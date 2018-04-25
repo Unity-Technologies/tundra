@@ -7,6 +7,12 @@
 namespace t2
 {
 
+struct NodeSignatureComponent
+{
+  FrozenString m_Key;
+  FrozenString m_Value;
+};
+
 struct NodeStateData
 {
   int32_t                   m_BuildResult;
@@ -14,6 +20,7 @@ struct NodeStateData
   FrozenArray<FrozenString> m_OutputFiles;
   FrozenArray<FrozenString> m_AuxOutputFiles;
   uint32_t                  m_TimeStampOfLastUseInDays;
+  FrozenArray<NodeSignatureComponent> m_InputSignatureComponents;
 };
 
 struct StateData

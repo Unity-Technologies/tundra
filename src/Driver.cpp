@@ -183,6 +183,8 @@ bool DriverInitData(Driver* self)
   if (!DriverPrepareDag(self, s_DagFileName))
     return false;
 
+  SetStructuredLogPath(self->m_DagData->m_StructuredLogPath);
+
   DigestCacheInit(&self->m_DigestCache, MB(128), self->m_DagData->m_DigestCacheFileName);
 
   LoadFrozenData<StateData>(self->m_DagData->m_StateFileName, &self->m_StateFile, &self->m_StateData);
@@ -778,6 +780,12 @@ BuildResult::Enum DriverBuild(Driver* self)
     queue_config.m_FileSigningLog      = nullptr;
   }
 
+  self->m_InputSignatureComponents.heap = &self->m_Heap;
+  MutexInit(&self->m_InputSignatureComponents.mutex);
+  BufferInit(&self->m_InputSignatureComponents.components);
+  BufferInit(&self->m_InputSignatureComponents.strings);
+  queue_config.m_InputSignatureHashLog = &self->m_InputSignatureComponents;
+
 #if ENABLED(CHECKED_BUILD)
   {
     ProfilerScope prof_scope("Tundra DebugCheckRemap", 0);
@@ -984,6 +992,20 @@ bool DriverSaveBuildState(Driver* self)
     BinarySegmentWriteUint32(state_seg, (uint32_t)now/millisecondsInADay);
   };
 
+  auto save_node_signature_components_live = [=](const HashComponentLogRange& range) -> void
+  {
+    BinarySegmentWriteInt32(state_seg, range.m_Count);
+    BinarySegmentWritePointer(state_seg, BinarySegmentPosition(array_seg));
+    for (int32_t i = 0; i < range.m_Count; ++i)
+    {
+      HashComponent& component = self->m_InputSignatureComponents.components[range.m_Index + i];
+      BinarySegmentWritePointer(array_seg, BinarySegmentPosition(string_seg));
+      BinarySegmentWriteStringData(string_seg, &self->m_InputSignatureComponents.strings[component.m_Key]);
+      BinarySegmentWritePointer(array_seg, BinarySegmentPosition(string_seg));
+      BinarySegmentWriteStringData(string_seg, &self->m_InputSignatureComponents.strings[component.m_Value]);
+    }
+  };
+
   auto save_node_state_old = [=](int build_result, const HashDigest* input_signature, const NodeStateData* src_node, const HashDigest* guid) -> void
   {
     BinarySegmentWrite(guid_seg, (const char*) guid, sizeof(HashDigest));
@@ -1012,6 +1034,21 @@ bool DriverSaveBuildState(Driver* self)
     BinarySegmentWriteUint32(state_seg, src_node->m_TimeStampOfLastUseInDays);
   };
 
+  auto save_node_signature_components_frozen = [=](const NodeStateData* src_node) -> void
+  {
+    int32_t signatureComponentsCount = src_node->m_InputSignatureComponents.GetCount();
+    BinarySegmentWriteInt32(state_seg, signatureComponentsCount);
+    BinarySegmentWritePointer(state_seg, BinarySegmentPosition(array_seg));
+    for (int32_t i = 0; i < signatureComponentsCount; ++i)
+    {
+      BinarySegmentWritePointer(array_seg, BinarySegmentPosition(string_seg));
+      BinarySegmentWriteStringData(string_seg, src_node->m_InputSignatureComponents[i].m_Key);
+
+      BinarySegmentWritePointer(array_seg, BinarySegmentPosition(string_seg));
+      BinarySegmentWriteStringData(string_seg, src_node->m_InputSignatureComponents[i].m_Value);
+    }
+  };
+
   auto save_new = [=, &entry_count](size_t index) {
     const NodeState  *elem      = new_state + index;
     const NodeData   *src_elem  = elem->m_MmapData;
@@ -1027,6 +1064,7 @@ bool DriverSaveBuildState(Driver* self)
         size_t old_index = old_guid - old_guids;
         const NodeStateData* old_state_data = old_state + old_index;
         save_node_state_old(old_state_data->m_BuildResult, &old_state_data->m_InputSignature, old_state_data, guid);
+        save_node_signature_components_frozen(old_state_data);
         ++entry_count;
         ++g_Stats.m_StateSaveNew;
       }
@@ -1034,6 +1072,7 @@ bool DriverSaveBuildState(Driver* self)
     else
     {
       save_node_state(elem->m_BuildResult, &elem->m_InputSignature, src_elem, guid);
+      save_node_signature_components_live(elem->m_ComponentLogRange);
       ++entry_count;
       ++g_Stats.m_StateSaveNew;
     }
@@ -1084,6 +1123,7 @@ bool DriverSaveBuildState(Driver* self)
       const NodeStateData *data = old_state + index;
 
       save_node_state(data->m_BuildResult, &data->m_InputSignature, src_elem, guid);
+      save_node_signature_components_frozen(data);
       ++entry_count;
       ++g_Stats.m_StateSaveOld;
       return;
@@ -1113,6 +1153,7 @@ bool DriverSaveBuildState(Driver* self)
       if (!does_a_new_node_exist_that_shares_an_output_path_with(old_state_data))
       {
         save_node_state_old(old_state_data->m_BuildResult, &old_state_data->m_InputSignature, old_state_data, guid);
+        save_node_signature_components_frozen(old_state_data);
         ++entry_count;
         return;
       }

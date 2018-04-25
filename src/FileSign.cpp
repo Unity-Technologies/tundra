@@ -9,13 +9,14 @@
 namespace t2
 {
 
-static void ComputeFileSignatureSha1(HashState* state, StatCache* stat_cache, DigestCache* digest_cache, const char* filename, uint32_t fn_hash)
+static void ComputeFileSignatureSha1(HashState* state, StatCache* stat_cache, DigestCache* digest_cache, const char* filename, uint32_t fn_hash,
+  HashComponentLog*   component_log)
 {
   FileInfo file_info = StatCacheStat(stat_cache, filename, fn_hash);
 
   if (!file_info.Exists())
   {
-    HashAddInteger(state, ~0ull);
+    HashAddIntegerLogged(state, ~0ull, component_log, HashComponent::kFileSHA1, filename);
     return;
   }
 
@@ -28,7 +29,7 @@ static void ComputeFileSignatureSha1(HashState* state, StatCache* stat_cache, Di
     FILE* f = fopen(filename, "rb");
     if (!f)
     {
-      HashAddString(state, "<missing>");
+      HashAddStringLogged(state, "<missing>", component_log, HashComponent::kFileSHA1, filename);
       return;
     }
 
@@ -50,16 +51,17 @@ static void ComputeFileSignatureSha1(HashState* state, StatCache* stat_cache, Di
     AtomicIncrement(&g_Stats.m_DigestCacheHits);
   }
 
-  HashUpdate(state, &digest, sizeof(digest));
+  HashUpdateLogged(state, &digest, sizeof(digest), component_log, HashComponent::kFileSHA1, filename, false);
 }
 
-static bool ComputeFileSignatureTimestamp(HashState* out, StatCache* stat_cache, const char* filename, uint32_t hash)
+static bool ComputeFileSignatureTimestamp(HashState* out, StatCache* stat_cache, const char* filename, uint32_t hash,
+  HashComponentLog*   component_log)
 {
   FileInfo info = StatCacheStat(stat_cache, filename, hash);
   if (info.Exists())
-    HashAddInteger(out, info.m_Timestamp);
+    HashAddIntegerLogged(out, info.m_Timestamp, component_log, HashComponent::kFileTimestamp, filename);
   else
-    HashAddInteger(out, ~0ull);
+    HashAddIntegerLogged(out, ~0ull, component_log, HashComponent::kFileTimestamp, filename);
   return false;
 }
 
@@ -70,7 +72,8 @@ void ComputeFileSignature(
   const char*         filename,
   uint32_t            fn_hash,
   const uint32_t      sha_extension_hashes[],
-  int                 sha_extension_hash_count)
+  int                 sha_extension_hash_count,
+  HashComponentLog*   component_log)
 {
   if (const char* ext = strrchr(filename, '.'))
   {
@@ -79,13 +82,13 @@ void ComputeFileSignature(
     {
       if (sha_extension_hashes[i] == ext_hash)
       {
-        ComputeFileSignatureSha1(out, stat_cache, digest_cache, filename, fn_hash);
+        ComputeFileSignatureSha1(out, stat_cache, digest_cache, filename, fn_hash, component_log);
         return;
       }
     }
   }
 
-  ComputeFileSignatureTimestamp(out, stat_cache, filename, fn_hash);
+  ComputeFileSignatureTimestamp(out, stat_cache, filename, fn_hash, component_log);
 }
 
 t2::HashDigest CalculateGlobSignatureFor(const char* path, t2::MemAllocHeap* heap, t2::MemAllocLinear* scratch)

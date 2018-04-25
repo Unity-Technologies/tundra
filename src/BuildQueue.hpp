@@ -7,6 +7,7 @@
 #include "Thread.hpp"
 #include "MemAllocLinear.hpp"
 #include "MemAllocHeap.hpp"
+#include "JsonWriter.hpp"
 
 namespace t2
 {
@@ -16,6 +17,7 @@ namespace t2
   struct ScanCache;
   struct StatCache;
   struct DigestCache;
+  struct HashComponentLog;
 
   enum
   {
@@ -49,6 +51,7 @@ namespace t2
     void*           m_FileSigningLog;
     Mutex*          m_FileSigningLogMutex;
     int32_t         m_MaxExpensiveCount;
+    HashComponentLog* m_InputSignatureHashLog;
   };
 
   struct BuildQueue;
@@ -59,6 +62,7 @@ namespace t2
     MemAllocLinear    m_ScratchAlloc;
     int               m_ThreadIndex;
     BuildQueue*       m_Queue;
+    JsonWriter        m_StructuredMsg;
   };
 
   struct BuildQueue

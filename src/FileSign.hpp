@@ -20,7 +20,8 @@ void ComputeFileSignature(
   const char*         filename,
   uint32_t            fn_hash,
   const uint32_t      sha_extension_hashes[],
-  int                 sha_extension_hash_count);
+  int                 sha_extension_hash_count,
+  HashComponentLog*   component_log);
 
   HashDigest CalculateGlobSignatureFor(const char* path, MemAllocHeap* heap, MemAllocLinear* scratch);
 

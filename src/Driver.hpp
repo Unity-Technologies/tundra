@@ -78,6 +78,8 @@ struct Driver
   // Space for dynamic DAG node state
   Buffer<NodeState> m_Nodes;
 
+  HashComponentLog  m_InputSignatureComponents;
+
   MemAllocLinear    m_ScanCacheAllocator;
   ScanCache         m_ScanCache;
 

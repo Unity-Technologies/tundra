@@ -47,6 +47,7 @@ struct NodeState
   const char**              m_ImplicitDeps;
 
   HashDigest                m_InputSignature;
+  HashComponentLogRange     m_ComponentLogRange;
 };
 
 inline bool NodeStateIsCompleted(const NodeState* state)

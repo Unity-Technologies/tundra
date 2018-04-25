@@ -1,5 +1,7 @@
 #include "Hash.hpp"
 #include "MemAllocLinear.hpp"
+#include "Buffer.hpp"
+
 
 #include <cstring>
 #include <cstdio>
@@ -10,6 +12,20 @@ namespace t2
 void HashInitImpl(HashStateImpl* impl);
 void HashBlock(const uint8_t* data, HashStateImpl* state, void* debug_file);
 void HashFinalizeImpl(HashStateImpl* self, HashDigest* digest);
+
+static void AddToHashLog(HashComponentLog* log, HashComponent::Kinds kind, const char* key, const char* value)
+{
+  HashComponent c;
+  c.m_Kind = kind;
+
+  c.m_Key = log->strings.m_Size;
+  BufferAppend(&log->strings, log->heap, key, strlen(key) + 1);
+
+  c.m_Value = log->strings.m_Size;
+  BufferAppend(&log->strings, log->heap, value, strlen(value) + 1);
+
+  BufferAppendOne(&log->components, log->heap, c);
+}
 
 void HashUpdate(HashState* self, const void *data_in, size_t size)
 {
@@ -49,6 +65,30 @@ void HashUpdate(HashState* self, const void *data_in, size_t size)
   self->m_MsgSize += size * 8;
 }
 
+void HashUpdateLogged(HashState* self, const void* data_in, size_t size, HashComponentLog* log, HashComponent::Kinds kind, const char* key, bool dataIsString)
+{
+  HashUpdate(self, data_in, size);
+  
+  if (dataIsString)
+    AddToHashLog(log, kind, key, reinterpret_cast<const char*>(data_in));
+  else
+  {
+    char* valueStr = (char*)alloca(3 + size*2);
+    const char* hexBytes = "0123456789ABCDEF";
+    valueStr[0] = '0';
+    valueStr[1] = 'x';
+    for (size_t i = 0; i < size; ++i)
+    {
+      uint8_t byte = ((uint8_t*)data_in)[i];
+      valueStr[2 + i*2] = hexBytes[byte >> 4];
+      valueStr[2 + i*2 + 1] = hexBytes[byte & 0x0F];
+    }
+    valueStr[2 + size*2] = 0;
+
+    AddToHashLog(log, kind, key, valueStr);
+  }
+}
+
 // Quickie to generate a hash digest from a single string
 void HashSingleString(HashDigest* digest_out, const char* string)
 {
@@ -70,9 +110,45 @@ void HashAddStringFoldCase(HashState* self, const char* path)
   }
 }
 
-void HashAddInteger(HashState* self, uint64_t value)
+void HashAddStringFoldCaseLogged(HashState* self, const char* path, HashComponentLog* log, HashComponent::Kinds kind, const char* key)
 {
-  uint8_t bytes[8];
+  const size_t kFixedBufferSize = 1024;
+  char buf[kFixedBufferSize];
+  char* target = buf;
+  size_t length = 0;
+
+  do
+  {
+    char c = FoldCase(*path);
+    target[length] = c;
+    if (c == 0)
+      break;
+
+    ++path;
+    ++length;
+  } while(length < kFixedBufferSize);
+
+  if (length < kFixedBufferSize)
+  {
+    HashAddStringLogged(self, buf, log, kind, key);
+    return;
+  }
+
+  // The string must not have fit into the buffer. Measure how much is left, then allocate a new buffer for the whole
+  // result and finish folding the parts we didn't do already.
+  length = strlen(path) + kFixedBufferSize;
+  target = (char*)alloca(length + 1);
+  memcpy(target, buf, kFixedBufferSize);
+  for (size_t i = kFixedBufferSize; i <= length; ++i)
+  {
+    target[i] = FoldCase(*path++);
+  }
+
+  HashAddStringLogged(self, target, log, kind, key);
+}
+
+static void UInt64ToBytes(uint64_t value, uint8_t (&bytes)[8])
+{
   bytes[0] = uint8_t(value >> 56);
   bytes[1] = uint8_t(value >> 48);
   bytes[2] = uint8_t(value >> 40);
@@ -81,7 +157,20 @@ void HashAddInteger(HashState* self, uint64_t value)
   bytes[5] = uint8_t(value >> 16);
   bytes[6] = uint8_t(value >>  8);
   bytes[7] = uint8_t(value >>  0);
+}
+
+void HashAddInteger(HashState* self, uint64_t value)
+{
+  uint8_t bytes[8];
+  UInt64ToBytes(value, bytes);
   HashUpdate(self, bytes, sizeof bytes);
+}
+
+void HashAddIntegerLogged(HashState* self, uint64_t value, HashComponentLog* log, HashComponent::Kinds kind, const char* key)
+{
+  uint8_t bytes[8];
+  UInt64ToBytes(value, bytes);
+  HashUpdateLogged(self, bytes, sizeof bytes, log, kind, key, false);
 }
 
 void HashAddSeparator(HashState* self)

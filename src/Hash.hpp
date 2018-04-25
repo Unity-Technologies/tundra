@@ -2,6 +2,7 @@
 #define HASHER_HPP
 
 #include "Common.hpp"
+#include "Buffer.hpp"
 #include <cstring>
 
 namespace t2
@@ -152,6 +153,37 @@ struct ALIGN(16) HashStateImpl
 };
 #endif
 
+struct HashComponent
+{
+  enum Kinds
+  {
+    kGeneric,
+    kFilePath,
+    kFileTimestamp,
+    kFileSHA1
+  };
+
+  Kinds m_Kind;
+  uint32_t m_Key;
+  uint32_t m_Value;
+};
+
+struct HashComponentLog
+{
+  // TODO: Instead of HashComponent storing indices into the strings buffer, it might be nicer to use
+  // BinaryWriter to build this up, where components and strings are BinarySegments. Look into it...
+  Buffer<HashComponent> components;
+  Buffer<char> strings;
+  MemAllocHeap* heap;
+  Mutex mutex;
+};
+
+struct HashComponentLogRange
+{
+  uint32_t m_Index;
+  uint32_t m_Count;
+};
+
 struct ALIGN(16) HashState
 {
   HashStateImpl m_StateImpl;
@@ -170,25 +202,47 @@ void HashInitDebug(HashState* h, void* file_handle);
 // Add arbitrary data to be hashed.
 void HashUpdate(HashState* h, const void* data, size_t size);
 
+void HashUpdateLogged(HashState* h, const void* data, size_t size, HashComponentLog* log, HashComponent::Kinds kind, const char* key, bool isString);
+
 // Add string data to be hashed.
 inline void HashAddString(HashState* self, const char* s)
 {
   HashUpdate(self, s, strlen(s));
 }
 
+inline void HashAddStringLogged(HashState* self, const char* s, HashComponentLog* log, HashComponent::Kinds kind, const char* key)
+{
+  HashUpdateLogged(self, s, strlen(s), log, kind, key, true);
+}
+
 void HashAddStringFoldCase(HashState* self, const char* path);
+
+void HashAddStringFoldCaseLogged(HashState* self, const char* path, HashComponentLog* log, HashComponent::Kinds kind, const char* key);
+
 
 inline void HashAddPath(HashState* self, const char* path)
 {
 #if ENABLED(TUNDRA_CASE_INSENSITIVE_FILESYSTEM)
-  HashAddStringFoldCase(self,path);
+  HashAddStringFoldCase(self, path);
 #else
-  HashAddString(self,path);  
+  HashAddString(self, path);  
+#endif
+}
+
+inline void HashAddPathLogged(HashState* self, const char* path, HashComponentLog* log)
+{
+  const char* pathKey = "Path";
+#if ENABLED(TUNDRA_CASE_INSENSITIVE_FILESYSTEM)
+  HashAddStringFoldCaseLogged(self, path, log, HashComponent::kFilePath, pathKey);
+#else
+  HashAddStringLogged(self, path, log, HashComponent::kFilePath, pathKey);  
 #endif
 }
 
 // Add binary integer data to be hashed.
 void HashAddInteger(HashState* h, uint64_t value);
+
+void HashAddIntegerLogged(HashState* h, uint64_t value, HashComponentLog* log, HashComponent::Kinds kind, const char* key);
 
 // Add a separator (zero byte) to keep runs of separate data apart.
 void HashAddSeparator(HashState* h);

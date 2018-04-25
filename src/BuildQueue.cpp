@@ -1,4 +1,4 @@
-﻿#include "BuildQueue.hpp"
+#include "BuildQueue.hpp"
 #include "DagData.hpp"
 #include "MemAllocHeap.hpp"
 #include "MemAllocLinear.hpp"
@@ -16,6 +16,7 @@
 #include "Profiler.hpp"
 #include "NodeResultPrinting.hpp"
 #include "OutputValidation.hpp"
+#include "JsonWriter.hpp"
 
 #include <stdio.h>
 
@@ -39,10 +40,12 @@ namespace t2
     LinearAllocInit(&self->m_ScratchAlloc, &self->m_LocalHeap, scratch_size, "thread-local scratch");
     self->m_ThreadIndex = index;
     self->m_Queue       = queue;
+    JsonWriteInit(&self->m_StructuredMsg, &self->m_LocalHeap);
   }
 
   static void ThreadStateDestroy(ThreadState* self)
   {
+    JsonWriteDestroy(&self->m_StructuredMsg);
     LinearAllocDestroy(&self->m_ScratchAlloc);
     HeapDestroy(&self->m_LocalHeap);
   }
@@ -255,6 +258,100 @@ namespace t2
     return MakeDirectoriesRecursive(stat_cache, path);
   }
 
+  static void ReportInputSignatureChangeCause(JsonWriter* msg, NodeState* node, const NodeStateData* prev_state, HashComponentLog* hashComponentLog)
+  {
+    JsonWriteReset(msg);
+    JsonWriteStartObject(msg);
+    JsonWriteKeyName(msg, "msg");
+    JsonWriteValueString(msg, "inputSignatureChanged");
+    JsonWriteKeyName(msg, "annotation");
+    JsonWriteValueString(msg, node->m_MmapData->m_Annotation.Get());
+
+    if (prev_state->m_InputSignatureComponents.GetCount() != node->m_ComponentLogRange.m_Count)
+    {
+      JsonWriteKeyName(msg, "oldKeyCount");
+      JsonWriteValueInteger(msg, prev_state->m_InputSignatureComponents.GetCount());
+      JsonWriteKeyName(msg, "newKeyCount");
+      JsonWriteValueInteger(msg, node->m_ComponentLogRange.m_Count);
+      goto endObjectAndLog;
+    }
+    
+    MutexLock(&hashComponentLog->mutex);
+
+    JsonWriteKeyName(msg, "changes");
+    JsonWriteStartArray(msg);
+
+    for (int i = 0; i < node->m_ComponentLogRange.m_Count; ++i)
+    {
+      HashComponent& component = hashComponentLog->components[node->m_ComponentLogRange.m_Index + i];
+
+      const char* key = &hashComponentLog->strings[component.m_Key];
+      const char* prevKey = prev_state->m_InputSignatureComponents[i].m_Key.Get();
+      const bool keyChanged = (0 != strcmp(key, prevKey));
+
+      const char* value = &hashComponentLog->strings[component.m_Value];
+      const char* prevValue = prev_state->m_InputSignatureComponents[i].m_Value.Get();
+      const bool valueChanged = (0 != strcmp(value, prevValue));
+
+      if (!keyChanged && !valueChanged)
+        continue;
+
+      JsonWriteStartObject(msg);
+
+      bool emitKeyAsFilePath = false;
+
+      if (component.m_Kind != HashComponent::kGeneric)
+      {
+        JsonWriteKeyName(msg, "kind");
+        switch(component.m_Kind)
+        {
+          case HashComponent::kFilePath:
+            JsonWriteValueString(msg, "path");
+            break;
+          case HashComponent::kFileSHA1:
+            JsonWriteValueString(msg, "sha1");
+            emitKeyAsFilePath = true;
+            break;
+          case HashComponent::kFileTimestamp:
+            JsonWriteValueString(msg, "timestamp");
+            emitKeyAsFilePath = true;
+            break;
+          default:
+            JsonWriteValueString(msg, "unknown");
+            break;
+        }
+      }
+
+      JsonWriteKeyName(msg, emitKeyAsFilePath ? "path" : "key");
+      JsonWriteValueString(msg, key);
+
+      JsonWriteKeyName(msg, "value");
+      JsonWriteValueString(msg, value);
+
+      if (keyChanged)
+      {
+        JsonWriteKeyName(msg, "oldkey");
+        JsonWriteValueString(msg, prevKey);
+      }
+
+      if (valueChanged)
+      {
+        JsonWriteKeyName(msg, "oldvalue");
+        JsonWriteValueString(msg, prevValue);
+      }
+
+      JsonWriteEndObject(msg);
+    }
+
+    JsonWriteEndArray(msg);
+
+    MutexUnlock(&hashComponentLog->mutex);
+
+  endObjectAndLog:
+    JsonWriteEndObject(msg);
+    LogStructured(msg);
+  }
+    
   static BuildProgress::Enum CheckInputSignature(BuildQueue* queue, ThreadState* thread_state, NodeState* node, Mutex* queue_lock)
   {
     CHECK(AllDependenciesReady(queue, node));
@@ -264,11 +361,18 @@ namespace t2
     const BuildQueueConfig& config = queue->m_Config;
     StatCache* stat_cache = config.m_StatCache;
     DigestCache* digest_cache = config.m_DigestCache;
+    HashComponentLog* component_log = config.m_InputSignatureHashLog;
 
     const NodeData* node_data = node->m_MmapData;
 
     HashState sighash;
     FILE* debug_log = (FILE*) queue->m_Config.m_FileSigningLog;
+
+    // TODO: Give each BuildQueue thread a separate hashComponentLog so that we don't need the mutex.
+    // As long as they're all around when we're saving the build state, and we know which log to use
+    // for each node, we can just pull the values from each thread's log instance as we go along.
+    if (component_log)
+      MutexLock(&component_log->mutex);
 
     if (debug_log)
     {
@@ -281,13 +385,15 @@ namespace t2
       HashInit(&sighash);
     }
 
+    node->m_ComponentLogRange.m_Index = component_log->components.m_Size;
+
     // Start with command line action. If that changes, we'll definitely have to rebuild.
-    HashAddString(&sighash, node_data->m_Action);
+    HashAddStringLogged(&sighash, node_data->m_Action, component_log, HashComponent::kGeneric, "Action");
     HashAddSeparator(&sighash);
 
     if (const char* pre_action = node_data->m_PreAction)
     {
-      HashAddString(&sighash, pre_action);
+      HashAddStringLogged(&sighash, pre_action, component_log, HashComponent::kGeneric, "PreAction");
       HashAddSeparator(&sighash);
     }
 
@@ -296,8 +402,8 @@ namespace t2
     for (const FrozenFileAndHash& input : node_data->m_InputFiles)
     {
       // Add path and timestamp of every direct input file.
-      HashAddPath(&sighash, input.m_Filename);
-      ComputeFileSignature(&sighash, stat_cache, digest_cache, input.m_Filename, input.m_FilenameHash, config.m_ShaDigestExtensions, config.m_ShaDigestExtensionCount);
+      HashAddPathLogged(&sighash, input.m_Filename, component_log);
+      ComputeFileSignature(&sighash, stat_cache, digest_cache, input.m_Filename, input.m_FilenameHash, config.m_ShaDigestExtensions, config.m_ShaDigestExtensionCount, component_log);
 
       if (scanner)
       {
@@ -319,20 +425,26 @@ namespace t2
           {
             // Add path and timestamp of every indirect input file (#includes)
             const FileAndHash& path = scan_output.m_IncludedFiles[i];
-            HashAddPath(&sighash, path.m_Filename);
-            ComputeFileSignature(&sighash, stat_cache, digest_cache, path.m_Filename, path.m_FilenameHash, config.m_ShaDigestExtensions, config.m_ShaDigestExtensionCount);
+            HashAddPathLogged(&sighash, path.m_Filename, component_log);
+            ComputeFileSignature(&sighash, stat_cache, digest_cache, path.m_Filename, path.m_FilenameHash, config.m_ShaDigestExtensions, config.m_ShaDigestExtensionCount, component_log);
           }
         }
       }
     }
 
     for (const FrozenString& input : node_data->m_AllowedOutputSubstrings)
-      HashAddString(&sighash, (const char*)input);
+    {
+      HashAddStringLogged(&sighash, (const char*)input, component_log, HashComponent::kGeneric, "AllowedOutputSubstring");
+    }
 
-    HashAddInteger(&sighash, (node_data->m_Flags & NodeData::kFlagAllowUnexpectedOutput) ? 1 : 0);
+    HashAddIntegerLogged(&sighash, (node_data->m_Flags & NodeData::kFlagAllowUnexpectedOutput) ? 1 : 0, component_log, HashComponent::kGeneric, "AllowUnexpectedOutput");
 
     HashFinalize(&sighash, &node->m_InputSignature);
 
+    node->m_ComponentLogRange.m_Count = component_log->components.m_Size - node->m_ComponentLogRange.m_Index;
+      
+    if (component_log)
+      MutexUnlock(&component_log->mutex);
 
     if (debug_log)
     {
@@ -351,6 +463,17 @@ namespace t2
     {
       // This is a new node - we must built it
       Log(kSpam, "T=%d: building %s - new node", thread_state->m_ThreadIndex, node_data->m_Annotation.Get());
+
+      JsonWriter* msg = &thread_state->m_StructuredMsg;
+      JsonWriteReset(msg);
+      JsonWriteStartObject(msg);
+      JsonWriteKeyName(msg, "msg");
+      JsonWriteValueString(msg, "newNode");
+      JsonWriteKeyName(msg, "node");
+      JsonWriteValueString(msg, node_data->m_Annotation);
+      JsonWriteEndObject(msg);
+      LogStructured(msg);
+
       next_state = BuildProgress::kRunAction;
     }
     else if (prev_state->m_InputSignature != node->m_InputSignature)
@@ -363,6 +486,10 @@ namespace t2
       DigestToString(newDigest, node->m_InputSignature);
 
       Log(kSpam, "T=%d: building %s - input signature changed. was:%s now:%s", thread_state->m_ThreadIndex, node_data->m_Annotation.Get(), oldDigest, newDigest);
+
+      if (component_log != nullptr)
+        ReportInputSignatureChangeCause(&thread_state->m_StructuredMsg, node, prev_state, component_log);
+
       next_state = BuildProgress::kRunAction;
     }
     else if (prev_state->m_BuildResult != 0)
