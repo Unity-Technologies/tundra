@@ -540,6 +540,15 @@ static void FindReachableNodes(uint32_t* node_bits, const DagData* dag, const Bu
 //searching in inputs prevents useful single object builds, as the requested object gets found as an input of the linker
 #define SUPPORT_SEARCHING_IN_INPUTS 0
 
+static int stricmp(const char* string1, const char* string2)
+{
+#if defined(TUNDRA_WIN32) 
+  return _stricmp(string1, string2);
+#else
+  return strcasecmp(string1, string2);
+#endif
+}
+
 // Match their source files and output files against the names specified.
 static void FindNodesByName(
     const DagData*          dag,
@@ -564,7 +573,7 @@ static void FindNodesByName(
     // Try all named nodes first
     for (const NamedNodeData& named_node : tuple->m_NamedNodes)
     {
-      if (0 == strcmp(named_node.m_Name, name))
+      if (0 == strcasecmp(named_node.m_Name, name))
       {
         BufferAppendOne(out_nodes, heap, named_node.m_NodeIndex);
         Log(kDebug, "mapped %s to node %d", name, named_node.m_NodeIndex);
