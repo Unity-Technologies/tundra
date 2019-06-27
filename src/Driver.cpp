@@ -26,6 +26,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <map>
+#include <sstream>
+
 #if ENABLED(TUNDRA_CASE_INSENSITIVE_FILESYSTEM)
 #if defined(_MSC_VER) || defined(TUNDRA_WIN32_MINGW)
 #define PathCompareN _strnicmp
@@ -40,8 +43,7 @@
 #endif
 
 #if defined(TUNDRA_WIN32) 
-#define strcasecmp  _stricmp
-#define strncasecmp _strnicmp
+#define strcasestr  StrStrIA
 #endif
 
 namespace t2
@@ -570,29 +572,46 @@ static void FindNodesByName(
     bool foundMatchingPrefix = false;
     bool prefixIsAmbigious = false;
     const NamedNodeData* nodeDataForMatchingPrefix = nullptr;
+    std::map<int, const char*> nodesWithMatchingPrefix;
+    std::map<int, const char*> nodesWithMatchingSubstring;
     for (const NamedNodeData& named_node : tuple->m_NamedNodes)
     {
-      if (0 == strcasecmp(named_node.m_Name, name))
+      // Is string contained?
+      const char* strstrResult = strcasestr(named_node.m_Name, name);
+      if (strstrResult)
       {
-        if (strcmp(named_node.m_Name, name) != 0)
-          Log(kInfo, "found case insensitive match for %s, mapping to %s", name, named_node.m_Name.Get());
+        const int lengthDifference = strlen(named_node.m_Name) - strlen(name);
 
-        BufferAppendOne(out_nodes, heap, named_node.m_NodeIndex);
-        Log(kDebug, "mapped %s to node %d", name, named_node.m_NodeIndex);
-        found = true;
-        break;
-      }
-      else if (!prefixIsAmbigious && strncasecmp(named_node.m_Name, name, strlen(name)) == 0)
-      {
-        if (foundMatchingPrefix)
-          prefixIsAmbigious = true;
-        else
+        // Exact match?
+        if (lengthDifference == 0)
         {
-          foundMatchingPrefix = true;
-          nodeDataForMatchingPrefix = &named_node;
+          if (strcmp(named_node.m_Name, name) != 0)
+            Log(kInfo, "found case insensitive match for %s, mapping to %s", name, named_node.m_Name.Get());
+
+          BufferAppendOne(out_nodes, heap, named_node.m_NodeIndex);
+          Log(kDebug, "mapped %s to node %d", name, named_node.m_NodeIndex);
+          found = true;
+          break;
         }
+
+        // Prefix match?
+        else if (strstrResult == named_node.m_Name)
+        {
+          if (foundMatchingPrefix)
+            prefixIsAmbigious = true;
+          else
+          {
+            foundMatchingPrefix = true;
+            nodeDataForMatchingPrefix = &named_node;
+          }
+          nodesWithMatchingPrefix.insert(std::make_pair(lengthDifference, named_node.m_Name.Get()));
+        }
+        else
+          nodesWithMatchingSubstring.insert(std::make_pair(lengthDifference, named_node.m_Name.Get()));
       }
     }
+
+    // If the given name is an unambigious prefix of one of our named nodes, we go with it, but warn the user.
     if (!found && foundMatchingPrefix && !prefixIsAmbigious)
     {
         Log(kWarning, "autocompleting %s to %s", name, nodeDataForMatchingPrefix->m_Name.Get());
@@ -628,7 +647,19 @@ static void FindNodesByName(
 
     if (!found)
     {
-      Croak("unable to map %s to any named node or input/output file", name);
+      std::stringstream errorOutput;
+      errorOutput << "unable to map " << name << " to any named node or input/output file\n";
+      if (!nodesWithMatchingPrefix.empty() || !nodesWithMatchingSubstring.empty())
+      {
+        errorOutput << "maybe you meant:\n";
+        for (const auto& match : nodesWithMatchingPrefix)
+          errorOutput << "- " << match.second << "\n";
+        for (const auto& match : nodesWithMatchingSubstring)
+          errorOutput << "- " << match.second << "\n";
+      }
+      auto errorString = errorOutput.str();
+      errorString.pop_back(); // Remove trailing newline.
+      Croak(errorString.c_str());
     }
   }
 }
