@@ -1,0 +1,71 @@
+linux:
+  name: "Build & Test - Linux"
+  agent:
+    type: Unity::VM
+    image: cds-ops/cds-ubuntu-18.04-base:stable
+    flavor: b1.small
+  commands:
+    - git submodule init
+    - git submodule update
+    - mono bee.exe tundra2::linux::master
+    - mono bee.exe tundra2-unittest-report::linux::master
+  artifacts:
+    artifacts:
+      paths:
+        - "build/**/*"
+
+mac:
+  name: "Build & Test - Mac"
+  agent:
+    type: Unity::VM::osx
+    image: buildfarm/mac:stable
+    flavor: m1.mac
+  commands:
+    - git submodule init
+    - git submodule update
+    - mono bee.exe tundra2::mac::master
+    - mono bee.exe tundra2-unittest-report::mac::master
+  artifacts:
+    artifacts:
+      paths:
+        - "build/**/*"
+
+windows:
+  name: "Build & Test - Windows"
+  agent:
+    type: Unity::VM
+    image: cds-ops/win10-base:stable
+    flavor: b1.small
+  commands:
+    - git submodule init
+    - git submodule update
+    - bee.exe tundra2::win::master
+    - bee.exe tundra2-unittest-report::win::master
+  artifacts:
+    artifacts:
+      paths:
+        - "build/**/*"
+
+package:
+  name: "Package Distribution"
+  agent:
+    type: Unity::VM
+    image: cds-ops/cds-ubuntu-18.04-base:stable
+    flavor: b1.small
+  commands:
+    - sudo apt install -y p7zip
+    - git submodule init
+    - git submodule update
+    - 7za a -tzip builds.zip * -xr\!unittest/googletest/.git
+  artifacts:
+    artifacts:
+        paths:
+        - builds.zip
+  triggers:
+    branches:
+      only:
+      - "/.*/"
+  dependencies:
+    - .yamato/yamato-ci.yml#linux
+    - .yamato/yamato-ci.yml#mac
+    - .yamato/yamato-ci.yml#windows

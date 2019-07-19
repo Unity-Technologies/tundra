@@ -111,10 +111,12 @@
 #define TD_PATHSEP_STR "/"
 #endif
 
+#if !defined(USE_VALGRIND)
 #if defined(_DEBUG) && defined(TUNDRA_LINUX)
 #define USE_VALGRIND YES
 #else
 #define USE_VALGRIND NO
+#endif
 #endif
 
 #endif
