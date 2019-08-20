@@ -9,6 +9,9 @@ linux:
     - git submodule update
     - mono bee.exe tundra2::linux::master
     - mono bee.exe tundra2-unittest-report::linux::master
+    - mono bee.exe artifacts/for-stevedore/tundra-linux-x64.zip
+    - python3 -m pip install 'stevedore-upload-tool>=0.2.3'
+    - python3 -m stevedoreupload --append-manifest build/linux-x86_64/manifest.stevedore --version-len=12 --glob public "$GIT_REVISION" artifacts/for-stevedore/*
   artifacts:
     artifacts:
       paths:
@@ -21,10 +24,15 @@ mac:
     image: buildfarm/mac:stable
     flavor: m1.mac
   commands:
+    # TODO: It should be possible to procure a Mac image that has both Mono and Python 3 preinstalled.
+    - HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 brew upgrade python || true
     - git submodule init
     - git submodule update
     - mono bee.exe tundra2::mac::master
     - mono bee.exe tundra2-unittest-report::mac::master
+    - mono bee.exe artifacts/for-stevedore/tundra-mac-x64.zip
+    - python3 -m pip install 'stevedore-upload-tool>=0.2.3'
+    - python3 -m stevedoreupload --append-manifest build/osx-x86_64/manifest.stevedore --version-len=12 --glob public "$GIT_REVISION" artifacts/for-stevedore/*
   artifacts:
     artifacts:
       paths:
@@ -37,10 +45,15 @@ windows:
     image: cds-ops/win10-base:stable
     flavor: b1.small
   commands:
+    # TODO: It should be possible to procure a Windows image that has Python 3 preinstalled.
+    - choco install --no-progress -y python3 -source https://artifactory.bf.unity3d.com/artifactory/api/nuget/unity-choco-local
     - git submodule init
     - git submodule update
     - bee.exe tundra2::win::master
     - bee.exe tundra2-unittest-report::win::master
+    - bee.exe artifacts/for-stevedore/tundra-win-x64.zip artifacts/for-stevedore/tundra-win-x64-debug.7z
+    - py -3 -m pip install "stevedore-upload-tool>=0.2.3"
+    - py -3 -m stevedoreupload --append-manifest build/windows-x86_64/manifest.stevedore --version-len=12 --glob public "%GIT_REVISION%" artifacts/for-stevedore/*
   artifacts:
     artifacts:
       paths:
@@ -57,6 +70,7 @@ package:
     - git submodule init
     - git submodule update
     - 7za a -tzip builds.zip * -xr\!unittest/googletest/.git
+    - echo 'Stevedore artifacts uploaded:' && sort build/*/manifest.stevedore
   artifacts:
     artifacts:
         paths:
