@@ -517,6 +517,8 @@ static const BuildTupleData* FindBuildTuple(const DagData* dag, const TargetSpec
   return nullptr;
 }
 
+#if DISABLED_IN_OUR_FORK
+    
 // Walk reachable nodes from the entry points in the DAG
 static void FindReachable(uint32_t* node_bits, const DagData* dag, int index)
 {
@@ -542,6 +544,8 @@ static void FindReachableNodes(uint32_t* node_bits, const DagData* dag, const Bu
     FindReachable(node_bits, dag, named_node.m_NodeIndex);
   }
 }
+    
+#endif
 
 static int LevenshteinDistanceNoCase(const char* s, const char* t)
 {
@@ -593,7 +597,6 @@ static void FindNodesByName(
 {
   size_t    node_bits_size = (dag->m_NodeCount + 31) / 32 *sizeof(uint32_t);
   uint32_t *node_bits      = (uint32_t*) alloca(node_bits_size);
-  bool      bits_valid     = false;
 
   memset(node_bits, 0, node_bits_size);
 
@@ -701,7 +704,7 @@ static void FindNodesByName(
 }
 
 #if DISABLED_IN_OUR_FORK
-
+    
     // Try to match against all input/output filenames
     if (!found)
     {
@@ -729,11 +732,7 @@ static void FindNodesByName(
 
       const uint32_t filename_hash = Djb2HashPath(filename);
 
-      if (!bits_valid)
-      {
-        FindReachableNodes(node_bits, dag, tuple);
-        bits_valid = true;
-      }
+      FindReachableNodes(node_bits, dag, tuple);
 
       // Brute force all reachable nodes from tuple to match input or output file names
       size_t base_index = 0;
@@ -1533,7 +1532,7 @@ void DriverRemoveStaleOutputs(Driver* self)
   HashSetInit(&file_table, &self->m_Heap);
 
   // Insert all current regular and aux output files into the hash table.
-  auto add_file = [&file_table, scratch](const FrozenFileAndHash& p) -> void
+  auto add_file = [&file_table](const FrozenFileAndHash& p) -> void
   {
     const uint32_t hash = p.m_FilenameHash;
 

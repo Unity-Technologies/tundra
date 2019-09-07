@@ -5,8 +5,6 @@
 
 namespace t2
 {
-  static uint64_t g_timeOfLastHumanInteraction = -1;
-
   void HumanActivityDetectionInit()
   {
   }
