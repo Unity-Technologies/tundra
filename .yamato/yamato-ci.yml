@@ -2,7 +2,7 @@ linux:
   name: "Build & Test - Linux"
   agent:
     type: Unity::VM
-    image: cds-ops/cds-ubuntu-18.04-base:stable
+    image: cds-ops/ubuntu-18.04-base:stable
     flavor: b1.small
   commands:
     - git submodule init
@@ -50,7 +50,7 @@ package:
   name: "Package Distribution"
   agent:
     type: Unity::VM
-    image: cds-ops/cds-ubuntu-18.04-base:stable
+    image: cds-ops/ubuntu-18.04-base:stable
     flavor: b1.small
   commands:
     - sudo apt install -y p7zip
