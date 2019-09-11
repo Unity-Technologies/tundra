@@ -9,6 +9,9 @@ linux:
     - git submodule update
     - mono bee.exe tundra2::linux::master
     - mono bee.exe tundra2-unittest-report::linux::master
+    - mono bee.exe artifacts/for-stevedore/tundra-linux-x64.zip
+    - curl -sSo StevedoreUpload.exe "$STEVEDORE_UPLOAD_TOOL_URL"
+    - mono StevedoreUpload.exe --append-manifest=build/linux-x86_64/manifest.stevedore --version-len=12 --repo=public --version="$GIT_REVISION" artifacts/for-stevedore/*
   artifacts:
     artifacts:
       paths:
@@ -25,6 +28,9 @@ mac:
     - git submodule update
     - mono bee.exe tundra2::mac::master
     - mono bee.exe tundra2-unittest-report::mac::master
+    - mono bee.exe artifacts/for-stevedore/tundra-mac-x64.zip
+    - curl -sSo StevedoreUpload.exe "$STEVEDORE_UPLOAD_TOOL_URL"
+    - mono StevedoreUpload.exe --append-manifest=build/osx-x86_64/manifest.stevedore --version-len=12 --repo=public --version="$GIT_REVISION" artifacts/for-stevedore/*
   artifacts:
     artifacts:
       paths:
@@ -41,6 +47,9 @@ windows:
     - git submodule update
     - bee.exe tundra2::win::master
     - bee.exe tundra2-unittest-report::win::master
+    - bee.exe artifacts/for-stevedore/tundra-win-x64.zip artifacts/for-stevedore/tundra-win-x64-debug.7z
+    - curl -sSo StevedoreUpload.exe "%STEVEDORE_UPLOAD_TOOL_URL%"
+    - StevedoreUpload.exe --append-manifest=build/windows-x86_64/manifest.stevedore --version-len=12 --repo=public --version="%GIT_REVISION%" artifacts/for-stevedore/*
   artifacts:
     artifacts:
       paths:
@@ -57,6 +66,7 @@ package:
     - git submodule init
     - git submodule update
     - 7za a -tzip builds.zip * -xr\!unittest/googletest/.git
+    - printf '\n\nStevedore artifacts uploaded:\n' | LC_ALL=C sort - build/*/manifest.stevedore
   artifacts:
     artifacts:
         paths:
