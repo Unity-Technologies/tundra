@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using Bee.BuildTools;
 using Bee.Core;
 using Bee.NativeProgramSupport.Building;
 using Bee.NativeProgramSupport.Building.FluentSyntaxHelpers;
@@ -111,6 +113,19 @@ class Build
         return deployedProgram;
     }
 
+    static void SetupStevedoreArtifact(NativeProgramConfiguration config, string artifactNamePattern, IEnumerable<NPath> files)
+    {
+        // The platform/arch suffix, e.g. "win-x86" or "linux-x64".
+        var suffix = $"{config.Platform.DisplayName.ToLower()}-{config.ToolChain.Architecture.DisplayName}";
+
+        var artifactPath = new NPath("artifacts/for-stevedore/" + artifactNamePattern.Replace("*", suffix));
+
+        var contents = new ZipArchiveContents();
+        foreach (var path in files)
+            contents.AddFileToArchive(path, path.FileName);
+        ZipTool.SetupPack(artifactPath, contents);
+    }
+
     static void Main()
     {
         // lua library
@@ -177,13 +192,28 @@ class Build
 
                 SetupSpecificConfiguration(tundraLibraryProgram, config, toolchain.StaticLibraryFormat);
                 SetupSpecificConfiguration(tundraLuaProgram, config, toolchain.ExecutableFormat);
-                SetupSpecificConfiguration(tundraExecutableProgram, config, toolchain.ExecutableFormat);
+                var tundra = SetupSpecificConfiguration(tundraExecutableProgram, config, toolchain.ExecutableFormat);
 
                 var tundraUnitTestExecutable = (Executable)SetupSpecificConfiguration(tundraUnitTestProgram, config, toolchain.ExecutableFormat);
                 if (Bee.PramBinding.Pram.CanLaunch(toolchain.Platform, toolchain.Architecture))
                 {
                     var tundraUnitTestResult = Bee.PramBinding.Pram.SetupLaunch(new Bee.PramBinding.Pram.LaunchArguments(toolchain.ExecutableFormat, tundraUnitTestExecutable));
                     RegisterAlias($"{tundraUnitTestProgram.Name}-report", config, tundraUnitTestResult.Result);
+                }
+
+                if (config.CodeGen == CodeGen.Master)
+                {
+                    // Create a zip artifact (rather than 7z), as Bee needs Tundra early
+                    // (before 7za is downloaded). The artifact should be minimal: Just
+                    // the license file and main binary, no tests, docs, PDBs, Lua, etc.
+                    SetupStevedoreArtifact(config, "tundra-*.zip", new[] { "COPYING", tundra.Path });
+
+                    // On platforms with separate debug files (currently just Windows),
+                    // make a separate artifact for these, which devs can fetch as needed.
+                    if (tundra.Paths.Length > 1)
+                    {
+                        SetupStevedoreArtifact(config, "tundra-*-debug.7z", new NPath[] { "COPYING" }.Concat(tundra.Paths.Skip(1)));
+                    }
                 }
             }
         }
