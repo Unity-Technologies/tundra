@@ -1511,6 +1511,25 @@ bool DriverSaveBuildState(Driver* self)
   return success;
 }
 
+// Returns true if the path was actually cleaned up.
+// Does NOT delete symlinks.
+static bool CleanupPath(const char* path)
+{
+  FileInfo info = GetFileInfo(path);
+  if (!info.Exists())
+    return false;
+  if (info.IsSymlink())
+    return false;
+#if defined(TUNDRA_UNIX)
+  return 0 == remove(path);
+#else
+  else if (info.IsDirectory())
+    return TRUE == RemoveDirectoryA(path);
+  else
+    return TRUE == DeleteFileA(path);
+#endif
+}
+
 void DriverRemoveStaleOutputs(Driver* self)
 {
   TimingScope timing_scope(nullptr, &g_Stats.m_StaleCheckTimeCycles);
@@ -1627,8 +1646,10 @@ void DriverRemoveStaleOutputs(Driver* self)
   uint64_t time_exec_started = TimerGet();
   for (uint32_t i = 0; i < nuke_count; ++i)
   {
-    Log(kDebug, "cleaning up %s", paths[i]);
-    RemoveFileOrDir(paths[i]);
+    if (CleanupPath(paths[i]))
+    {
+      Log(kDebug, "cleaned up %s", paths[i]);
+    }
   }
 
   if (nuke_count > 0)
