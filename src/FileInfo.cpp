@@ -42,31 +42,51 @@ FileInfo GetFileInfo(const char* path)
   struct __stat64 stbuf;
 #endif
 
+  uint32_t flags = 0;
+
 #if defined(TUNDRA_UNIX)
-  if (0 == stat(path, &stbuf))
-#elif defined(TUNDRA_WIN32_MINGW)
-  if (0 == _stat64(path, &stbuf))
+  if (0 != lstat(path, &stbuf))
+    goto Failure;
+
+  if ((stbuf.st_mode & S_IFMT) == S_IFLNK)
+  {
+    flags |= FileInfo::kFlagSymlink;
+    if (0 != stat(path, &stbuf))
+      goto Failure;
+  }
 #elif defined(TUNDRA_WIN32)
-  if (0 == __stat64(path, &stbuf))
+# if defined(TUNDRA_WIN32_MINGW)
+  if (0 != _stat64(path, &stbuf))
+#else
+  if (0 != __stat64(path, &stbuf))
 #endif
-  {
-    uint32_t flags = FileInfo::kFlagExists;
+    goto Failure;
 
-    if ((stbuf.st_mode & S_IFMT) == S_IFDIR)
-      flags |= FileInfo::kFlagDirectory;
-    else if ((stbuf.st_mode & S_IFMT) == S_IFREG)
-      flags |= FileInfo::kFlagFile;
+  DWORD attrs = GetFileAttributesA(path);
+  if (attrs == INVALID_FILE_ATTRIBUTES)
+    goto Failure;
 
-    result.m_Flags     = flags;
-    result.m_Timestamp = stbuf.st_mtime;
-    result.m_Size      = stbuf.st_size;
-  }
-  else
-  {
-    result.m_Flags     = errno == ENOENT ? 0 : FileInfo::kFlagError;
-    result.m_Timestamp = 0;
-    result.m_Size      = 0;
-  }
+  if ((attrs & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+    flags |= FileInfo::kFlagSymlink;
+#endif
+
+  flags |= FileInfo::kFlagExists;
+
+  if ((stbuf.st_mode & S_IFMT) == S_IFDIR)
+    flags |= FileInfo::kFlagDirectory;
+  else if ((stbuf.st_mode & S_IFMT) == S_IFREG)
+    flags |= FileInfo::kFlagFile;
+
+  result.m_Flags     = flags;
+  result.m_Timestamp = stbuf.st_mtime;
+  result.m_Size      = stbuf.st_size;
+
+  return result;
+
+Failure:
+  result.m_Flags     = errno == ENOENT ? flags : FileInfo::kFlagError;
+  result.m_Timestamp = 0;
+  result.m_Size      = 0;
 
   return result;
 }
