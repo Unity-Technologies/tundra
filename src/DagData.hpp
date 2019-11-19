@@ -112,9 +112,7 @@ struct NodeData
   };
 
   FrozenString                    m_Action;
-  FrozenString                    m_PreAction;
   FrozenString                    m_Annotation;
-  int32_t                         m_PassIndex;
   FrozenArray<int32_t>            m_Dependencies;
   FrozenArray<int32_t>            m_BackLinks;
   FrozenArray<FrozenFileAndHash>  m_InputFiles;
@@ -127,11 +125,6 @@ struct NodeData
   FrozenArray<int32_t>            m_SharedResources;
   uint32_t                        m_Flags;
   uint32_t                        m_OriginalIndex;
-};
-
-struct PassData
-{
-  FrozenString m_PassName;
 };
 
 struct SharedResourceData
@@ -153,8 +146,6 @@ struct DagData
   int32_t                       m_NodeCount;
   FrozenPtr<HashDigest>         m_NodeGuids;
   FrozenPtr<NodeData>           m_NodeData;
-
-  FrozenArray<PassData>         m_Passes;
 
   FrozenArray<SharedResourceData> m_SharedResources;
 

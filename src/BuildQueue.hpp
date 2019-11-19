@@ -116,7 +116,7 @@ namespace t2
 
   void BuildQueueInit(BuildQueue* queue, const BuildQueueConfig* config);
 
-  BuildResult::Enum BuildQueueBuildNodeRange(BuildQueue* queue, int start_index, int count, int pass_index);
+  BuildResult::Enum BuildQueueBuildNodeRange(BuildQueue* queue, int start_index, int count );
 
   void BuildQueueDestroy(BuildQueue* queue);
 

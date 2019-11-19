@@ -31,9 +31,7 @@ static void DumpDag(const DagData* data)
     if (node.m_Flags & NodeData::kFlagOverwriteOutputs) printf(" overwrite");
     if (node.m_Flags & NodeData::kFlagExpensive) printf(" expensive");
     printf("\n  action: %s\n", node.m_Action.Get());
-    printf("  preaction: %s\n", node.m_PreAction.Get() ? node.m_PreAction.Get() : "(null)");
     printf("  annotation: %s\n", node.m_Annotation.Get());
-    printf("  pass index: %u\n", node.m_PassIndex);
 
     printf("  dependencies:");
     for (int32_t dep : node.m_Dependencies)
@@ -110,12 +108,6 @@ static void DumpDag(const DagData* data)
     }
 
     printf("\n");
-  }
-
-  printf("\npass count: %u\n", data->m_Passes.GetCount());
-  for (const PassData& pass : data->m_Passes)
-  {
-    printf("  pass: %s\n", pass.m_PassName.Get());
   }
 
   printf("\nconfig count: %u\n", data->m_ConfigCount);

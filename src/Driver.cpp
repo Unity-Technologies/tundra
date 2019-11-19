@@ -458,12 +458,6 @@ static bool DriverCheckDagSignatures(Driver* self, char* out_of_date_reason, int
 
   Log(kDebug, "checking file signatures for DAG data");
 
-  if (dag_data->m_Passes.GetCount() > Driver::kMaxPasses)
-  {
-    Log(kError, "too many passes, max is %d", Driver::kMaxPasses);
-    return false;
-  }
-
   // Check timestamps of frontend files used to produce the DAG
   for (const DagFileSignature& sig : dag_data->m_FileSignatures)
   {
@@ -516,36 +510,6 @@ static const BuildTupleData* FindBuildTuple(const DagData* dag, const TargetSpec
 
   return nullptr;
 }
-
-#if DISABLED_IN_OUR_FORK
-    
-// Walk reachable nodes from the entry points in the DAG
-static void FindReachable(uint32_t* node_bits, const DagData* dag, int index)
-{
-  int word_index = index / 32;
-  int bit_index = index & 31;
-  if (node_bits[word_index] & (1 << bit_index))
-    return;
-
-  node_bits[word_index] |= (1 << bit_index);
-
-  const NodeData* node = dag->m_NodeData + index;
-
-  for (int dep : node->m_Dependencies)
-  {
-    FindReachable(node_bits, dag, dep);
-  }
-}
-
-static void FindReachableNodes(uint32_t* node_bits, const DagData* dag, const BuildTupleData* tuple)
-{
-  for (const NamedNodeData& named_node : tuple->m_NamedNodes)
-  {
-    FindReachable(node_bits, dag, named_node.m_NodeIndex);
-  }
-}
-    
-#endif
 
 static int LevenshteinDistanceNoCase(const char* s, const char* t)
 {
@@ -703,92 +667,6 @@ static void FindNodesByName(
   }
 }
 
-#if DISABLED_IN_OUR_FORK
-    
-    // Try to match against all input/output filenames
-    if (!found)
-    {
-      char cwd[kMaxPathLength + 1];
-      GetCwd(cwd, sizeof cwd);
-      size_t cwd_len = strlen(cwd);
-      cwd[cwd_len] = TD_PATHSEP;
-      cwd[cwd_len+1] = '\0';
-
-      const char *filename = name;
-      PathBuffer path;
-      PathInit(&path, filename);
-      char path_fmt[kMaxPathLength];
-      PathFormat(path_fmt, &path);
-
-      if (0 == PathCompareN(path_fmt, cwd, cwd_len+1))
-      {
-        filename = path_fmt + cwd_len + 1;
-        Log(kDebug, "Mapped %s to %s for DAG searching", path_fmt, filename);
-      }
-      else
-      {
-        filename = path_fmt;
-      }
-
-      const uint32_t filename_hash = Djb2HashPath(filename);
-
-      FindReachableNodes(node_bits, dag, tuple);
-
-      // Brute force all reachable nodes from tuple to match input or output file names
-      size_t base_index = 0;
-      for (size_t i = 0, count = node_bits_size / 4; !found && i < count; ++i, base_index += 32)
-      {
-        uint32_t bits = node_bits[i];
-
-        while (bits)
-        {
-          int bit = CountTrailingZeroes(bits);
-
-          size_t node_index = base_index + bit;
-          const NodeData* node = dag->m_NodeData + node_index;
-
-#if SUPPORT_SEARCHING_IN_INPUTS
-          for (const FrozenFileAndHash& input : node->m_InputFiles)
-          {
-            if (filename_hash == input.m_FilenameHash && 0 == PathCompare(input.m_Filename, filename))
-            {
-              BufferAppendOne(out_nodes, heap, node_index);
-              Log(kDebug, "mapped %s to node %d (based on input file)", name, node_index);
-              found = true;
-              break;
-            }
-          }
-
-          if (found)
-            break;
-#endif
-          for (const FrozenFileAndHash& output : node->m_OutputFiles)
-          {
-            if (filename_hash == output.m_FilenameHash && 0 == PathCompare(output.m_Filename, filename))
-            {
-              BufferAppendOne(out_nodes, heap, node_index);
-              Log(kDebug, "mapped %s to node %d (based on output file)", name, node_index);
-              found = true;
-              break;
-            }
-          }
-
-          if (found)
-            break;
-
-          bits &= ~(1 << bit);
-        }
-      }
-    }
-
-    if (!found)
-    {
-      Croak("unable to map %s to any named node or input/output file", name);
-    }
-  }
-}
-
-#endif
 
 static void DriverSelectNodes(const DagData* dag, const char** targets, int target_count, Buffer<int32_t>* out_nodes, MemAllocHeap* heap)
 {
@@ -875,7 +753,7 @@ bool DriverPrepareNodes(Driver* self, const char** targets, int target_count)
     if (0 == (node_visited_bits[dag_word] & dag_bit))
     {
       const NodeData* node = src_nodes + dag_index;
-      CHECK(uint32_t(node->m_PassIndex) < uint32_t(dag->m_Passes.GetCount()));
+      
 
       BufferAppendOne(&node_indices, &self->m_Heap, dag_index);
 
@@ -883,13 +761,13 @@ bool DriverPrepareNodes(Driver* self, const char** targets, int target_count)
 
       // Update counts
       ++node_count;
-      self->m_PassNodeCount[node->m_PassIndex]++;
 
       // Stash node dependencies on the work queue to keep iterating
       BufferAppend(&node_stack, &self->m_Heap, node->m_Dependencies.GetArray(), node->m_Dependencies.GetCount());
     }
   }
 
+  self->m_NodeCount = node_count;
   HeapFree(heap, node_visited_bits);
   node_visited_bits = nullptr;
 
@@ -901,7 +779,6 @@ bool DriverPrepareNodes(Driver* self, const char** targets, int target_count)
   {
     const NodeData* src_node = src_nodes + node_indices[i];
     out_nodes[i].m_MmapData  = src_node;
-    out_nodes[i].m_PassIndex = (uint16_t) src_node->m_PassIndex;
   }
 
   // Find frozen node state from previous build, if present.
@@ -923,16 +800,6 @@ bool DriverPrepareNodes(Driver* self, const char** targets, int target_count)
     }
   }
 
-
-  // Sort the node state array based on which pass the nodes are in.
-  auto compare_node_passes = [](const NodeState& l, const NodeState& r) -> bool
-  {
-    return l.m_PassIndex < r.m_PassIndex;
-  };
-
-  std::sort(out_nodes, out_nodes + node_count, compare_node_passes);
-
-  // Now that our local order is established (sorted for pass purposes),
   // initialize a remapping table from global (dag) index to local (state)
   // index. This is so we can map any DAG node reference onto any local state.
   int32_t* node_remap = BufferAllocFill(&self->m_NodeRemap, heap, dag->m_NodeCount, -1);
@@ -987,7 +854,7 @@ bool DriverInit(Driver* self, const DriverOptions* options)
   LinearAllocInit(&self->m_StatCacheAllocator, &self->m_Heap, MB(64), "stat cache");
   StatCacheInit(&self->m_StatCache, &self->m_StatCacheAllocator, &self->m_Heap);
 
-  memset(&self->m_PassNodeCount, 0, sizeof self->m_PassNodeCount);
+  self->m_NodeCount = 0;
 
   return true;
 }
@@ -1019,25 +886,6 @@ bool DriverAllocNodes(Driver* self);
 BuildResult::Enum DriverBuild(Driver* self)
 {
   const DagData* dag = self->m_DagData;
-  const int pass_count = dag->m_Passes.GetCount();
-
-#if ENABLED(CHECKED_BUILD)
-  // Do some paranoia checking of the node state to make sure pass indices are
-  // set up correctly.
-  {
-    ProfilerScope prof_scope("Tundra DebugCheckPassIndices", 0);
-    int i = 0;
-    for (int pass = 0; pass < pass_count; ++pass)
-    {
-      for (int n = 0, node_count = self->m_PassNodeCount[pass]; n < node_count; ++n)
-      {
-        CHECK(self->m_Nodes[i].m_PassIndex == pass);
-        ++i;
-      }
-    }
-    CHECK(size_t(i) == self->m_Nodes.m_Size);
-  }
-#endif
 
   // Initialize build queue
   Mutex debug_signing_mutex;
@@ -1123,19 +971,13 @@ BuildResult::Enum DriverBuild(Driver* self)
 
   BuildResult::Enum build_result = BuildResult::kOk;
 
-  for (int pass = 0; BuildResult::kOk == build_result && pass < pass_count; ++pass)
+  int pass = 0;
   {
-    const char *pass_name  = dag->m_Passes[pass].m_PassName;
-    const int   pass_nodes = self->m_PassNodeCount[pass];
+    const int   pass_nodes = self->m_NodeCount;
 
-    Log(kInfo, "begin pass %s (nodes: %d - %d (%d))",
-        pass_name, global_node_index, global_node_index + pass_nodes - 1, pass_nodes);
-
-    build_result = BuildQueueBuildNodeRange(&build_queue, global_node_index, pass_nodes, pass);
+    build_result = BuildQueueBuildNodeRange(&build_queue, global_node_index, pass_nodes);
 
     global_node_index += pass_nodes;
-
-    Log(kInfo, "end pass %s", pass_name);
   }
 
   if (self->m_Options.m_DebugSigning)
@@ -1233,16 +1075,6 @@ static void save_node_sharedcode(int build_result, const HashDigest* input_signa
 
   BinarySegmentWritePointer(segments.state, BinarySegmentPosition(segments.string));
   BinarySegmentWriteStringData(segments.string, src_node->m_Action);
-
-  if (src_node->m_PreAction)
-  {
-    BinarySegmentWritePointer(segments.state, BinarySegmentPosition(segments.string));
-    BinarySegmentWriteStringData(segments.string, src_node->m_PreAction);
-  }
-  else
-  {
-    BinarySegmentWriteNullPointer(segments.state);
-  }
 }
 
 static bool node_was_used_by_this_dag_previously(const NodeStateData* node_state_data, uint32_t current_dag_identifier)

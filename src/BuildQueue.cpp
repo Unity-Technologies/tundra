@@ -114,7 +114,6 @@ namespace t2
     CHECK(!NodeStateIsQueued(state));
     CHECK(!NodeStateIsActive(state));
     CHECK(!NodeStateIsCompleted(state));
-    CHECK(state->m_MmapData->m_PassIndex == queue->m_CurrentPassIndex);
 
 #if ENABLED(CHECKED_BUILD)
     const int avail_init = AvailableNodeCount(queue);
@@ -166,8 +165,6 @@ namespace t2
       NodeState* state = GetStateForNode(queue, dep_index);
 
       CHECK(state != nullptr);
-
-      CHECK(state->m_MmapData->m_PassIndex <= src_node->m_PassIndex);
 
       if (NodeStateIsCompleted(state))
         continue;
@@ -375,22 +372,6 @@ namespace t2
       JsonWriteEndObject(msg);
     }
 
-    if (node_data->m_PreAction.Get() || prev_state->m_PreAction.Get())
-    {
-      if (!node_data->m_PreAction.Get() || !prev_state->m_PreAction.Get() || strcmp(node_data->m_PreAction, prev_state->m_PreAction) != 0)
-      {
-        JsonWriteStartObject(msg);
-
-        JsonWriteKeyName(msg, "key");
-        JsonWriteValueString(msg, "PreAction");
-
-        ReportValueWithOptionalTruncation(msg, "value", "value_truncated", node_data->m_PreAction);
-        ReportValueWithOptionalTruncation(msg, "oldvalue", "oldvalue_truncated", prev_state->m_PreAction);
-
-        JsonWriteEndObject(msg);
-      }
-    }
-
     bool explicitInputFilesListChanged = node_data->m_InputFiles.GetCount() != prev_state->m_InputFiles.GetCount();
     for (int32_t i = 0; i < node_data->m_InputFiles.GetCount() && !explicitInputFilesListChanged; ++i)
     {
@@ -574,12 +555,6 @@ namespace t2
     // Start with command line action. If that changes, we'll definitely have to rebuild.
     HashAddString(&sighash, node_data->m_Action);
     HashAddSeparator(&sighash);
-
-    if (const char* pre_action = node_data->m_PreAction)
-    {
-      HashAddString(&sighash, pre_action);
-      HashAddSeparator(&sighash);
-    }
 
     const ScannerData* scanner = node_data->m_Scanner;
 
@@ -895,7 +870,6 @@ namespace t2
     const bool        isWriteFileAction = node->m_MmapData->m_Flags & NodeData::kFlagIsWriteTextFileAction;
     const bool        dry_run       = (queue->m_Config.m_Flags & BuildQueueConfig::kFlagDryRun) != 0;
     const char        *cmd_line     = node_data->m_Action;
-    const char        *pre_cmd_line = node_data->m_PreAction;
 
     if (!isWriteFileAction && (!cmd_line || cmd_line[0] == '\0'))
     {
@@ -993,19 +967,6 @@ namespace t2
     bool* untouched_outputs = (bool*)LinearAllocate(&thread_state->m_ScratchAlloc, n_outputs, (size_t)sizeof(bool));
     memset(untouched_outputs, 0, n_outputs * sizeof(bool));
 
-    if (pre_cmd_line)
-    {
-      Log(kSpam, "Launching pre-action process");
-      TimingScope timing_scope(&g_Stats.m_ExecCount, &g_Stats.m_ExecTimeCycles);
-      ProfilerScope prof_scope("Pre-build", profiler_thread_id);
-      last_cmd_line = pre_cmd_line;
-      if (!dry_run)
-      {
-        result = ExecuteProcess(pre_cmd_line, env_count, env_vars, thread_state->m_Queue->m_Config.m_Heap, job_id, false, SlowCallback, &slowCallbackData, 1);
-        Log(kSpam, "Process return code %d", result.m_ReturnCode);
-      }
-    }
-
     ValidationResult passedOutputValidation = ValidationResult::Pass;
     if (0 == result.m_ReturnCode)
     {
@@ -1097,10 +1058,6 @@ namespace t2
     {
       if (NodeState* waiter = GetStateForNode(queue, link))
       {
-        // Only wake nodes in our current pass
-        if (waiter->m_MmapData->m_PassIndex != queue->m_CurrentPassIndex)
-          continue;
-
         // If the node isn't ready, skip it.
         if (!AllDependenciesReady(queue, waiter))
           continue;
@@ -1529,14 +1486,12 @@ namespace t2
     throttled = false;
   }
 
-  BuildResult::Enum BuildQueueBuildNodeRange(BuildQueue* queue, int start_index, int count, int pass_index)
+  BuildResult::Enum BuildQueueBuildNodeRange(BuildQueue* queue, int start_index, int count)
   {
     // Make sure none of the build threads see in-progress state due to a spurious wakeup.
     MutexLock(&queue->m_Lock);
 
     CHECK(start_index + count <= queue->m_Config.m_MaxNodes);
-
-    queue->m_CurrentPassIndex = pass_index;
 
     // Initialize build queue with index range to build
     int32_t   *build_queue = queue->m_Queue;

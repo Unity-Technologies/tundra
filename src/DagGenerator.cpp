@@ -245,8 +245,6 @@ static bool WriteNodes(
 
     const char           *action        = FindStringValue(node, "Action");
     const char           *annotation    = FindStringValue(node, "Annotation");
-    const char           *preaction     = FindStringValue(node, "PreAction");
-    const int             pass_index    = (int) FindIntValue(node, "PassIndex", 0);
     const JsonArrayValue *deps          = FindArrayValue(node, "Deps");
     const JsonArrayValue *inputs        = FindArrayValue(node, "Inputs");
     const JsonArrayValue *outputs       = FindArrayValue(node, "Outputs");
@@ -263,9 +261,7 @@ static bool WriteNodes(
     else
       WriteStringPtr(node_data_seg, writetextfile_payloads_seg, writetextfile_payload);
 
-    WriteStringPtr(node_data_seg, str_seg, preaction);
-    WriteCommonStringPtr(node_data_seg, str_seg, annotation, shared_strings, scratch);
-    BinarySegmentWriteInt32(node_data_seg, pass_index);
+    WriteCommonStringPtr(node_data_seg, str_seg, annotation, shared_strings, scratch);    
 
     if (deps)
     {
@@ -754,16 +750,9 @@ static bool CompileDag(const JsonObjectValue* root, BinaryWriter* writer, MemAll
 
 
   const JsonArrayValue  *nodes         = FindArrayValue(root, "Nodes");
-  const JsonArrayValue  *passes        = FindArrayValue(root, "Passes");
   const JsonArrayValue  *scanners      = FindArrayValue(root, "Scanners");
   const JsonArrayValue  *shared_resources = FindArrayValue(root, "SharedResources");
   const char*           identifier     = FindStringValue(root, "Identifier", "default");
-
-  if (EmptyArray(passes))
-  {
-    fprintf(stderr, "invalid Passes data\n");
-    return false;
-  }
   
   // Write scanners, store pointers
   BinaryLocator* scanner_ptrs = nullptr;
@@ -808,17 +797,6 @@ static bool CompileDag(const JsonObjectValue* root, BinaryWriter* writer, MemAll
   // Write nodes.
   if (!WriteNodes(nodes, main_seg, node_data_seg, aux_seg, str_seg, writetextfile_payloads_seg, scanner_ptrs, heap, &shared_strings, scratch, guid_table, remap_table))
     return false;
-
-  // Write passes
-  BinarySegmentWriteInt32(main_seg, (int) passes->m_Count);
-  BinarySegmentWritePointer(main_seg, BinarySegmentPosition(aux_seg));
-  for (size_t i = 0, count = passes->m_Count; i < count; ++i)
-  {
-    const char* pass_name = passes->m_Values[i]->GetString();
-    if (!pass_name)
-      return false;
-    WriteStringPtr(aux_seg, str_seg, pass_name);
-  }
 
   // Write shared resources
   if (!WriteSharedResources(shared_resources, main_seg, aux_seg, aux2_seg, str_seg))
