@@ -52,16 +52,6 @@ struct NamedNodeData
   int32_t      m_NodeIndex;
 };
 
-struct BuildTupleData
-{
-  int32_t                    m_ConfigIndex;
-  int32_t                    m_VariantIndex;
-  int32_t                    m_SubVariantIndex;
-  FrozenArray<int32_t>       m_DefaultNodes;
-  FrozenArray<int32_t>       m_AlwaysNodes;
-  FrozenArray<NamedNodeData> m_NamedNodes;
-};
-
 struct DagFileSignature
 {
   FrozenString      m_Path;
@@ -151,24 +141,6 @@ struct DagData
   FrozenArray<int32_t>          m_DefaultNodes;
 
   FrozenArray<SharedResourceData> m_SharedResources;
-
-  int32_t                       m_ConfigCount;
-  FrozenPtr<FrozenString>       m_ConfigNames;
-  FrozenPtr<uint32_t>           m_ConfigNameHashes;
-
-  int32_t                       m_VariantCount;
-  FrozenPtr<FrozenString>       m_VariantNames;
-  FrozenPtr<uint32_t>           m_VariantNameHashes;
-
-  int32_t                       m_SubVariantCount;
-  FrozenPtr<FrozenString>       m_SubVariantNames;
-  FrozenPtr<uint32_t>           m_SubVariantNameHashes;
-
-  FrozenArray<BuildTupleData>   m_BuildTuples;
-
-  int32_t                       m_DefaultConfigIndex;
-  int32_t                       m_DefaultVariantIndex;
-  int32_t                       m_DefaultSubVariantIndex;
 
   FrozenArray<DagFileSignature> m_FileSignatures;
   FrozenArray<DagGlobSignature> m_GlobSignatures;

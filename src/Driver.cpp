@@ -154,40 +154,24 @@ void DriverShowTargets(Driver* self)
 {
   const DagData* dag = self->m_DagData;
 
-  printf("%-20s %-20s %-20s\n", "Config", "Variant", "SubVariant");
-  printf("----------------------------------------------------------------\n");
-
-  for (const BuildTupleData& tuple : dag->m_BuildTuples)
-  {
-    const char* config_name = dag->m_ConfigNames[tuple.m_ConfigIndex];
-    const char* variant_name = dag->m_VariantNames[tuple.m_VariantIndex];
-    const char* subvariant_name = dag->m_SubVariantNames[tuple.m_SubVariantIndex];
-    printf("%-20s %-20s %-20s\n", config_name, variant_name, subvariant_name);
-  }
-
   printf("\nNamed nodes and aliases:\n");
   printf("----------------------------------------------------------------\n");
 
-  for (const BuildTupleData& tuple : dag->m_BuildTuples)
-  {
-    int32_t count = tuple.m_NamedNodes.GetCount();
-    const char** temp = (const char**)alloca(sizeof(const char*) * count);
-    for (int i = 0; i < count; ++i)
-    {
-      temp[i] = tuple.m_NamedNodes[i].m_Name.Get();
-    }
-    std::sort(temp, temp + count, [](const char *a, const char *b) { return strcmp(a, b) < 0; });
+ 
 
-    for (int i = 0; i < count; ++i)
-    {
-      printf(" - %s\n", temp[i]);
-    }
-    // Currently the named nodes are the same for all build tuples.
-    // We just need one.
-    break;
+  int32_t count = dag->m_NamedNodes.GetCount();
+  const char** temp = (const char**)alloca(sizeof(const char*) * count);
+  for (int i = 0; i < count; ++i)
+  {
+    temp[i] = dag->m_NamedNodes[i].m_Name.Get();
+  }
+  std::sort(temp, temp + count, [](const char *a, const char *b) { return strcmp(a, b) < 0; });
+
+  for (int i = 0; i < count; ++i)
+  {
+    printf(" - %s\n", temp[i]);
   }
 }
-
 
 static void GetIncludesRecursive(const HashDigest& scannerGuid, const char* fn, uint32_t fnHash, const ScanData* scan_data, int depth, HashTable<HashDigest, kFlagPathStrings>& seen, HashSet<kFlagPathStrings>& direct)
 {
@@ -496,21 +480,6 @@ static bool DriverCheckDagSignatures(Driver* self, char* out_of_date_reason, int
   return true;
 }
 
-static const BuildTupleData* FindBuildTuple(const DagData* dag, const TargetSpec spec)
-{
-  for (const BuildTupleData& tuple : dag->m_BuildTuples)
-  {
-    if (tuple.m_ConfigIndex == spec.m_ConfigIndex &&
-        tuple.m_VariantIndex == spec.m_VariantIndex &&
-        tuple.m_SubVariantIndex == spec.m_SubVariantIndex)
-    {
-      return &tuple;
-    }
-  }
-
-  return nullptr;
-}
-
 static int LevenshteinDistanceNoCase(const char* s, const char* t)
 {
   int n = strlen(s);
@@ -669,30 +638,7 @@ static void FindNodesByName(
 
 
 static void DriverSelectNodes(const DagData* dag, const char** targets, int target_count, Buffer<int32_t>* out_nodes, MemAllocHeap* heap)
-{
-  Buffer<TargetSpec> target_specs;
-  Buffer<const char*> named_targets;
-
-  BufferInit(&target_specs);
-  BufferInit(&named_targets);
-
-  TargetSelectInput tsel;
-  tsel.m_ConfigCount            = dag->m_ConfigCount;
-  tsel.m_VariantCount           = dag->m_VariantCount;
-  tsel.m_SubVariantCount        = dag->m_SubVariantCount;
-  tsel.m_ConfigNameHashes       = dag->m_ConfigNameHashes;
-  tsel.m_VariantNameHashes      = dag->m_VariantNameHashes;
-  tsel.m_SubVariantNameHashes   = dag->m_SubVariantNameHashes;
-  tsel.m_InputNameCount         = target_count;
-  tsel.m_InputNames             = targets;
-  tsel.m_DefaultConfigIndex     = dag->m_DefaultConfigIndex;
-  tsel.m_DefaultVariantIndex    = dag->m_DefaultVariantIndex;
-  tsel.m_DefaultSubVariantIndex = dag->m_DefaultSubVariantIndex;
-
-  SelectTargets(tsel, heap, &target_specs, &named_targets);
-
-  const BuildTupleData* tuple = FindBuildTuple(dag, target_specs[0]);
-  
+{  
   if (target_count > 0)
   {
     FindNodesByName(
@@ -707,9 +653,6 @@ static void DriverSelectNodes(const DagData* dag, const char** targets, int targ
   int32_t* new_end = std::unique(out_nodes->begin(), out_nodes->end());
   out_nodes->m_Size = new_end - out_nodes->begin();
   Log(kDebug, "Node selection finished with %d nodes to build", (int) out_nodes->m_Size);
-
-  BufferDestroy(&named_targets, heap);
-  BufferDestroy(&target_specs, heap);
 }
 
 bool DriverPrepareNodes(Driver* self, const char** targets, int target_count)
