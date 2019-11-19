@@ -2,6 +2,7 @@
 #include "DagData.hpp"
 #include "BuildQueue.hpp"
 #include "Exec.hpp"
+#include "JsonWriter.hpp"
 #include <stdio.h>
 #include <sstream>
 #include <ctime>
@@ -340,6 +341,7 @@ static void PrintNodeResult(const NodeResultPrintData* data, BuildQueue* queue)
       if (data->verbose)
       {
         PrintDiagnosticPrefix("Output");
+
         printf("%s\n", data->output_buffer);
       }
       else if (0 != (data->validation_result != ValidationResult::SwallowStdout))
@@ -369,10 +371,12 @@ void PrintNodeResult(
   const NodeData* node_data,
   const char* cmd_line,
   BuildQueue* queue,
+  ThreadState* thread_state,
   bool always_verbose,
   uint64_t time_exec_started,
   ValidationResult validationResult,
-  const bool* untouched_outputs)
+  const bool* untouched_outputs
+  )
 {
   int processedNodeCount = ++queue->m_ProcessedNodeCount;
   bool failed = result->m_ReturnCode != 0 || result->m_WasSignalled || validationResult >= ValidationResult::UnexpectedConsoleOutputFail;
@@ -403,6 +407,37 @@ void PrintNodeResult(
   {
     TrimOutputBuffer(&result->m_OutputBuffer);
     data.output_buffer = result->m_OutputBuffer.buffer;
+  }
+
+  
+  if (IsStructuredLogActive())
+  {
+    MemAllocLinearScope allocScope(&thread_state->m_ScratchAlloc);
+
+    JsonWriter msg;
+    JsonWriteInit(&msg, &thread_state->m_ScratchAlloc);
+    JsonWriteStartObject(&msg);
+
+    JsonWriteKeyName(&msg, "msg");
+    JsonWriteValueString(&msg, "noderesult");
+
+    JsonWriteKeyName(&msg, "annotation");
+    JsonWriteValueString(&msg, node_data->m_Annotation);
+
+    JsonWriteKeyName(&msg, "index");
+    JsonWriteValueInteger(&msg, node_data->m_OriginalIndex);
+
+    JsonWriteKeyName(&msg, "exitcode");
+    JsonWriteValueInteger(&msg, result->m_ReturnCode);
+
+    if (failed && data.output_buffer)
+    {
+      JsonWriteKeyName(&msg, "stdout");
+      JsonWriteValueString(&msg, data.output_buffer);
+    }
+
+    JsonWriteEndObject(&msg);
+    LogStructured(&msg);
   }
 
   // defer most of regular build failure output to the end of build, so that they are all

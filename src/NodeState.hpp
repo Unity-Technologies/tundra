@@ -12,13 +12,15 @@ namespace BuildProgress
   enum Enum
   {
     kInitial         = 0,
-    kBlocked         = 1,
-    kUnblocked       = 2,
-    kRunAction       = 3,
+    kWaitingForDependencies = 1,
+    kPermanentlyBlocked = 2,
+    kAllDependencesSucceeded  = 3,
+    kRunAction       = 4,
     kSucceeded       = 100,
-    kUpToDate        = 101,
-    kFailed          = 102,
-    kCompleted       = 200 
+    kSucceededButDependendeesRequireFrontendRerun = 101,
+    kUpToDate        = 102,
+    kFailed          = 103,
+    kCompleted       = 200
   };
 }
 
@@ -37,17 +39,14 @@ struct NodeState
   uint16_t                  m_PassIndex;
   BuildProgress::Enum       m_Progress;
 
+  const char*               m_DebugAnnotation;
   const NodeData*           m_MmapData;
   const NodeStateData*      m_MmapState;
 
-  int32_t                   m_FailedDependencyCount;
   int32_t                   m_BuildResult;
-
-  int32_t                   m_ImplicitDepCount;
-  const char**              m_ImplicitDeps;
-
   HashDigest                m_InputSignature;
 };
+
 
 inline bool NodeStateIsCompleted(const NodeState* state)
 {
@@ -84,10 +83,9 @@ inline void NodeStateFlagInactive(NodeState* state)
   state->m_Flags &= ~NodeStateFlags::kActive;
 }
 
-
-inline bool NodeStateIsBlocked(const NodeState* state)
+inline bool NodeStateIsWaitingForDependencies(const NodeState* state)
 {
-  return BuildProgress::kBlocked == state->m_Progress;
+  return BuildProgress::kWaitingForDependencies == state->m_Progress;
 }
 
 }

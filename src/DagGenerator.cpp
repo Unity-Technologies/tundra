@@ -250,6 +250,7 @@ static bool WriteNodes(
     const JsonArrayValue *deps          = FindArrayValue(node, "Deps");
     const JsonArrayValue *inputs        = FindArrayValue(node, "Inputs");
     const JsonArrayValue *outputs       = FindArrayValue(node, "Outputs");
+    const JsonArrayValue *output_dirs       = FindArrayValue(node, "TargetDirectories");
     const JsonArrayValue *aux_outputs   = FindArrayValue(node, "AuxOutputs");
     const JsonArrayValue *env_vars      = FindArrayValue(node, "Env");
     const int             scanner_index = (int) FindIntValue(node, "ScannerIndex", -1);
@@ -310,6 +311,23 @@ static bool WriteNodes(
 
     WriteFileArray(node_data_seg, array2_seg, str_seg, inputs);
     WriteFileArray(node_data_seg, array2_seg, str_seg, outputs);
+    WriteFileArray(node_data_seg, array2_seg, str_seg, output_dirs);
+
+    int output_dirs_count = output_dirs == nullptr ? 0 : output_dirs->m_Count;
+    BinarySegmentWriteInt32(node_data_seg, (int)output_dirs_count);
+    if (output_dirs_count >0)
+    {
+      BinarySegmentWritePointer(node_data_seg, BinarySegmentPosition(array2_seg));
+      for (int i=0; i!=output_dirs->m_Count; i++)
+      {
+        const JsonStringValue* d = output_dirs->m_Values[i]->AsString();
+        HashDigest digest = CalculateGlobSignatureFor(d->m_String, "*", true, heap, scratch);
+        BinarySegmentWrite(array2_seg, (char*) &digest, sizeof digest);
+      }
+    } else {
+      BinarySegmentWriteNullPointer(node_data_seg);
+    }
+
     WriteFileArray(node_data_seg, array2_seg, str_seg, aux_outputs);
     WriteFileArray(node_data_seg, array2_seg, str_seg, frontend_rsps);
 

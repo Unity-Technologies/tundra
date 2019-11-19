@@ -119,6 +119,8 @@ struct NodeData
   FrozenArray<int32_t>            m_BackLinks;
   FrozenArray<FrozenFileAndHash>  m_InputFiles;
   FrozenArray<FrozenFileAndHash>  m_OutputFiles;
+  FrozenArray<FrozenFileAndHash>  m_OutputDirectories;
+  FrozenArray<HashDigest>         m_OutputDirectoryGlobSignatures;
   FrozenArray<FrozenFileAndHash>  m_AuxOutputFiles;
   FrozenArray<FrozenFileAndHash>  m_FrontendResponseFiles;
   FrozenArray<FrozenString>       m_AllowedOutputSubstrings;
@@ -144,7 +146,7 @@ struct SharedResourceData
 
 struct DagData
 {
-  static const uint32_t         MagicNumber   = 0x2B89014f ^ kTundraHashMagic;
+  static const uint32_t         MagicNumber   = 0x2B29014f ^ kTundraHashMagic;
 
   uint32_t                      m_MagicNumber;
 

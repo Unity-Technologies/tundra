@@ -9,6 +9,7 @@ using Bee.Toolchain.GNU;
 using Bee.Toolchain.Linux;
 using Bee.Toolchain.VisualStudio;
 using Bee.Tools;
+using Bee.VisualStudioSolution;
 using NiceIO;
 using Unity.BuildSystem.NativeProgramSupport;
 using static Unity.BuildSystem.NativeProgramSupport.NativeProgramConfiguration;
@@ -178,7 +179,6 @@ class Build
             ToolChain.Store.Mac().Sdk_10_13().x64("10.12"),
             ToolChain.Store.Windows().VS2017().Sdk_17134().x64(),
             ToolChain.Store.Linux().Ubuntu_14_4().Gcc_4_8().x64(),
-            new LinuxGccToolchain(WSLGccSdk.Locatorx64.UserDefaultOrDummy),
         })
         {
             foreach (var config in new[]
@@ -216,6 +216,8 @@ class Build
                     }
                 }
             }
+
         }
-    }
+
+  }
 }

@@ -2,6 +2,7 @@
 #define BINARYDATA_HPP
 
 #include "Common.hpp"
+#include "Hash.hpp"
 
 namespace t2
 {

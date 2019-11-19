@@ -901,6 +901,7 @@ bool DriverPrepareNodes(Driver* self, const char** targets, int target_count)
   {
     const NodeData* src_node = src_nodes + node_indices[i];
     out_nodes[i].m_MmapData  = src_node;
+    out_nodes[i].m_DebugAnnotation = src_node->m_Annotation.Get();
     out_nodes[i].m_PassIndex = (uint16_t) src_node->m_PassIndex;
   }
 
@@ -1431,7 +1432,7 @@ bool DriverSaveBuildState(Driver* self)
 
     // If this node never computed an input signature (due to an error, or build cancellation), copy the old build progress over to retain the history.
     // Only do this if the output files and aux output files agree with the previously stored build state.
-    if (elem->m_Progress < BuildProgress::kUnblocked)
+    if (elem->m_Progress <= BuildProgress::kAllDependencesSucceeded)
     {
       if (const HashDigest* old_guid = BinarySearch(old_guids, old_count, *guid))
       {

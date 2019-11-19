@@ -266,6 +266,15 @@ int main(int argc, char* argv[])
 {
   using namespace t2;
 
+  if (getenv("GIVE_DEBUGGER_CHANCE_TO_ATTACH") != nullptr)
+  {
+      MessageBox(
+        NULL,
+        (LPCWSTR)L"Native debugger can attach now",
+        (LPCWSTR)L"Tundra",
+        MB_OK);
+  }
+
   InitCommon();
 
   Driver driver;
@@ -583,7 +592,7 @@ leave:
 
   SetStructuredLogFileName(nullptr);
 
-  return build_result == BuildResult::kOk ? 0 : 1;
+  return build_result;
 
   // Match up nodes to nodes in the build state
   //   Walk DAG node array in parallel with build state node array

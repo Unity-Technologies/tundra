@@ -32,7 +32,8 @@ namespace t2
       "build success",
       "build interrupted",
       "build failed",
-      "build failed to setup error"
+      "build failed to setup error",
+      "requires additional run"
     };
   }
 
@@ -74,26 +75,70 @@ namespace t2
     return state;
   }
 
-
-  static bool AllDependenciesReady(BuildQueue* queue, const NodeState* state)
+  static bool IsNodeReadyToBeAdvanced(BuildQueue* queue, const NodeState* state)
   {
     const NodeData *src_node      = state->m_MmapData;
 
     for (int32_t dep_index : src_node->m_Dependencies)
     {
       NodeState* state = GetStateForNode(queue, dep_index);
-
       CHECK(state != nullptr);
 
-      if (!NodeStateIsCompleted(state))
+      const char* name = state->m_MmapData->m_Annotation.Get();
+      Log(LogLevel::kInfo, "jaja %s\n", name);
+
+
+      switch(state->m_Progress)
       {
-        return false;
+         case BuildProgress::kInitial:
+           Croak("Should never happen!?");
+           break;
+         case BuildProgress::kWaitingForDependencies:
+         case BuildProgress::kRunAction:
+            return false;
+         case BuildProgress::kPermanentlyBlocked:
+         case BuildProgress::kAllDependencesSucceeded:
+         case BuildProgress::kSucceeded:
+         case BuildProgress::kSucceededButDependendeesRequireFrontendRerun:
+         case BuildProgress::kUpToDate:
+         case BuildProgress::kFailed:
+         case BuildProgress::kCompleted:
+           break;
+         default:
+         Croak("Unexpected progress");
       }
     }
 
     return true;
   }
 
+  static BuildProgress::Enum NextProgressForNodesWhoseDependenciesFinished(BuildQueue* queue, const NodeState* state)
+  {
+    for (int32_t dep_index : state->m_MmapData->m_Dependencies)
+    {
+      NodeState* depState = GetStateForNode(queue, dep_index);
+
+      BuildProgress::Enum depProgress = depState->m_Progress;
+
+      switch(depProgress)
+      {
+        case BuildProgress::kPermanentlyBlocked:
+        case BuildProgress::kFailed:
+        case BuildProgress::kSucceededButDependendeesRequireFrontendRerun:
+          return BuildProgress::kPermanentlyBlocked;
+        case BuildProgress::kSucceeded:
+        case BuildProgress::kCompleted:
+          continue;
+        case BuildProgress::kWaitingForDependencies:
+        case BuildProgress::kAllDependencesSucceeded:
+          return BuildProgress::kWaitingForDependencies;
+        default:
+          Croak("Unexpected node state for dependency %d", depProgress);
+      }
+    }
+
+    return BuildProgress::kAllDependencesSucceeded;
+  }
 
   static void WakeWaiters(BuildQueue* queue, int count)
   {
@@ -109,11 +154,10 @@ namespace t2
     const uint32_t queue_mask  = queue->m_QueueCapacity - 1;
     int32_t*       build_queue = queue->m_Queue;
 
-
-    CHECK(AllDependenciesReady(queue, state));
+    CHECK(IsNodeReadyToBeAdvanced(queue, state));
     CHECK(!NodeStateIsQueued(state));
     CHECK(!NodeStateIsActive(state));
-    CHECK(!NodeStateIsCompleted(state));
+    CHECK(state->m_Progress <= BuildProgress::kAllDependencesSucceeded);
     CHECK(state->m_MmapData->m_PassIndex == queue->m_CurrentPassIndex);
 
 #if ENABLED(CHECKED_BUILD)
@@ -166,7 +210,6 @@ namespace t2
       NodeState* state = GetStateForNode(queue, dep_index);
 
       CHECK(state != nullptr);
-
       CHECK(state->m_MmapData->m_PassIndex <= src_node->m_PassIndex);
 
       if (NodeStateIsCompleted(state))
@@ -174,7 +217,7 @@ namespace t2
 
       ++dep_waits_needed;
 
-      if (!NodeStateIsQueued(state) && !NodeStateIsActive(state) && !NodeStateIsBlocked(state))
+      if (!NodeStateIsQueued(state) && !NodeStateIsActive(state) && !NodeStateIsWaitingForDependencies(state))
       {
         Enqueue(queue, state);
         ++enqueue_count;
@@ -186,9 +229,9 @@ namespace t2
 
     // We're waiting on dependencies to be ready.
     if (dep_waits_needed > 0)
-      return BuildProgress::kBlocked;
+      return BuildProgress::kWaitingForDependencies;
 
-    return BuildProgress::kUnblocked;
+    return BuildProgress::kAllDependencesSucceeded;
   }
 
   static bool OutputFilesDiffer(const NodeData* node_data, const NodeStateData* prev_state)
@@ -543,9 +586,21 @@ namespace t2
     }
   }
 
+  static bool OutputFileInTargetDirectoryMissing(const NodeData* node_data, ThreadState* thread_state)
+  {
+    for (int i = 0; i < node_data->m_OutputDirectories.GetCount(); i++)
+    {
+        HashDigest hd = CalculateGlobSignatureFor(node_data->m_OutputDirectories[i].m_Filename, "*", true, &thread_state->m_LocalHeap, &thread_state->m_ScratchAlloc);      
+        HashDigest node_digest = node_data->m_OutputDirectoryGlobSignatures[i];
+        if (hd != node_digest)
+          return true;
+    }
+    return false;
+  }
+
   static BuildProgress::Enum CheckInputSignature(BuildQueue* queue, ThreadState* thread_state, NodeState* node, Mutex* queue_lock)
   {
-    CHECK(AllDependenciesReady(queue, node));
+    CHECK(IsNodeReadyToBeAdvanced(queue, node));
 
     MutexUnlock(queue_lock);
     const NodeData* node_data = node->m_MmapData;
@@ -752,34 +807,6 @@ namespace t2
 
       next_state = BuildProgress::kRunAction;
     }
-    else if (prev_state->m_BuildResult != 0)
-    {
-      // The build progress failed the last time around - we need to retry it.
-      Log(kSpam, "T=%d: building %s - previous build failed", thread_state->m_ThreadIndex, node_data->m_Annotation.Get());
-
-      if (IsStructuredLogActive())
-      {
-        MemAllocLinearScope allocScope(&thread_state->m_ScratchAlloc);
-
-        JsonWriter msg;
-        JsonWriteInit(&msg, &thread_state->m_ScratchAlloc);
-        JsonWriteStartObject(&msg);
-
-        JsonWriteKeyName(&msg, "msg");
-        JsonWriteValueString(&msg, "nodeRetryBuild");
-
-        JsonWriteKeyName(&msg, "annotation");
-        JsonWriteValueString(&msg, node_data->m_Annotation);
-
-        JsonWriteKeyName(&msg, "index");
-        JsonWriteValueInteger(&msg, node_data->m_OriginalIndex);
-
-        JsonWriteEndObject(&msg);
-        LogStructured(&msg);
-      }
-
-      next_state = BuildProgress::kRunAction;
-    }
     else if (OutputFilesDiffer(node_data, prev_state))
     {
       // The output files are different - need to rebuild.
@@ -824,8 +851,31 @@ namespace t2
 
       next_state = BuildProgress::kRunAction;
     }
-    else
+    else if (OutputFileInTargetDirectoryMissing(node_data, thread_state))
     {
+      if (IsStructuredLogActive())
+      {
+        MemAllocLinearScope allocScope(&thread_state->m_ScratchAlloc);
+
+        JsonWriter msg;
+        JsonWriteInit(&msg, &thread_state->m_ScratchAlloc);
+        JsonWriteStartObject(&msg);
+
+        JsonWriteKeyName(&msg, "msg");
+        JsonWriteValueString(&msg, "nodeOutputInTargetDirectoryMissing");
+
+        JsonWriteKeyName(&msg, "annotation");
+        JsonWriteValueString(&msg, node_data->m_Annotation);
+
+        JsonWriteKeyName(&msg, "index");
+        JsonWriteValueInteger(&msg, node_data->m_OriginalIndex);
+
+        JsonWriteEndObject(&msg);
+        LogStructured(&msg);
+      }
+
+      next_state = BuildProgress::kRunAction;
+    } else {
       // Everything is up to date
       Log(kSpam, "T=%d: %s - up to date", thread_state->m_ThreadIndex, node_data->m_Annotation.Get());
       next_state = BuildProgress::kUpToDate;
@@ -943,6 +993,28 @@ namespace t2
       }
     }
 
+
+    if (IsStructuredLogActive())
+    {
+      MemAllocLinearScope allocScope(&thread_state->m_ScratchAlloc);
+
+      JsonWriter msg;
+      JsonWriteInit(&msg, &thread_state->m_ScratchAlloc);
+      JsonWriteStartObject(&msg);
+
+      JsonWriteKeyName(&msg, "msg");
+      JsonWriteValueString(&msg, "nodestarted");
+
+      JsonWriteKeyName(&msg, "annotation");
+      JsonWriteValueString(&msg, node_data->m_Annotation);
+
+      JsonWriteKeyName(&msg, "index");
+      JsonWriteValueInteger(&msg, node_data->m_OriginalIndex);
+
+      JsonWriteEndObject(&msg);
+      LogStructured(&msg);
+    }
+
     if (!dry_run)
     {
       auto EnsureParentDirExistsFor = [=](const FrozenFileAndHash& fileAndHash) -> bool {
@@ -965,6 +1037,14 @@ namespace t2
       for (const FrozenFileAndHash& output_file : node_data->m_AuxOutputFiles)
         if (!EnsureParentDirExistsFor(output_file))
           return BuildProgress::kFailed;
+    
+      for (const FrozenFileAndHash& output_dir : node_data->m_OutputDirectories)
+      {
+        PathBuffer path;
+        PathInit(&path, output_dir.m_Filename);
+        if (!MakeDirectoriesRecursive(stat_cache, path))
+          return BuildProgress::kFailed;
+      }
     }
 
     ExecResult result = { 0, false };
@@ -992,6 +1072,8 @@ namespace t2
 
     bool* untouched_outputs = (bool*)LinearAllocate(&thread_state->m_ScratchAlloc, n_outputs, (size_t)sizeof(bool));
     memset(untouched_outputs, 0, n_outputs * sizeof(bool));
+
+    bool requireFrontendRerun = false;
 
     if (pre_cmd_line)
     {
@@ -1046,8 +1128,16 @@ namespace t2
           }
         }
 
-        Log(kSpam, "Process return code %d", result.m_ReturnCode);
+        for (int i = 0; i < node_data->m_OutputDirectories.GetCount(); i++)
+        {
+          HashDigest hd = CalculateGlobSignatureFor(node_data->m_OutputDirectories[i].m_Filename, "*", true, &thread_state->m_LocalHeap, &thread_state->m_ScratchAlloc);
+          
+           HashDigest node_digest = node_data->m_OutputDirectoryGlobSignatures[i];
+           if (hd != node_digest)
+                requireFrontendRerun = true;
+        }
 
+        Log(kSpam, "Process return code %d", result.m_ReturnCode);
       }
     }
 
@@ -1057,7 +1147,8 @@ namespace t2
     }
 
     MutexLock(queue_lock);
-    PrintNodeResult(&result, node_data, last_cmd_line, thread_state->m_Queue, echo_cmdline, time_of_start, passedOutputValidation, untouched_outputs);
+    PrintNodeResult(&result, node_data, last_cmd_line, thread_state->m_Queue, thread_state, echo_cmdline, time_of_start, passedOutputValidation, untouched_outputs);
+
     ExecResultFreeMemory(&result);
 
     if (result.m_WasAborted)
@@ -1067,7 +1158,7 @@ namespace t2
 
     if (0 == result.m_ReturnCode && passedOutputValidation < ValidationResult::UnexpectedConsoleOutputFail)
     {
-      return BuildProgress::kSucceeded;
+      return requireFrontendRerun ? BuildProgress::kSucceededButDependendeesRequireFrontendRerun : BuildProgress::kSucceeded;
     }
     else
     {
@@ -1097,20 +1188,24 @@ namespace t2
     {
       if (NodeState* waiter = GetStateForNode(queue, link))
       {
+        const char* a = waiter->m_MmapData->m_Annotation.Get();
+        Log(LogLevel::kInfo, "yeah %s\n", a);
         // Only wake nodes in our current pass
         if (waiter->m_MmapData->m_PassIndex != queue->m_CurrentPassIndex)
-          continue;
-
-        // If the node isn't ready, skip it.
-        if (!AllDependenciesReady(queue, waiter))
           continue;
 
         // Did someone else get to the node first?
         if (NodeStateIsQueued(waiter) || NodeStateIsActive(waiter))
           continue;
 
+        // If the node isn't ready, skip it.
+        if (!IsNodeReadyToBeAdvanced(queue, waiter))
+          continue;
+
         //printf("%s is ready to go\n", GetSourceNode(queue, waiter)->m_Annotation);
+        waiter->m_Progress = BuildProgress::kWaitingForDependencies;
         Enqueue(queue, waiter);
+        
         ++enqueue_count;
       }
     }
@@ -1155,21 +1250,19 @@ namespace t2
         case BuildProgress::kInitial:
           node->m_Progress = SetupDependencies(queue, node);
 
-          if (BuildProgress::kBlocked == node->m_Progress)
+          if (BuildProgress::kWaitingForDependencies == node->m_Progress)
           {
-            // Set ourselves as inactive until our dependencies are ready.
+            // Set ourselves as inactive until our dependencies are ready. note we do not requeue ourselves here.
             NodeStateFlagInactive(node);
             return;
           }
-          else
-            break;
-
-        case BuildProgress::kBlocked:
-          CHECK(AllDependenciesReady(queue, node));
-          node->m_Progress = BuildProgress::kUnblocked;
           break;
 
-        case BuildProgress::kUnblocked:
+        case BuildProgress::kWaitingForDependencies:
+          node->m_Progress = NextProgressForNodesWhoseDependenciesFinished(queue,node);
+          break;
+
+        case BuildProgress::kAllDependencesSucceeded:
           node->m_Progress = CheckInputSignature(queue, thread_state, node, queue_lock);
           break;
 
@@ -1210,6 +1303,13 @@ namespace t2
           SignalMainThreadToStartCleaningUp(queue);
           break;
 
+        case BuildProgress::kSucceededButDependendeesRequireFrontendRerun:
+          queue->m_RequireFrontendRerunNodeCount++;
+          node->m_BuildResult = 0;
+          //node->m_Progress = BuildProgress::kCompleted;
+          //break;
+
+        case BuildProgress::kPermanentlyBlocked:
         case BuildProgress::kCompleted:
           queue->m_PendingNodeCount--;
           
@@ -1378,6 +1478,7 @@ namespace t2
     queue->m_Config             = *config;
     queue->m_PendingNodeCount   = 0;
     queue->m_FailedNodeCount    = 0;
+    queue->m_RequireFrontendRerunNodeCount    = 0;
     queue->m_ProcessedNodeCount = 0;
     queue->m_MainThreadWantsToCleanUp = false;
     queue->m_BuildFinishedConditionalVariableSignaled = false;
@@ -1595,6 +1696,8 @@ namespace t2
       return BuildResult::kInterrupted;
     else if (queue->m_FailedNodeCount)
       return BuildResult::kBuildError;
+    else if (queue->m_RequireFrontendRerunNodeCount)
+      return BuildResult::kRequireFrontendRerun;
     else
       return BuildResult::kOk;
   }

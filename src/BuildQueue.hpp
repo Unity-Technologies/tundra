@@ -87,6 +87,7 @@ namespace t2
     BuildQueueConfig   m_Config;
     int32_t            m_PendingNodeCount;
     int32_t            m_FailedNodeCount;
+    int32_t            m_RequireFrontendRerunNodeCount;
     uint32_t            m_ProcessedNodeCount;
     int32_t            m_CurrentPassIndex;
     ThreadId           m_Threads[kMaxBuildThreads];
@@ -108,6 +109,7 @@ namespace t2
       kInterrupted = 1, // User interrupted the build (e.g CTRL+C)
       kBuildError  = 2, // At least one node failed to build
       kSetupError  = 3, // We couldn't set up the build
+      kRequireFrontendRerun = 4, //Frontend needs to run again
       kCount
     };
 

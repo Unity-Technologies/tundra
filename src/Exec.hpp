@@ -29,6 +29,7 @@ namespace t2
     int               m_ReturnCode;
     bool              m_WasSignalled;
     bool              m_WasAborted;
+    bool              m_RequiresFrontendRerun;
     NodeData*         m_FrozenNodeData;
     OutputBufferData  m_OutputBuffer;
   };
