@@ -52,6 +52,7 @@ struct NamedNodeData
   int32_t      m_NodeIndex;
 };
 
+
 struct DagFileSignature
 {
   FrozenString      m_Path;

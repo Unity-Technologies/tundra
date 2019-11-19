@@ -375,7 +375,7 @@ uint64_t TimerFromSeconds(double seconds)
 #if defined(TUNDRA_UNIX)
   return seconds * 1000000.0;
 #else
-  return seconds * s_PerfFrequency;
+  return (uint64_t) (seconds * s_PerfFrequency);
 #endif  
 }
 

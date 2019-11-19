@@ -50,6 +50,14 @@ class Build
             {
               new WarningAndPolicy("all", WarningPolicy.AsError)
             }));
+            this.CompilerSettingsForMsvc().Add(c => c.WithWarningPolicies(new[] 
+            {
+                //new msvc complains about: destructor was implicitly defined as deleted because a base class destructor is inaccessible or deleted
+                new WarningAndPolicy("4624", WarningPolicy.Silent),
+                new WarningAndPolicy("4244", WarningPolicy.Silent),
+                new WarningAndPolicy("4267", WarningPolicy.Silent),  //<-- even vs2017 headers complain about this one
+                new WarningAndPolicy("4018", WarningPolicy.AsError)
+            }));
 
             // We can enable this by committing valgrind to the repository or uploading a public stevedore artifact.
             this.Defines.Add("USE_VALGRIND=NO");

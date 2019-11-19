@@ -1236,7 +1236,7 @@ namespace t2
     auto HibernateForThrottlingIfRequired = [=]() {
       //check if dynamic max jobs amount has been reduced to a point where we need this thread to hibernate.
       //Don't take a mutex lock for this check, as this if check will almost never hit and it's in a perf critical loop.
-      if (thread_state->m_ThreadIndex < queue->m_DynamicMaxJobs)
+      if (thread_state->m_ThreadIndex < (int)queue->m_DynamicMaxJobs)
         return false;
       
       ProfilerScope profiler_scope("HibernateForThrottling", thread_state->m_ProfilerThreadId, nullptr, "thread_state_sleeping");

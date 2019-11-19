@@ -385,7 +385,7 @@ static bool DriverPrepareDag(Driver* self, const char* dag_fn)
       checkResult = DriverCheckDagSignatures(self, out_of_date_reason, out_of_date_reason_length);
     }
     uint64_t now = TimerGet();
-    int duration = TimerDiffSeconds(time_exec_started, now);
+    double duration = TimerDiffSeconds(time_exec_started, now);
     if (duration > 1)
       PrintNonNodeActionResult(duration, self->m_DagData->m_NodeCount, MessageStatusLevel::Warning, "Calculating file and glob signatures. (unusually slow)");
 
@@ -481,8 +481,8 @@ static bool DriverCheckDagSignatures(Driver* self, char* out_of_date_reason, int
 
 static int LevenshteinDistanceNoCase(const char* s, const char* t)
 {
-  int n = strlen(s);
-  int m = strlen(t);
+  int n = (int)strlen(s);
+  int m = (int)strlen(t);
   
   if (n == 0)
     return m;
@@ -1406,7 +1406,7 @@ void DriverRemoveStaleOutputs(Driver* self)
     return strlen(r) < strlen(l);
   });
 
-  int nuke_count = nuke_table.m_RecordCount;
+  uint32_t nuke_count = nuke_table.m_RecordCount;
   uint64_t time_exec_started = TimerGet();
   for (uint32_t i = 0; i < nuke_count; ++i)
   {
@@ -1420,7 +1420,7 @@ void DriverRemoveStaleOutputs(Driver* self)
   {
     char buffer[2000];
     snprintf(buffer, sizeof(buffer), "Delete %d artifact files that are no longer in use. (like %s)", nuke_count, paths[0]);
-    PrintNonNodeActionResult(TimerDiffSeconds(time_exec_started, TimerGet()), self->m_Nodes.m_Size, MessageStatusLevel::Success, buffer);
+    PrintNonNodeActionResult(TimerDiffSeconds(time_exec_started, TimerGet()), (int)self->m_Nodes.m_Size, MessageStatusLevel::Success, buffer);
   }
  
   HashSetDestroy(&nuke_table);
