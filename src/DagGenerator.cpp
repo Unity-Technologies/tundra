@@ -405,31 +405,6 @@ static bool WriteNodes(
   return true;
 }
 
-static bool WriteStrHashArray(
-    BinarySegment* main_seg,
-    BinarySegment* aux_seg,
-    BinarySegment* str_seg,
-    const JsonArrayValue* strings)
-{
-  BinarySegmentWriteInt32(main_seg, (int) strings->m_Count);
-  BinarySegmentWritePointer(main_seg, BinarySegmentPosition(aux_seg));
-  for (size_t i = 0, count = strings->m_Count; i < count; ++i)
-  {
-    const char* str = strings->m_Values[i]->GetString();
-    if (!str)
-      return false;
-    WriteStringPtr(aux_seg, str_seg, str);
-  }
-  BinarySegmentWritePointer(main_seg, BinarySegmentPosition(aux_seg));
-  for (size_t i = 0, count = strings->m_Count; i < count; ++i)
-  {
-    const char* str = strings->m_Values[i]->GetString();
-    uint32_t hash = Djb2Hash(str);
-    BinarySegmentWriteUint32(aux_seg, hash);
-  }
-
-  return true;
-}
 
 static bool WriteNodeArray(BinarySegment* top_seg, BinarySegment* data_seg, const JsonArrayValue* ints, const int32_t remap_table[])
 {
