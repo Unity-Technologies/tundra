@@ -83,7 +83,6 @@ struct Driver
   MemAllocLinear    m_StatCacheAllocator;
   StatCache         m_StatCache;
 
-  int32_t           m_NodeCount;
   DigestCache       m_DigestCache;  
 };
 

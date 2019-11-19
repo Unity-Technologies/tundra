@@ -685,7 +685,6 @@ bool DriverPrepareNodes(Driver* self, const char** targets, int target_count)
     {
       const NodeData* node = src_nodes + dag_index;
       
-
       BufferAppendOne(&node_indices, &self->m_Heap, dag_index);
 
       node_visited_bits[dag_word] |= dag_bit;
@@ -698,7 +697,6 @@ bool DriverPrepareNodes(Driver* self, const char** targets, int target_count)
     }
   }
 
-  self->m_NodeCount = node_count;
   HeapFree(heap, node_visited_bits);
   node_visited_bits = nullptr;
 
@@ -784,8 +782,6 @@ bool DriverInit(Driver* self, const DriverOptions* options)
   // This linear allocator is only accessed when the state cache is locked.
   LinearAllocInit(&self->m_StatCacheAllocator, &self->m_Heap, MB(64), "stat cache");
   StatCacheInit(&self->m_StatCache, &self->m_StatCacheAllocator, &self->m_Heap);
-
-  self->m_NodeCount = 0;
 
   return true;
 }
@@ -884,19 +880,10 @@ BuildResult::Enum DriverBuild(Driver* self)
   BuildQueue build_queue;
   BuildQueueInit(&build_queue, &queue_config);
 
-  int global_node_index = 0;
-
   BuildResult::Enum build_result = BuildResult::kOk;
-
-  int pass = 0;
-  {
-    const int   pass_nodes = self->m_NodeCount;
-
-    build_result = BuildQueueBuildNodeRange(&build_queue, global_node_index, pass_nodes);
-
-    global_node_index += pass_nodes;
-  }
-
+  
+  build_result = BuildQueueBuildNodeRange(&build_queue, 0, self->m_Nodes.m_Size);
+  
   if (self->m_Options.m_DebugSigning)
   {
     fclose((FILE*)queue_config.m_FileSigningLog);
