@@ -264,6 +264,7 @@ int main(int argc, char* argv[])
 {
   using namespace t2;
 
+#if TUNDRA_WIN32
   if (getenv("GIVE_DEBUGGER_CHANCE_TO_ATTACH") != nullptr)
   {
       MessageBox(
@@ -272,6 +273,7 @@ int main(int argc, char* argv[])
         (LPCWSTR)L"Tundra",
         MB_OK);
   }
+#endif
 
   InitCommon();
 
