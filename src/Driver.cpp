@@ -66,7 +66,6 @@ void DriverInitializeTundraFilePaths(DriverOptions* driverOptions)
 void DriverOptionsInit(DriverOptions* self)
 {
   self->m_ShowHelp          = false;
-  self->m_DryRun            = false;
   self->m_ForceDagRegen     = false;
   self->m_ShowTargets       = false;
   self->m_DebugMessages     = false;
@@ -822,15 +821,6 @@ BuildResult::Enum DriverBuild(Driver* self)
   // Initialize build queue
   Mutex debug_signing_mutex;
 
-  int max_expensive_count = self->m_DagData->m_MaxExpensiveCount;
-
-  if (max_expensive_count < 0)
-    max_expensive_count = self->m_Options.m_ThreadCount;
-  else
-    max_expensive_count = std::max(std::min(max_expensive_count, self->m_Options.m_ThreadCount), 1);
-
-  Log(kDebug, "Max # expensive jobs: %d", max_expensive_count);
-
   BuildQueueConfig queue_config;
   queue_config.m_Flags                   = 0;
   queue_config.m_Heap                    = &self->m_Heap;
@@ -844,7 +834,6 @@ BuildResult::Enum DriverBuild(Driver* self)
   queue_config.m_DigestCache             = &self->m_DigestCache;
   queue_config.m_ShaDigestExtensionCount = dag->m_ShaExtensionHashes.GetCount();
   queue_config.m_ShaDigestExtensions     = dag->m_ShaExtensionHashes.GetArray();
-  queue_config.m_MaxExpensiveCount       = max_expensive_count;
   queue_config.m_SharedResources         = dag->m_SharedResources.GetArray();
   queue_config.m_SharedResourcesCount    = dag->m_SharedResources.GetCount();
   queue_config.m_ThrottleInactivityPeriod = self->m_Options.m_ThrottleInactivityPeriod;
@@ -862,10 +851,6 @@ BuildResult::Enum DriverBuild(Driver* self)
   if (self->m_Options.m_ContinueOnError)
   {
     queue_config.m_Flags |= BuildQueueConfig::kFlagContinueOnError;
-  }
-  if (self->m_Options.m_DryRun)
-  {
-    queue_config.m_Flags |= BuildQueueConfig::kFlagDryRun;
   }
 
   if (self->m_Options.m_DebugSigning)

@@ -29,7 +29,7 @@ static void DumpDag(const DagData* data)
     printf("  flags:");
     if (node.m_Flags & NodeData::kFlagPreciousOutputs) printf(" precious");
     if (node.m_Flags & NodeData::kFlagOverwriteOutputs) printf(" overwrite");
-    if (node.m_Flags & NodeData::kFlagExpensive) printf(" expensive");
+  
     printf("\n  action: %s\n", node.m_Action.Get());
     printf("  annotation: %s\n", node.m_Annotation.Get());
 
@@ -139,7 +139,6 @@ static void DumpDag(const DagData* data)
     printf("hash            : 0x%08x\n", ext);
   }
 
-  printf("\nMax expensive jobs: %d\n", data->m_MaxExpensiveCount);
   printf("Magic number at end: 0x%08x\n", data->m_MagicNumberEnd);
 }
 

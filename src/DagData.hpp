@@ -92,8 +92,6 @@ struct NodeData
     // for incremental linking.
     kFlagPreciousOutputs    = 1 << 1,
 
-    kFlagExpensive          = 1 << 2,
-
     //if not set, we fail the build when a command prints anything unexpected to stdout or stderr
     kFlagAllowUnexpectedOutput = 1 << 3,
     
@@ -149,7 +147,6 @@ struct DagData
   // Hashes of filename extensions to use SHA-1 digest signing instead of timestamp signing.
   FrozenArray<uint32_t>         m_ShaExtensionHashes;
 
-  int32_t                       m_MaxExpensiveCount;
   int32_t                       m_DaysToKeepUnreferencedNodesAround;
 
   FrozenString                  m_StateFileName;

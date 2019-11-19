@@ -21,7 +21,6 @@ struct StateData;
 struct DriverOptions
 {
   bool        m_ShowHelp;
-  bool        m_DryRun;
   bool        m_ForceDagRegen;
   bool        m_ShowTargets;
   bool        m_DebugMessages;

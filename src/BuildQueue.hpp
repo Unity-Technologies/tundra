@@ -34,8 +34,6 @@ namespace t2
       kFlagEchoAnnotations    = 1 << 1,
       // Continue building even if there are errors.
       kFlagContinueOnError    = 1 << 2,
-      // Figure out which nodes need building, but do not actually execute any actions
-      kFlagDryRun             = 1 << 3
     };
 
     uint32_t        m_Flags;
@@ -53,7 +51,6 @@ namespace t2
     const uint32_t* m_ShaDigestExtensions;
     void*           m_FileSigningLog;
     Mutex*          m_FileSigningLogMutex;
-    int32_t         m_MaxExpensiveCount;
     const SharedResourceData* m_SharedResources;
     int             m_SharedResourcesCount;
     bool            m_ThrottleOnHumanActivity;
@@ -91,9 +88,6 @@ namespace t2
     int32_t            m_CurrentPassIndex;
     ThreadId           m_Threads[kMaxBuildThreads];
     ThreadState        m_ThreadState[kMaxBuildThreads];
-    int32_t            m_ExpensiveRunning;
-    int32_t            m_ExpensiveWaitCount;
-    NodeState        **m_ExpensiveWaitList;
     uint32_t          *m_SharedResourcesCreated;
     Mutex              m_SharedResourcesLock;
     bool               m_MainThreadWantsToCleanUp;

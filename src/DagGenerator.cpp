@@ -383,7 +383,6 @@ static bool WriteNodes(
 
     flags |= GetNodeFlag(node, "OverwriteOutputs", NodeData::kFlagOverwriteOutputs, true);
     flags |= GetNodeFlag(node, "PreciousOutputs",  NodeData::kFlagPreciousOutputs);
-    flags |= GetNodeFlag(node, "Expensive",        NodeData::kFlagExpensive);
     flags |= GetNodeFlag(node, "AllowUnexpectedOutput", NodeData::kFlagAllowUnexpectedOutput, false);
     flags |= GetNodeFlag(node, "AllowUnwrittenOutputFiles", NodeData::kFlagAllowUnwrittenOutputFiles, false);
     flags |= GetNodeFlag(node, "BanContentDigestForInputs", NodeData::kFlagBanContentDigestForInputs, false);
@@ -934,7 +933,6 @@ static bool CompileDag(const JsonObjectValue* root, BinaryWriter* writer, MemAll
     BinarySegmentWriteNullPointer(main_seg);
   }
 
-  BinarySegmentWriteInt32(main_seg, (int) FindIntValue(root, "MaxExpensiveCount", -1));
   BinarySegmentWriteInt32(main_seg, (int) FindIntValue(root, "DaysToKeepUnreferencedNodesAround", -1));
 
   WriteStringPtr(main_seg, str_seg, FindStringValue(root, "StateFileName", ".tundra2.state"));
