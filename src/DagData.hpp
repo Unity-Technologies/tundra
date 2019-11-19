@@ -147,6 +147,9 @@ struct DagData
   FrozenPtr<HashDigest>         m_NodeGuids;
   FrozenPtr<NodeData>           m_NodeData;
 
+  FrozenArray<NamedNodeData>    m_NamedNodes;
+  FrozenArray<int32_t>          m_DefaultNodes;
+
   FrozenArray<SharedResourceData> m_SharedResources;
 
   int32_t                       m_ConfigCount;

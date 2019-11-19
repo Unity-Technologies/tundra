@@ -798,6 +798,38 @@ static bool CompileDag(const JsonObjectValue* root, BinaryWriter* writer, MemAll
   if (!WriteNodes(nodes, main_seg, node_data_seg, aux_seg, str_seg, writetextfile_payloads_seg, scanner_ptrs, heap, &shared_strings, scratch, guid_table, remap_table))
     return false;
 
+  const JsonObjectValue *named_nodes      = FindObjectValue(root, "NamedNodes");
+  if (named_nodes)
+  {
+    size_t ncount = named_nodes->m_Count;
+    BinarySegmentWriteInt32(main_seg, (int) ncount);
+    BinarySegmentWritePointer(main_seg, BinarySegmentPosition(aux2_seg));
+    for (size_t i = 0; i < ncount; ++i)
+    {
+      WriteStringPtr(aux2_seg, str_seg, named_nodes->m_Names[i]);
+      const JsonNumberValue* node_index = named_nodes->m_Values[i]->AsNumber();
+      if (!node_index)
+      {
+        fprintf(stderr, "named node index must be number\n");
+        return false;
+      }
+      int remapped_index = remap_table[(int) node_index->m_Number];
+      BinarySegmentWriteInt32(aux2_seg, remapped_index);
+    }
+  }
+  else
+  {
+    BinarySegmentWriteInt32(main_seg, 0);
+    BinarySegmentWriteNullPointer(main_seg);
+  }
+
+  const JsonArrayValue  *default_nodes    = FindArrayValue(root, "DefaultNodes");
+  if (!WriteNodeArray(main_seg, aux2_seg, default_nodes, remap_table))
+  {
+    fprintf(stderr, "bad DefaultNodes data\n");
+    return false;
+  }
+
   // Write shared resources
   if (!WriteSharedResources(shared_resources, main_seg, aux_seg, aux2_seg, str_seg))
     return false;

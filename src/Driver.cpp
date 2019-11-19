@@ -557,7 +557,7 @@ static void FindNodesByName(
     MemAllocHeap*           heap,
     const char**            names,
     size_t                  name_count,
-    const BuildTupleData*   tuple)
+    const FrozenArray<NamedNodeData>&   named_nodes)
 {
   size_t    node_bits_size = (dag->m_NodeCount + 31) / 32 *sizeof(uint32_t);
   uint32_t *node_bits      = (uint32_t*) alloca(node_bits_size);
@@ -581,8 +581,8 @@ static void FindNodesByName(
       const char* string;
     };
     std::vector<StringWithScore> fuzzyMatches;
-    fuzzyMatches.reserve(tuple->m_NamedNodes.GetCount());
-    for (const NamedNodeData& named_node : tuple->m_NamedNodes)
+    fuzzyMatches.reserve(named_nodes.GetCount());
+    for (const NamedNodeData& named_node : named_nodes)
     {
       const int distance = LevenshteinDistanceNoCase(named_node.m_Name, name);
       const int fuzzyMatchLimit = std::max(0, std::min((int)strlen(name) - 2, 4));
@@ -691,26 +691,16 @@ static void DriverSelectNodes(const DagData* dag, const char** targets, int targ
 
   SelectTargets(tsel, heap, &target_specs, &named_targets);
 
-  for (const TargetSpec& spec : target_specs)
+  const BuildTupleData* tuple = FindBuildTuple(dag, target_specs[0]);
+  
+  if (target_count > 0)
   {
-    const BuildTupleData* tuple = FindBuildTuple(dag, spec);
-    if (!tuple)
-      Croak("couldn't find build tuple in DAG");
-
-    if (named_targets.m_Size > 0)
-    {
-      FindNodesByName(
-          dag,
-          out_nodes, heap,
-          named_targets.m_Storage, named_targets.m_Size,
-          tuple);
-    }
-    else
-    {
-      BufferAppend(out_nodes, heap, tuple->m_DefaultNodes.GetArray(), tuple->m_DefaultNodes.GetCount());
-    }
-
-    BufferAppend(out_nodes, heap, tuple->m_AlwaysNodes.GetArray(), tuple->m_AlwaysNodes.GetCount());
+    FindNodesByName(
+            dag,
+            out_nodes, heap,
+            targets, target_count, dag->m_NamedNodes);
+  } else {
+    BufferAppend(out_nodes, heap, dag->m_DefaultNodes.GetArray(), dag->m_DefaultNodes.GetCount());
   }
 
   std::sort(out_nodes->begin(), out_nodes->end());
