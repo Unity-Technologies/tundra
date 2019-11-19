@@ -161,7 +161,6 @@ class Build
       ToolChain.Store.Mac().Sdk_10_13().x64("10.12"),
       ToolChain.Store.Windows().VS2017().Sdk_17134().x64(),
       ToolChain.Store.Linux().Ubuntu_14_4().Gcc_4_8().x64(),
-      new LinuxGccToolchain(WSLGccSdk.Locatorx64.UserDefaultOrDummy),
     }.Where(toolChain => toolChain.CanBuild).ToArray();
 
     var configs = toolChains.SelectMany(toolchain => new[]
