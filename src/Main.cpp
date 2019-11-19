@@ -44,9 +44,7 @@ static const struct OptionTemplate
   const char       *m_Help;
 } g_OptionTemplates[] = {
   { 'j', "threads", OptionType::kInt, offsetof(t2::DriverOptions, m_ThreadCount),
-  "Specify number of build threads" },
-  { 'n', "dry-run", OptionType::kBool, offsetof(t2::DriverOptions, m_DryRun),
-  "Don't actually execute any build actions" },
+  "Specify number of build threads" },  
   { 'f', "force-dag-regen", OptionType::kBool, offsetof(t2::DriverOptions, m_ForceDagRegen),
     "Force regeneration of DAG data" },
   { 'G', "dag-regen-only", OptionType::kBool, offsetof(t2::DriverOptions, m_GenDagOnly),
@@ -266,6 +264,7 @@ int main(int argc, char* argv[])
 {
   using namespace t2;
 
+#if TUNDRA_WIN32
   if (getenv("GIVE_DEBUGGER_CHANCE_TO_ATTACH") != nullptr)
   {
       MessageBox(
@@ -274,6 +273,7 @@ int main(int argc, char* argv[])
         (LPCWSTR)L"Tundra",
         MB_OK);
   }
+#endif
 
   InitCommon();
 
@@ -514,7 +514,7 @@ int main(int argc, char* argv[])
 
   build_result = DriverBuild(&driver);
 
-  if (!driver.m_Options.m_DryRun && !DriverSaveBuildState(&driver))
+  if (!DriverSaveBuildState(&driver))
     Log(kError, "Couldn't save build state");
 
   if (!DriverSaveScanCache(&driver))

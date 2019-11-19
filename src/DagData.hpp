@@ -52,15 +52,6 @@ struct NamedNodeData
   int32_t      m_NodeIndex;
 };
 
-struct BuildTupleData
-{
-  int32_t                    m_ConfigIndex;
-  int32_t                    m_VariantIndex;
-  int32_t                    m_SubVariantIndex;
-  FrozenArray<int32_t>       m_DefaultNodes;
-  FrozenArray<int32_t>       m_AlwaysNodes;
-  FrozenArray<NamedNodeData> m_NamedNodes;
-};
 
 struct DagFileSignature
 {
@@ -101,8 +92,6 @@ struct NodeData
     // for incremental linking.
     kFlagPreciousOutputs    = 1 << 1,
 
-    kFlagExpensive          = 1 << 2,
-
     //if not set, we fail the build when a command prints anything unexpected to stdout or stderr
     kFlagAllowUnexpectedOutput = 1 << 3,
     
@@ -112,9 +101,7 @@ struct NodeData
   };
 
   FrozenString                    m_Action;
-  FrozenString                    m_PreAction;
   FrozenString                    m_Annotation;
-  int32_t                         m_PassIndex;
   FrozenArray<int32_t>            m_Dependencies;
   FrozenArray<int32_t>            m_BackLinks;
   FrozenArray<FrozenFileAndHash>  m_InputFiles;
@@ -129,11 +116,6 @@ struct NodeData
   FrozenArray<int32_t>            m_SharedResources;
   uint32_t                        m_Flags;
   uint32_t                        m_OriginalIndex;
-};
-
-struct PassData
-{
-  FrozenString m_PassName;
 };
 
 struct SharedResourceData
@@ -156,27 +138,10 @@ struct DagData
   FrozenPtr<HashDigest>         m_NodeGuids;
   FrozenPtr<NodeData>           m_NodeData;
 
-  FrozenArray<PassData>         m_Passes;
+  FrozenArray<NamedNodeData>    m_NamedNodes;
+  FrozenArray<int32_t>          m_DefaultNodes;
 
   FrozenArray<SharedResourceData> m_SharedResources;
-
-  int32_t                       m_ConfigCount;
-  FrozenPtr<FrozenString>       m_ConfigNames;
-  FrozenPtr<uint32_t>           m_ConfigNameHashes;
-
-  int32_t                       m_VariantCount;
-  FrozenPtr<FrozenString>       m_VariantNames;
-  FrozenPtr<uint32_t>           m_VariantNameHashes;
-
-  int32_t                       m_SubVariantCount;
-  FrozenPtr<FrozenString>       m_SubVariantNames;
-  FrozenPtr<uint32_t>           m_SubVariantNameHashes;
-
-  FrozenArray<BuildTupleData>   m_BuildTuples;
-
-  int32_t                       m_DefaultConfigIndex;
-  int32_t                       m_DefaultVariantIndex;
-  int32_t                       m_DefaultSubVariantIndex;
 
   FrozenArray<DagFileSignature> m_FileSignatures;
   FrozenArray<DagGlobSignature> m_GlobSignatures;
@@ -184,7 +149,6 @@ struct DagData
   // Hashes of filename extensions to use SHA-1 digest signing instead of timestamp signing.
   FrozenArray<uint32_t>         m_ShaExtensionHashes;
 
-  int32_t                       m_MaxExpensiveCount;
   int32_t                       m_DaysToKeepUnreferencedNodesAround;
 
   FrozenString                  m_StateFileName;

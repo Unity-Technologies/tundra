@@ -35,7 +35,7 @@ void PrintNodeResult(
   const bool* untouched_outputs);
 int PrintNodeInProgress(const NodeData* node_data, uint64_t time_of_start, const BuildQueue* queue);
 void PrintDeferredMessages(BuildQueue* queue);
-void PrintNonNodeActionResult(int duration, int max_nodes, MessageStatusLevel::Enum status_level, const char* annotation, ExecResult* result = nullptr);
+void PrintNonNodeActionResult(double duration, int max_nodes, MessageStatusLevel::Enum status_level, const char* annotation, ExecResult* result = nullptr);
 void PrintServiceMessage(MessageStatusLevel::Enum statusLevel, const char* formatString, ...);
 void StripAnsiColors(char* buffer);
 }

@@ -25,7 +25,6 @@ struct NodeStateData
   FrozenArray<FrozenString>      m_OutputFiles;
   FrozenArray<FrozenString>      m_AuxOutputFiles;
   FrozenString                   m_Action;
-  FrozenString                   m_PreAction;
   FrozenArray<NodeInputFileData> m_InputFiles;
   FrozenArray<NodeInputFileData> m_ImplicitInputFiles;
 

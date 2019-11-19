@@ -21,7 +21,6 @@ struct StateData;
 struct DriverOptions
 {
   bool        m_ShowHelp;
-  bool        m_DryRun;
   bool        m_ForceDagRegen;
   bool        m_ShowTargets;
   bool        m_DebugMessages;
@@ -53,11 +52,6 @@ void DriverOptionsInit(DriverOptions* self);
 
 struct Driver
 {
-  enum
-  {
-    kMaxPasses = 64
-  };
-
   MemAllocHeap      m_Heap;
   MemAllocLinear    m_Allocator;
 
@@ -89,9 +83,7 @@ struct Driver
   MemAllocLinear    m_StatCacheAllocator;
   StatCache         m_StatCache;
 
-  DigestCache       m_DigestCache;
-
-  int32_t           m_PassNodeCount[kMaxPasses];
+  DigestCache       m_DigestCache;  
 };
 
 bool DriverInit(Driver* self, const DriverOptions* options);

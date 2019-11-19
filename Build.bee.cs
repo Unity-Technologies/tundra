@@ -1,10 +1,14 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using Bee;
 using Bee.BuildTools;
 using Bee.Core;
+using Bee.DotNet;
 using Bee.NativeProgramSupport.Building;
 using Bee.NativeProgramSupport.Building.FluentSyntaxHelpers;
+using Bee.ProjectGeneration.VisualStudio;
 using Bee.Toolchain.GNU;
 using Bee.Toolchain.Linux;
 using Bee.Toolchain.VisualStudio;
@@ -16,208 +20,218 @@ using static Unity.BuildSystem.NativeProgramSupport.NativeProgramConfiguration;
 
 class Build
 {
-    private static readonly NPath SourceFolder = "src";
-    private static readonly NPath LuaSourceFolder = "lua/src";
-    private static readonly NPath UnitTestSourceFolder = "unittest";
+  private static readonly NPath SourceFolder = "src";
+  private static readonly NPath UnitTestSourceFolder = "unittest";
 
-    private static readonly NPath[] LuaSources = new[]
+  private static readonly NPath[] TundraSources = new[]
+  {
+    "BinaryWriter.cpp", "BuildQueue.cpp", "Common.cpp", "DagGenerator.cpp",
+    "Driver.cpp", "FileInfo.cpp", "Hash.cpp", "HashTable.cpp",
+    "IncludeScanner.cpp", "JsonParse.cpp", "JsonWriter.cpp", "MemAllocHeap.cpp",
+    "MemAllocLinear.cpp", "MemoryMappedFile.cpp", "PathUtil.cpp", "Profiler.cpp",
+    "ScanCache.cpp", "Scanner.cpp", "SignalHandler.cpp", "StatCache.cpp", "SharedResources.cpp",
+    "Thread.cpp",
+    "ExecUnix.cpp", "ExecWin32.cpp", "DigestCache.cpp", "FileSign.cpp",
+    "HashSha1.cpp", "HashFast.cpp", "ConditionVar.cpp", "ReadWriteLock.cpp",
+    "Exec.cpp", "NodeResultPrinting.cpp", "OutputValidation.cpp", "re.c", "HumanActivityDetection.cpp"
+  }.Select(file => SourceFolder.Combine(file)).ToArray();
+
+  private static readonly NPath[] TundraUnitTestSources = new[]
+  {
+    "TestHarness.cpp", "Test_BitFuncs.cpp", "Test_Buffer.cpp", "Test_Djb2.cpp", "Test_Hash.cpp",
+    "Test_IncludeScanner.cpp", "Test_Json.cpp", "Test_MemAllocLinear.cpp", "Test_Pow2.cpp",
+    "test_PathUtil.cpp", "Test_HashTable.cpp", "Test_StripAnsiColors.cpp"
+  }.Select(file => UnitTestSourceFolder.Combine(file)).ToArray();
+
+
+  class TundraNativeProgram : NativeProgram
+  {
+    public TundraNativeProgram(string name) : base(name)
     {
-        "lapi.c", "lauxlib.c", "lbaselib.c", "lcode.c",
-        "ldblib.c", "ldebug.c", "ldo.c", "ldump.c",
-        "lfunc.c", "lgc.c", "linit.c", "liolib.c",
-        "llex.c", "lmathlib.c", "lmem.c", "loadlib.c",
-        "lobject.c", "lopcodes.c", "loslib.c", "lparser.c",
-        "lstate.c", "lstring.c", "lstrlib.c", "ltable.c",
-        "ltablib.c", "ltm.c", "lundump.c", "lvm.c",
-        "lzio.c"
-    }.Select(file => LuaSourceFolder.Combine(file)).ToArray();
+      this.CompilerSettings().Add(compiler => compiler.WithCppLanguageVersion(CppLanguageVersion.Cpp11));
+      this.CompilerSettingsForGccLike().Add(compiler => compiler.WithVisibility(Visibility.Default));
 
-    private static readonly NPath[] TundraLuaSources = new[]
-    {
-        "LuaMain.cpp", "LuaInterface.cpp", "LuaInterpolate.cpp", "LuaJsonWriter.cpp",
-        "LuaPath.cpp", "LuaProfiler.cpp"
-    }.Select(file => SourceFolder.Combine(file)).ToArray();
+      this.CompilerSettingsForClang().Add(c => c.WithWarningPolicies(new[]
+      {
+        new WarningAndPolicy("all", WarningPolicy.AsError)
+      }));
+      this.CompilerSettingsForMsvc().Add(c => c.WithWarningPolicies(new[]
+      {
+        //new msvc complains about: destructor was implicitly defined as deleted because a base class destructor is inaccessible or deleted
+        new WarningAndPolicy("4624", WarningPolicy.Silent),
+        new WarningAndPolicy("4244", WarningPolicy.Silent),
+        new WarningAndPolicy("4267", WarningPolicy.Silent), //<-- even vs2017 headers complain about this one
+        new WarningAndPolicy("4018", WarningPolicy.AsError)
+      }));
 
-    private static readonly NPath[] TundraSources = new[]
-    {
-        "BinaryWriter.cpp", "BuildQueue.cpp", "Common.cpp", "DagGenerator.cpp",
-        "Driver.cpp", "FileInfo.cpp", "Hash.cpp", "HashTable.cpp",
-        "IncludeScanner.cpp", "JsonParse.cpp", "JsonWriter.cpp", "MemAllocHeap.cpp",
-        "MemAllocLinear.cpp", "MemoryMappedFile.cpp", "PathUtil.cpp", "Profiler.cpp",
-        "ScanCache.cpp", "Scanner.cpp", "SignalHandler.cpp", "StatCache.cpp", "SharedResources.cpp",
-        "TargetSelect.cpp", "Thread.cpp",
-        "ExecUnix.cpp", "ExecWin32.cpp", "DigestCache.cpp", "FileSign.cpp",
-        "HashSha1.cpp", "HashFast.cpp", "ConditionVar.cpp", "ReadWriteLock.cpp",
-        "Exec.cpp", "NodeResultPrinting.cpp", "OutputValidation.cpp", "re.c", "HumanActivityDetection.cpp"
-    }.Select(file => SourceFolder.Combine(file)).ToArray();
-
-    private static readonly NPath[] TundraUnitTestSources = new[]
-    {
-        "TestHarness.cpp", "Test_BitFuncs.cpp", "Test_Buffer.cpp", "Test_Djb2.cpp", "Test_Hash.cpp",
-        "Test_IncludeScanner.cpp", "Test_Json.cpp", "Test_MemAllocLinear.cpp", "Test_Pow2.cpp",
-        "Test_TargetSelect.cpp", "test_PathUtil.cpp", "Test_HashTable.cpp", "Test_StripAnsiColors.cpp"
-    }.Select(file => UnitTestSourceFolder.Combine(file)).ToArray();
-
-
-    class TundraNativeProgram : NativeProgram
-    {
-        public TundraNativeProgram(string name) : base(name)
-        {
-            this.CompilerSettings().Add(compiler => compiler.WithCppLanguageVersion(CppLanguageVersion.Cpp11));
-            this.CompilerSettingsForGccLike().Add(compiler => compiler.WithVisibility(Visibility.Default));
-
-            this.CompilerSettingsForClang().Add(c => c.WithWarningPolicies(new[]
-            {
-              new WarningAndPolicy("all", WarningPolicy.AsError)
-            }));
-
-            // We can enable this by committing valgrind to the repository or uploading a public stevedore artifact.
-            this.Defines.Add("USE_VALGRIND=NO");
-            this.Defines.Add(IsWindows, "WIN32_LEAN_AND_MEAN", "NOMINMAX", "WINVER=0x0600", "_WIN32_WINNT=0x0600");
-            this.DynamicLinkerSettingsForMsvc().Add(linker => linker.WithSubSystemType(SubSystemType.Console));
-        }
+      // We can enable this by committing valgrind to the repository or uploading a public stevedore artifact.
+      this.Defines.Add("USE_VALGRIND=NO");
+      this.Defines.Add(IsWindows, "WIN32_LEAN_AND_MEAN", "NOMINMAX", "WINVER=0x0600", "_WIN32_WINNT=0x0600");
+      this.DynamicLinkerSettingsForMsvc().Add(linker => linker.WithSubSystemType(SubSystemType.Console));
     }
+  }
 
-    static NPath GenerateGitFile()
-    {
-        var result = Shell.Execute("git for-each-ref --count 1 --format \"%(objectname):%(refname:short)\"");
-        if (!result.Success)
-            return null;
+  static NPath GenerateGitFile()
+  {
+    var result = Shell.Execute("git for-each-ref --count 1 --format \"%(objectname):%(refname:short)\"");
+    if (!result.Success)
+      return null;
 
-        var matches = Regex.Matches(result.StdOut, @"(\w+?):(.+)");
-        if (matches.Count == 0)
-            return null;
+    var matches = Regex.Matches(result.StdOut, @"(\w+?):(.+)");
+    if (matches.Count == 0)
+      return null;
 
-        var hash = matches[0].Groups[0].Captures[0].Value;
-        var branch = matches[0].Groups[1].Captures[0].Value;
-        var gitRevFile = Configuration.AbsoluteRootArtifactsPath.Combine($"generated/git_rev.c");
-        gitRevFile.WriteAllText($@"
+    var hash = matches[0].Groups[0].Captures[0].Value;
+    var branch = matches[0].Groups[1].Captures[0].Value;
+    var gitRevFile = Configuration.AbsoluteRootArtifactsPath.Combine($"generated/git_rev.c");
+    gitRevFile.WriteAllText($@"
             const char g_GitVersion[] = ""${hash}"";
             const char g_GitBranch[]  = ""${branch}"";
         ");
-        return gitRevFile;
-    }
+    return gitRevFile;
+  }
 
-    static void RegisterAlias(string name, NativeProgramConfiguration config, NPath file)
-    {
-        Backend.Current.AddAliasDependency($"{name}::{config.ToolChain.Platform.DisplayName.ToLower()}::{config.CodeGen.ToString().ToLower()}", file);
-        Backend.Current.AddAliasDependency($"{name}::{config.ToolChain.Platform.DisplayName.ToLower()}", file);
-        Backend.Current.AddAliasDependency($"{name}::{config.CodeGen.ToString().ToLower()}", file);
-        Backend.Current.AddAliasDependency($"{name}", file);
-    }
+  static void RegisterAlias(string name, NativeProgramConfiguration config, NPath file)
+  {
+    Backend.Current.AddAliasDependency($"{name}::{config.ToolChain.Platform.DisplayName.ToLower()}::{config.CodeGen.ToString().ToLower()}", file);
+    Backend.Current.AddAliasDependency($"{name}::{config.ToolChain.Platform.DisplayName.ToLower()}", file);
+    Backend.Current.AddAliasDependency($"{name}::{config.CodeGen.ToString().ToLower()}", file);
+    Backend.Current.AddAliasDependency($"{name}", file);
+  }
 
     static BuiltNativeProgram SetupSpecificConfiguration(NativeProgram program, NativeProgramConfiguration config, NativeProgramFormat format)
-    {
-        var builtProgram = program.SetupSpecificConfiguration(config, format);
+  {
+    var builtProgram = program.SetupSpecificConfiguration(config, format);
         var deployedProgram = builtProgram.DeployTo($"build/{config.Platform.Name}-{config.ToolChain.Architecture.Name}/{config.CodeGen}".ToLower());
-        RegisterAlias($"{program.Name}", config, deployedProgram.Path);
-        return deployedProgram;
-    }
+    RegisterAlias($"{program.Name}", config, deployedProgram.Path);
+    return deployedProgram;
+  }
 
     static void SetupStevedoreArtifact(NativeProgramConfiguration config, string artifactNamePattern, IEnumerable<NPath> files)
+  {
+    // The platform/arch suffix, e.g. "win-x86" or "linux-x64".
+    var suffix = $"{config.Platform.DisplayName.ToLower()}-{config.ToolChain.Architecture.DisplayName}";
+
+    var artifactPath = new NPath("artifacts/for-stevedore/" + artifactNamePattern.Replace("*", suffix));
+
+    var contents = new ZipArchiveContents();
+    foreach (var path in files)
+      contents.AddFileToArchive(path, path.FileName);
+    ZipTool.SetupPack(artifactPath, contents);
+  }
+
+  static void Main()
+  {
+    // tundra library
+    var tundraLibraryProgram = new TundraNativeProgram("libtundra");
+    tundraLibraryProgram.CompilerSettingsForMsvc().Add(compiler => compiler.WithUnicode(false));
+    tundraLibraryProgram.Sources.Add(TundraSources);
+    tundraLibraryProgram.PublicIncludeDirectories.Add(SourceFolder);
+    tundraLibraryProgram.Libraries.Add(IsWindows,
+      new SystemLibrary("Rstrtmgr.lib"),
+      new SystemLibrary("Shlwapi.lib"),
+      new SystemLibrary("User32.lib")
+    );
+
+    // tundra executable
+    var tundraExecutableProgram = new TundraNativeProgram("tundra2");
+    tundraExecutableProgram.Libraries.Add(tundraLibraryProgram);
+    tundraExecutableProgram.Sources.Add(SourceFolder.Combine("Main.cpp"));
+    // tundra executable rev info
+    var gitRevFile = GenerateGitFile();
+    if (gitRevFile != null)
     {
-        // The platform/arch suffix, e.g. "win-x86" or "linux-x64".
-        var suffix = $"{config.Platform.DisplayName.ToLower()}-{config.ToolChain.Architecture.DisplayName}";
-
-        var artifactPath = new NPath("artifacts/for-stevedore/" + artifactNamePattern.Replace("*", suffix));
-
-        var contents = new ZipArchiveContents();
-        foreach (var path in files)
-            contents.AddFileToArchive(path, path.FileName);
-        ZipTool.SetupPack(artifactPath, contents);
+      tundraExecutableProgram.Sources.Add(gitRevFile);
+      tundraExecutableProgram.Defines.Add("HAVE_GIT_INFO");
     }
 
-    static void Main()
+    // workaround to make sure we don't conflict with tundra executable used by bee
+    tundraExecutableProgram.ArtifactsGroup = "t2";
+
+    // tundra unit tests
+    var tundraUnitTestProgram = new TundraNativeProgram("tundra2-unittest");
+    tundraUnitTestProgram.Libraries.Add(tundraLibraryProgram);
+    tundraUnitTestProgram.Sources.Add(TundraUnitTestSources);
+    tundraUnitTestProgram.IncludeDirectories.Add($"{UnitTestSourceFolder}/googletest/googletest");
+    tundraUnitTestProgram.IncludeDirectories.Add($"{UnitTestSourceFolder}/googletest/googletest/include");
+
+    // setup build targets
+    var toolChains = new ToolChain[]
     {
-        // lua library
-        var luaLibrary = new TundraNativeProgram("lua");
-        luaLibrary.CompilerSettingsForMsvc().Add(compiler => compiler.WithUnicode(false));
-        luaLibrary.PublicIncludeDirectories.Add(LuaSourceFolder);
-        luaLibrary.Sources.Add(LuaSources);
+      ToolChain.Store.Mac().Sdk_10_13().x64("10.12"),
+      ToolChain.Store.Windows().VS2017().Sdk_17134().x64(),
+      ToolChain.Store.Linux().Ubuntu_14_4().Gcc_4_8().x64(),
+      new LinuxGccToolchain(WSLGccSdk.Locatorx64.UserDefaultOrDummy),
+    }.Where(toolChain => toolChain.CanBuild).ToArray();
 
-        // tundra library
-        var tundraLibraryProgram = new TundraNativeProgram("libtundra");
-        tundraLibraryProgram.CompilerSettingsForMsvc().Add(compiler => compiler.WithUnicode(false));
-        tundraLibraryProgram.Sources.Add(TundraSources);
-        tundraLibraryProgram.PublicIncludeDirectories.Add(SourceFolder);
-        tundraLibraryProgram.Libraries.Add(IsWindows,
-            new SystemLibrary("Rstrtmgr.lib"),
-            new SystemLibrary("Shlwapi.lib"),
-            new SystemLibrary("User32.lib")
-        );
+    var configs = toolChains.SelectMany(toolchain => new[]
+    {
+      new NativeProgramConfiguration(CodeGen.Master, toolchain, lump: false),
+      new NativeProgramConfiguration(CodeGen.Debug, toolchain, lump: false),
+    });
 
-        // tundra executable
-        var tundraExecutableProgram = new TundraNativeProgram("tundra2");
-        tundraExecutableProgram.Libraries.Add(tundraLibraryProgram);
-        tundraExecutableProgram.Sources.Add(SourceFolder.Combine("Main.cpp"));
-        // tundra executable rev info
-        var gitRevFile = GenerateGitFile();
-        if (gitRevFile != null)
+    var projectFileBuilders  =new NativeProgram[] {tundraLibraryProgram, tundraExecutableProgram, tundraUnitTestProgram}.ToDictionary(p => p, p => new VisualStudioNativeProjectFileBuilder(p));
+
+    foreach (var config in configs)
+    {
+      var toolchain = config.ToolChain;
+      var setupLib = SetupSpecificConfiguration(tundraLibraryProgram, config, toolchain.StaticLibraryFormat);
+      projectFileBuilders[tundraLibraryProgram].AddProjectConfiguration(config, setupLib);
+
+      var tundra = SetupSpecificConfiguration(tundraExecutableProgram, config, toolchain.ExecutableFormat);
+      projectFileBuilders[tundraExecutableProgram].AddProjectConfiguration(config, tundra);
+
+      var tundraUnitTestExecutable = (Executable) SetupSpecificConfiguration(tundraUnitTestProgram, config, toolchain.ExecutableFormat);
+      projectFileBuilders[tundraUnitTestProgram].AddProjectConfiguration(config, tundraUnitTestExecutable);
+
+      if (Bee.PramBinding.Pram.CanLaunch(toolchain.Platform, toolchain.Architecture))
+      {
+        var tundraUnitTestResult = Bee.PramBinding.Pram.SetupLaunch(
+          new Bee.PramBinding.Pram.LaunchArguments(toolchain.ExecutableFormat, tundraUnitTestExecutable));
+        RegisterAlias($"{tundraUnitTestProgram.Name}-report", config, tundraUnitTestResult.Result);
+      }
+
+      if (config.CodeGen == CodeGen.Master)
+      {
+        // Create a zip artifact (rather than 7z), as Bee needs Tundra early
+        // (before 7za is downloaded). The artifact should be minimal: Just
+        // the license file and main binary, no tests, docs, PDBs, Lua, etc.
+        SetupStevedoreArtifact(config, "tundra-*.zip", new[] {"COPYING", tundra.Path});
+
+        // On platforms with separate debug files (currently just Windows),
+        // make a separate artifact for these, which devs can fetch as needed.
+        if (tundra.Paths.Length > 1)
         {
-            tundraExecutableProgram.Sources.Add(gitRevFile);
-            tundraExecutableProgram.Defines.Add("HAVE_GIT_INFO");
+          SetupStevedoreArtifact(config, "tundra-*-debug.7z", new NPath[] {"COPYING"}.Concat(tundra.Paths.Skip(1)));
         }
-        // workaround to make sure we don't conflict with tundra executable used by bee
-        tundraExecutableProgram.ArtifactsGroup = "t2";
+      }
+    }
 
-        // tundra lua executable
-        var tundraLuaProgram = new TundraNativeProgram("t2-lua");
-        tundraLuaProgram.Libraries.Add(tundraLibraryProgram, luaLibrary);
-        tundraLuaProgram.Libraries.Add(IsWindows, new SystemLibrary("Advapi32.lib"));
-        tundraLuaProgram.Sources.Add(TundraLuaSources);
+    SetupVisualStudioSolution(projectFileBuilders, configs);
+  }
 
-        // tundra unit tests
-        var tundraUnitTestProgram = new TundraNativeProgram("tundra2-unittest");
-        tundraUnitTestProgram.Libraries.Add(tundraLibraryProgram);
-        tundraUnitTestProgram.Sources.Add(TundraUnitTestSources);
-        tundraUnitTestProgram.IncludeDirectories.Add($"{UnitTestSourceFolder}/googletest/googletest");
-        tundraUnitTestProgram.IncludeDirectories.Add($"{UnitTestSourceFolder}/googletest/googletest/include");
+  static void SetupVisualStudioSolution(Dictionary<NativeProgram, VisualStudioNativeProjectFileBuilder> projectFileBuilders, IEnumerable<NativeProgramConfiguration> configs)
+  {
+    var sln = new VisualStudioSolution()
+    {
+      Path = "visualstudio/tundra.gen.sln"
+    };
 
-        // setup build targets
-        foreach (var toolchain in new ToolChain[]
-        {
-            ToolChain.Store.Mac().Sdk_10_13().x64("10.12"),
-            ToolChain.Store.Windows().VS2017().Sdk_17134().x64(),
-            ToolChain.Store.Linux().Ubuntu_14_4().Gcc_4_8().x64(),
-        })
-        {
-            foreach (var config in new[]
-            {
-                new NativeProgramConfiguration(CodeGen.Master, toolchain, lump: false),
-                new NativeProgramConfiguration(CodeGen.Debug, toolchain, lump: false),
-            })
-            {
-                if (!toolchain.CanBuild)
-                    continue;
+    var nativeProjecFiles = projectFileBuilders.Values
+      .Select(pfb => pfb.DeployTo($"visualstudio/{pfb.NativeProgram.Name}.gen.vcxproj")).ToArray();
+    foreach (var nativeProjectFile in nativeProjecFiles)
+      sln.Projects.Add(nativeProjectFile);
 
-                SetupSpecificConfiguration(tundraLibraryProgram, config, toolchain.StaticLibraryFormat);
-                SetupSpecificConfiguration(tundraLuaProgram, config, toolchain.ExecutableFormat);
-                var tundra = SetupSpecificConfiguration(tundraExecutableProgram, config, toolchain.ExecutableFormat);
+    foreach (var config in configs)
+    {
+      ProjectConfigurationSelector selector = (incomingConfigs, incomingProjectFile) =>
+      {
+        var projectConfiguration = incomingConfigs.SingleOrDefault(i => i.Identifier == config.Identifier);
+        return new Tuple<IProjectConfiguration, bool>(projectConfiguration, projectConfiguration != null);
+      };
+      sln.Configurations.Add(new SolutionConfiguration(config.Identifier, selector));
+    }
 
-                var tundraUnitTestExecutable = (Executable)SetupSpecificConfiguration(tundraUnitTestProgram, config, toolchain.ExecutableFormat);
-                if (Bee.PramBinding.Pram.CanLaunch(toolchain.Platform, toolchain.Architecture))
-                {
-                    var tundraUnitTestResult = Bee.PramBinding.Pram.SetupLaunch(new Bee.PramBinding.Pram.LaunchArguments(toolchain.ExecutableFormat, tundraUnitTestExecutable));
-                    RegisterAlias($"{tundraUnitTestProgram.Name}-report", config, tundraUnitTestResult.Result);
-                }
-
-                if (config.CodeGen == CodeGen.Master)
-                {
-                    // Create a zip artifact (rather than 7z), as Bee needs Tundra early
-                    // (before 7za is downloaded). The artifact should be minimal: Just
-                    // the license file and main binary, no tests, docs, PDBs, Lua, etc.
-                    SetupStevedoreArtifact(config, "tundra-*.zip", new[] { "COPYING", tundra.Path });
-
-                    // On platforms with separate debug files (currently just Windows),
-                    // make a separate artifact for these, which devs can fetch as needed.
-                    if (tundra.Paths.Length > 1)
-                    {
-                        SetupStevedoreArtifact(config, "tundra-*-debug.7z", new NPath[] { "COPYING" }.Concat(tundra.Paths.Skip(1)));
-                    }
-                }
-            }
-
-        }
-
+    sln.Setup();
   }
 }

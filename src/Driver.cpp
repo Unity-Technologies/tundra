@@ -14,7 +14,6 @@
 #include "SortedArrayUtil.hpp"
 #include "StateData.hpp"
 #include "Stats.hpp"
-#include "TargetSelect.hpp"
 #include "HashTable.hpp"
 #include "Hash.hpp"
 #include "Profiler.hpp"
@@ -67,7 +66,6 @@ void DriverInitializeTundraFilePaths(DriverOptions* driverOptions)
 void DriverOptionsInit(DriverOptions* self)
 {
   self->m_ShowHelp          = false;
-  self->m_DryRun            = false;
   self->m_ForceDagRegen     = false;
   self->m_ShowTargets       = false;
   self->m_DebugMessages     = false;
@@ -154,40 +152,24 @@ void DriverShowTargets(Driver* self)
 {
   const DagData* dag = self->m_DagData;
 
-  printf("%-20s %-20s %-20s\n", "Config", "Variant", "SubVariant");
-  printf("----------------------------------------------------------------\n");
-
-  for (const BuildTupleData& tuple : dag->m_BuildTuples)
-  {
-    const char* config_name = dag->m_ConfigNames[tuple.m_ConfigIndex];
-    const char* variant_name = dag->m_VariantNames[tuple.m_VariantIndex];
-    const char* subvariant_name = dag->m_SubVariantNames[tuple.m_SubVariantIndex];
-    printf("%-20s %-20s %-20s\n", config_name, variant_name, subvariant_name);
-  }
-
   printf("\nNamed nodes and aliases:\n");
   printf("----------------------------------------------------------------\n");
 
-  for (const BuildTupleData& tuple : dag->m_BuildTuples)
-  {
-    int32_t count = tuple.m_NamedNodes.GetCount();
-    const char** temp = (const char**)alloca(sizeof(const char*) * count);
-    for (int i = 0; i < count; ++i)
-    {
-      temp[i] = tuple.m_NamedNodes[i].m_Name.Get();
-    }
-    std::sort(temp, temp + count, [](const char *a, const char *b) { return strcmp(a, b) < 0; });
+ 
 
-    for (int i = 0; i < count; ++i)
-    {
-      printf(" - %s\n", temp[i]);
-    }
-    // Currently the named nodes are the same for all build tuples.
-    // We just need one.
-    break;
+  int32_t count = dag->m_NamedNodes.GetCount();
+  const char** temp = (const char**)alloca(sizeof(const char*) * count);
+  for (int i = 0; i < count; ++i)
+  {
+    temp[i] = dag->m_NamedNodes[i].m_Name.Get();
+  }
+  std::sort(temp, temp + count, [](const char *a, const char *b) { return strcmp(a, b) < 0; });
+
+  for (int i = 0; i < count; ++i)
+  {
+    printf(" - %s\n", temp[i]);
   }
 }
-
 
 static void GetIncludesRecursive(const HashDigest& scannerGuid, const char* fn, uint32_t fnHash, const ScanData* scan_data, int depth, HashTable<HashDigest, kFlagPathStrings>& seen, HashSet<kFlagPathStrings>& direct)
 {
@@ -402,7 +384,7 @@ static bool DriverPrepareDag(Driver* self, const char* dag_fn)
       checkResult = DriverCheckDagSignatures(self, out_of_date_reason, out_of_date_reason_length);
     }
     uint64_t now = TimerGet();
-    int duration = TimerDiffSeconds(time_exec_started, now);
+    double duration = TimerDiffSeconds(time_exec_started, now);
     if (duration > 1)
       PrintNonNodeActionResult(duration, self->m_DagData->m_NodeCount, MessageStatusLevel::Warning, "Calculating file and glob signatures. (unusually slow)");
 
@@ -458,12 +440,6 @@ static bool DriverCheckDagSignatures(Driver* self, char* out_of_date_reason, int
 
   Log(kDebug, "checking file signatures for DAG data");
 
-  if (dag_data->m_Passes.GetCount() > Driver::kMaxPasses)
-  {
-    Log(kError, "too many passes, max is %d", Driver::kMaxPasses);
-    return false;
-  }
-
   // Check timestamps of frontend files used to produce the DAG
   for (const DagFileSignature& sig : dag_data->m_FileSignatures)
   {
@@ -502,55 +478,10 @@ static bool DriverCheckDagSignatures(Driver* self, char* out_of_date_reason, int
   return true;
 }
 
-static const BuildTupleData* FindBuildTuple(const DagData* dag, const TargetSpec spec)
-{
-  for (const BuildTupleData& tuple : dag->m_BuildTuples)
-  {
-    if (tuple.m_ConfigIndex == spec.m_ConfigIndex &&
-        tuple.m_VariantIndex == spec.m_VariantIndex &&
-        tuple.m_SubVariantIndex == spec.m_SubVariantIndex)
-    {
-      return &tuple;
-    }
-  }
-
-  return nullptr;
-}
-
-#if DISABLED_IN_OUR_FORK
-    
-// Walk reachable nodes from the entry points in the DAG
-static void FindReachable(uint32_t* node_bits, const DagData* dag, int index)
-{
-  int word_index = index / 32;
-  int bit_index = index & 31;
-  if (node_bits[word_index] & (1 << bit_index))
-    return;
-
-  node_bits[word_index] |= (1 << bit_index);
-
-  const NodeData* node = dag->m_NodeData + index;
-
-  for (int dep : node->m_Dependencies)
-  {
-    FindReachable(node_bits, dag, dep);
-  }
-}
-
-static void FindReachableNodes(uint32_t* node_bits, const DagData* dag, const BuildTupleData* tuple)
-{
-  for (const NamedNodeData& named_node : tuple->m_NamedNodes)
-  {
-    FindReachable(node_bits, dag, named_node.m_NodeIndex);
-  }
-}
-    
-#endif
-
 static int LevenshteinDistanceNoCase(const char* s, const char* t)
 {
-  int n = strlen(s);
-  int m = strlen(t);
+  int n = (int)strlen(s);
+  int m = (int)strlen(t);
   
   if (n == 0)
     return m;
@@ -593,7 +524,7 @@ static void FindNodesByName(
     MemAllocHeap*           heap,
     const char**            names,
     size_t                  name_count,
-    const BuildTupleData*   tuple)
+    const FrozenArray<NamedNodeData>&   named_nodes)
 {
   size_t    node_bits_size = (dag->m_NodeCount + 31) / 32 *sizeof(uint32_t);
   uint32_t *node_bits      = (uint32_t*) alloca(node_bits_size);
@@ -617,8 +548,8 @@ static void FindNodesByName(
       const char* string;
     };
     std::vector<StringWithScore> fuzzyMatches;
-    fuzzyMatches.reserve(tuple->m_NamedNodes.GetCount());
-    for (const NamedNodeData& named_node : tuple->m_NamedNodes)
+    fuzzyMatches.reserve(named_nodes.GetCount());
+    for (const NamedNodeData& named_node : named_nodes)
     {
       const int distance = LevenshteinDistanceNoCase(named_node.m_Name, name);
       const int fuzzyMatchLimit = std::max(0, std::min((int)strlen(name) - 2, 4));
@@ -703,145 +634,23 @@ static void FindNodesByName(
   }
 }
 
-#if DISABLED_IN_OUR_FORK
-    
-    // Try to match against all input/output filenames
-    if (!found)
-    {
-      char cwd[kMaxPathLength + 1];
-      GetCwd(cwd, sizeof cwd);
-      size_t cwd_len = strlen(cwd);
-      cwd[cwd_len] = TD_PATHSEP;
-      cwd[cwd_len+1] = '\0';
-
-      const char *filename = name;
-      PathBuffer path;
-      PathInit(&path, filename);
-      char path_fmt[kMaxPathLength];
-      PathFormat(path_fmt, &path);
-
-      if (0 == PathCompareN(path_fmt, cwd, cwd_len+1))
-      {
-        filename = path_fmt + cwd_len + 1;
-        Log(kDebug, "Mapped %s to %s for DAG searching", path_fmt, filename);
-      }
-      else
-      {
-        filename = path_fmt;
-      }
-
-      const uint32_t filename_hash = Djb2HashPath(filename);
-
-      FindReachableNodes(node_bits, dag, tuple);
-
-      // Brute force all reachable nodes from tuple to match input or output file names
-      size_t base_index = 0;
-      for (size_t i = 0, count = node_bits_size / 4; !found && i < count; ++i, base_index += 32)
-      {
-        uint32_t bits = node_bits[i];
-
-        while (bits)
-        {
-          int bit = CountTrailingZeroes(bits);
-
-          size_t node_index = base_index + bit;
-          const NodeData* node = dag->m_NodeData + node_index;
-
-#if SUPPORT_SEARCHING_IN_INPUTS
-          for (const FrozenFileAndHash& input : node->m_InputFiles)
-          {
-            if (filename_hash == input.m_FilenameHash && 0 == PathCompare(input.m_Filename, filename))
-            {
-              BufferAppendOne(out_nodes, heap, node_index);
-              Log(kDebug, "mapped %s to node %d (based on input file)", name, node_index);
-              found = true;
-              break;
-            }
-          }
-
-          if (found)
-            break;
-#endif
-          for (const FrozenFileAndHash& output : node->m_OutputFiles)
-          {
-            if (filename_hash == output.m_FilenameHash && 0 == PathCompare(output.m_Filename, filename))
-            {
-              BufferAppendOne(out_nodes, heap, node_index);
-              Log(kDebug, "mapped %s to node %d (based on output file)", name, node_index);
-              found = true;
-              break;
-            }
-          }
-
-          if (found)
-            break;
-
-          bits &= ~(1 << bit);
-        }
-      }
-    }
-
-    if (!found)
-    {
-      Croak("unable to map %s to any named node or input/output file", name);
-    }
-  }
-}
-
-#endif
 
 static void DriverSelectNodes(const DagData* dag, const char** targets, int target_count, Buffer<int32_t>* out_nodes, MemAllocHeap* heap)
-{
-  Buffer<TargetSpec> target_specs;
-  Buffer<const char*> named_targets;
-
-  BufferInit(&target_specs);
-  BufferInit(&named_targets);
-
-  TargetSelectInput tsel;
-  tsel.m_ConfigCount            = dag->m_ConfigCount;
-  tsel.m_VariantCount           = dag->m_VariantCount;
-  tsel.m_SubVariantCount        = dag->m_SubVariantCount;
-  tsel.m_ConfigNameHashes       = dag->m_ConfigNameHashes;
-  tsel.m_VariantNameHashes      = dag->m_VariantNameHashes;
-  tsel.m_SubVariantNameHashes   = dag->m_SubVariantNameHashes;
-  tsel.m_InputNameCount         = target_count;
-  tsel.m_InputNames             = targets;
-  tsel.m_DefaultConfigIndex     = dag->m_DefaultConfigIndex;
-  tsel.m_DefaultVariantIndex    = dag->m_DefaultVariantIndex;
-  tsel.m_DefaultSubVariantIndex = dag->m_DefaultSubVariantIndex;
-
-  SelectTargets(tsel, heap, &target_specs, &named_targets);
-
-  for (const TargetSpec& spec : target_specs)
+{  
+  if (target_count > 0)
   {
-    const BuildTupleData* tuple = FindBuildTuple(dag, spec);
-    if (!tuple)
-      Croak("couldn't find build tuple in DAG");
-
-    if (named_targets.m_Size > 0)
-    {
-      FindNodesByName(
-          dag,
-          out_nodes, heap,
-          named_targets.m_Storage, named_targets.m_Size,
-          tuple);
-    }
-    else
-    {
-      BufferAppend(out_nodes, heap, tuple->m_DefaultNodes.GetArray(), tuple->m_DefaultNodes.GetCount());
-    }
-
-    BufferAppend(out_nodes, heap, tuple->m_AlwaysNodes.GetArray(), tuple->m_AlwaysNodes.GetCount());
+    FindNodesByName(
+            dag,
+            out_nodes, heap,
+            targets, target_count, dag->m_NamedNodes);
+  } else {
+    BufferAppend(out_nodes, heap, dag->m_DefaultNodes.GetArray(), dag->m_DefaultNodes.GetCount());
   }
 
   std::sort(out_nodes->begin(), out_nodes->end());
   int32_t* new_end = std::unique(out_nodes->begin(), out_nodes->end());
   out_nodes->m_Size = new_end - out_nodes->begin();
   Log(kDebug, "Node selection finished with %d nodes to build", (int) out_nodes->m_Size);
-
-  BufferDestroy(&named_targets, heap);
-  BufferDestroy(&target_specs, heap);
 }
 
 bool DriverPrepareNodes(Driver* self, const char** targets, int target_count)
@@ -875,15 +684,13 @@ bool DriverPrepareNodes(Driver* self, const char** targets, int target_count)
     if (0 == (node_visited_bits[dag_word] & dag_bit))
     {
       const NodeData* node = src_nodes + dag_index;
-      CHECK(uint32_t(node->m_PassIndex) < uint32_t(dag->m_Passes.GetCount()));
-
+      
       BufferAppendOne(&node_indices, &self->m_Heap, dag_index);
 
       node_visited_bits[dag_word] |= dag_bit;
 
       // Update counts
       ++node_count;
-      self->m_PassNodeCount[node->m_PassIndex]++;
 
       // Stash node dependencies on the work queue to keep iterating
       BufferAppend(&node_stack, &self->m_Heap, node->m_Dependencies.GetArray(), node->m_Dependencies.GetCount());
@@ -902,7 +709,6 @@ bool DriverPrepareNodes(Driver* self, const char** targets, int target_count)
     const NodeData* src_node = src_nodes + node_indices[i];
     out_nodes[i].m_MmapData  = src_node;
     out_nodes[i].m_DebugAnnotation = src_node->m_Annotation.Get();
-    out_nodes[i].m_PassIndex = (uint16_t) src_node->m_PassIndex;
   }
 
   // Find frozen node state from previous build, if present.
@@ -924,16 +730,6 @@ bool DriverPrepareNodes(Driver* self, const char** targets, int target_count)
     }
   }
 
-
-  // Sort the node state array based on which pass the nodes are in.
-  auto compare_node_passes = [](const NodeState& l, const NodeState& r) -> bool
-  {
-    return l.m_PassIndex < r.m_PassIndex;
-  };
-
-  std::sort(out_nodes, out_nodes + node_count, compare_node_passes);
-
-  // Now that our local order is established (sorted for pass purposes),
   // initialize a remapping table from global (dag) index to local (state)
   // index. This is so we can map any DAG node reference onto any local state.
   int32_t* node_remap = BufferAllocFill(&self->m_NodeRemap, heap, dag->m_NodeCount, -1);
@@ -988,8 +784,6 @@ bool DriverInit(Driver* self, const DriverOptions* options)
   LinearAllocInit(&self->m_StatCacheAllocator, &self->m_Heap, MB(64), "stat cache");
   StatCacheInit(&self->m_StatCache, &self->m_StatCacheAllocator, &self->m_Heap);
 
-  memset(&self->m_PassNodeCount, 0, sizeof self->m_PassNodeCount);
-
   return true;
 }
 
@@ -1020,37 +814,9 @@ bool DriverAllocNodes(Driver* self);
 BuildResult::Enum DriverBuild(Driver* self)
 {
   const DagData* dag = self->m_DagData;
-  const int pass_count = dag->m_Passes.GetCount();
-
-#if ENABLED(CHECKED_BUILD)
-  // Do some paranoia checking of the node state to make sure pass indices are
-  // set up correctly.
-  {
-    ProfilerScope prof_scope("Tundra DebugCheckPassIndices", 0);
-    int i = 0;
-    for (int pass = 0; pass < pass_count; ++pass)
-    {
-      for (int n = 0, node_count = self->m_PassNodeCount[pass]; n < node_count; ++n)
-      {
-        CHECK(self->m_Nodes[i].m_PassIndex == pass);
-        ++i;
-      }
-    }
-    CHECK(size_t(i) == self->m_Nodes.m_Size);
-  }
-#endif
 
   // Initialize build queue
   Mutex debug_signing_mutex;
-
-  int max_expensive_count = self->m_DagData->m_MaxExpensiveCount;
-
-  if (max_expensive_count < 0)
-    max_expensive_count = self->m_Options.m_ThreadCount;
-  else
-    max_expensive_count = std::max(std::min(max_expensive_count, self->m_Options.m_ThreadCount), 1);
-
-  Log(kDebug, "Max # expensive jobs: %d", max_expensive_count);
 
   BuildQueueConfig queue_config;
   queue_config.m_Flags                   = 0;
@@ -1065,7 +831,6 @@ BuildResult::Enum DriverBuild(Driver* self)
   queue_config.m_DigestCache             = &self->m_DigestCache;
   queue_config.m_ShaDigestExtensionCount = dag->m_ShaExtensionHashes.GetCount();
   queue_config.m_ShaDigestExtensions     = dag->m_ShaExtensionHashes.GetArray();
-  queue_config.m_MaxExpensiveCount       = max_expensive_count;
   queue_config.m_SharedResources         = dag->m_SharedResources.GetArray();
   queue_config.m_SharedResourcesCount    = dag->m_SharedResources.GetCount();
   queue_config.m_ThrottleInactivityPeriod = self->m_Options.m_ThrottleInactivityPeriod;
@@ -1083,10 +848,6 @@ BuildResult::Enum DriverBuild(Driver* self)
   if (self->m_Options.m_ContinueOnError)
   {
     queue_config.m_Flags |= BuildQueueConfig::kFlagContinueOnError;
-  }
-  if (self->m_Options.m_DryRun)
-  {
-    queue_config.m_Flags |= BuildQueueConfig::kFlagDryRun;
   }
 
   if (self->m_Options.m_DebugSigning)
@@ -1120,25 +881,10 @@ BuildResult::Enum DriverBuild(Driver* self)
   BuildQueue build_queue;
   BuildQueueInit(&build_queue, &queue_config);
 
-  int global_node_index = 0;
-
   BuildResult::Enum build_result = BuildResult::kOk;
-
-  for (int pass = 0; BuildResult::kOk == build_result && pass < pass_count; ++pass)
-  {
-    const char *pass_name  = dag->m_Passes[pass].m_PassName;
-    const int   pass_nodes = self->m_PassNodeCount[pass];
-
-    Log(kInfo, "begin pass %s (nodes: %d - %d (%d))",
-        pass_name, global_node_index, global_node_index + pass_nodes - 1, pass_nodes);
-
-    build_result = BuildQueueBuildNodeRange(&build_queue, global_node_index, pass_nodes, pass);
-
-    global_node_index += pass_nodes;
-
-    Log(kInfo, "end pass %s", pass_name);
-  }
-
+  
+  build_result = BuildQueueBuildNodeRange(&build_queue, 0, self->m_Nodes.m_Size);
+  
   if (self->m_Options.m_DebugSigning)
   {
     fclose((FILE*)queue_config.m_FileSigningLog);
@@ -1234,16 +980,6 @@ static void save_node_sharedcode(int build_result, const HashDigest* input_signa
 
   BinarySegmentWritePointer(segments.state, BinarySegmentPosition(segments.string));
   BinarySegmentWriteStringData(segments.string, src_node->m_Action);
-
-  if (src_node->m_PreAction)
-  {
-    BinarySegmentWritePointer(segments.state, BinarySegmentPosition(segments.string));
-    BinarySegmentWriteStringData(segments.string, src_node->m_PreAction);
-  }
-  else
-  {
-    BinarySegmentWriteNullPointer(segments.state);
-  }
 }
 
 static bool node_was_used_by_this_dag_previously(const NodeStateData* node_state_data, uint32_t current_dag_identifier)
@@ -1512,6 +1248,25 @@ bool DriverSaveBuildState(Driver* self)
   return success;
 }
 
+// Returns true if the path was actually cleaned up.
+// Does NOT delete symlinks.
+static bool CleanupPath(const char* path)
+{
+  FileInfo info = GetFileInfo(path);
+  if (!info.Exists())
+    return false;
+  if (info.IsSymlink())
+    return false;
+#if defined(TUNDRA_UNIX)
+  return 0 == remove(path);
+#else
+  else if (info.IsDirectory())
+    return TRUE == RemoveDirectoryA(path);
+  else
+    return TRUE == DeleteFileA(path);
+#endif
+}
+
 void DriverRemoveStaleOutputs(Driver* self)
 {
   TimingScope timing_scope(nullptr, &g_Stats.m_StaleCheckTimeCycles);
@@ -1624,19 +1379,21 @@ void DriverRemoveStaleOutputs(Driver* self)
     return strlen(r) < strlen(l);
   });
 
-  int nuke_count = nuke_table.m_RecordCount;
+  uint32_t nuke_count = nuke_table.m_RecordCount;
   uint64_t time_exec_started = TimerGet();
   for (uint32_t i = 0; i < nuke_count; ++i)
   {
-    Log(kDebug, "cleaning up %s", paths[i]);
-    RemoveFileOrDir(paths[i]);
+    if (CleanupPath(paths[i]))
+    {
+      Log(kDebug, "cleaned up %s", paths[i]);
+    }
   }
 
   if (nuke_count > 0)
   {
     char buffer[2000];
     snprintf(buffer, sizeof(buffer), "Delete %d artifact files that are no longer in use. (like %s)", nuke_count, paths[0]);
-    PrintNonNodeActionResult(TimerDiffSeconds(time_exec_started, TimerGet()), self->m_Nodes.m_Size, MessageStatusLevel::Success, buffer);
+    PrintNonNodeActionResult(TimerDiffSeconds(time_exec_started, TimerGet()), (int)self->m_Nodes.m_Size, MessageStatusLevel::Success, buffer);
   }
  
   HashSetDestroy(&nuke_table);
