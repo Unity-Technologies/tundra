@@ -14,7 +14,6 @@
 #include "SortedArrayUtil.hpp"
 #include "StateData.hpp"
 #include "Stats.hpp"
-#include "TargetSelect.hpp"
 #include "HashTable.hpp"
 #include "Hash.hpp"
 #include "Profiler.hpp"
