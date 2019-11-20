@@ -1035,6 +1035,9 @@ static bool RunExternalTool(const char* options, ...)
   env_var.m_Name = "TUNDRA_FRONTEND_OPTIONS";
   env_var.m_Value = option_str;
 
+
+  char cmdline[1024];
+  
   if (const char* env_option = getenv("TUNDRA_DAGTOOL_FULLCOMMANDLINE"))
   {
     cmdline_to_use = env_option;
@@ -1045,7 +1048,6 @@ static bool RunExternalTool(const char* options, ...)
     if (strchr(dag_gen_path, ' '))
       quotes = "\"";
 
-    char cmdline[1024];
     snprintf(cmdline, sizeof cmdline, "%s%s%s %s", quotes, dag_gen_path, quotes, option_str);
     cmdline[sizeof(cmdline)-1] = '\0';
     
