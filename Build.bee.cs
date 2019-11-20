@@ -104,7 +104,7 @@ class Build
     // tundra library
     var tundraLibraryProgram = new TundraNativeProgram("libtundra");
     tundraLibraryProgram.CompilerSettingsForMsvc().Add(compiler => compiler.WithUnicode(false));
-    tundraLibraryProgram.Sources.Add(SourceFolder.Files("*.c*").Where(f=>f.FileName != "Main.cpp" && f.FileName != "InspectMain.cpp").ToArray());
+    tundraLibraryProgram.Sources.Add(SourceFolder.Files("*.c*").Where(f=>!f.FileName.EndsWith("Main.cpp")).ToArray());
     tundraLibraryProgram.PublicIncludeDirectories.Add(SourceFolder);
     tundraLibraryProgram.Libraries.Add(IsWindows,
       new SystemLibrary("Rstrtmgr.lib"),
