@@ -7,23 +7,6 @@
 namespace t2
 {
 
-namespace BuildProgress
-{
-  enum Enum
-  {
-    kInitial         = 0,
-    kWaitingForDependencies = 1,
-    kPermanentlyBlocked = 2,
-    kAllDependencesSucceeded  = 3,
-    kRunAction       = 4,
-    kSucceeded       = 100,
-    kSucceededButDependendeesRequireFrontendRerun = 101,
-    kUpToDate        = 102,
-    kFailed          = 103,
-    kCompleted       = 200
-  };
-}
-
 namespace NodeBuildResult
 {
   enum Enum
