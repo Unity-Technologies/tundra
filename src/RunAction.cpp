@@ -138,7 +138,7 @@ namespace t2{
         return NodeBuildResult::kRanFailed;
     }
   
-    for (const FrozenFileAndHash& output_file : node_data->m_AuxOutputFiles)
+    for (const FrozenFileAndHash& output_file : node_data->m_OutputFiles)
       if (!EnsureParentDirExistsFor(output_file))
         return NodeBuildResult::kRanFailed;
     
