@@ -245,8 +245,6 @@ static bool WriteNodes(
 
     const char           *action        = FindStringValue(node, "Action");
     const char           *annotation    = FindStringValue(node, "Annotation");
-    const char           *preaction     = FindStringValue(node, "PreAction");
-    const int             pass_index    = (int) FindIntValue(node, "PassIndex", 0);
     const JsonArrayValue *deps          = FindArrayValue(node, "Deps");
     const JsonArrayValue *inputs        = FindArrayValue(node, "Inputs");
     const JsonArrayValue *outputs       = FindArrayValue(node, "Outputs");
@@ -263,9 +261,7 @@ static bool WriteNodes(
     else
       WriteStringPtr(node_data_seg, writetextfile_payloads_seg, writetextfile_payload);
 
-    WriteStringPtr(node_data_seg, str_seg, preaction);
-    WriteCommonStringPtr(node_data_seg, str_seg, annotation, shared_strings, scratch);
-    BinarySegmentWriteInt32(node_data_seg, pass_index);
+    WriteCommonStringPtr(node_data_seg, str_seg, annotation, shared_strings, scratch);    
 
     if (deps)
     {
@@ -387,7 +383,6 @@ static bool WriteNodes(
 
     flags |= GetNodeFlag(node, "OverwriteOutputs", NodeData::kFlagOverwriteOutputs, true);
     flags |= GetNodeFlag(node, "PreciousOutputs",  NodeData::kFlagPreciousOutputs);
-    flags |= GetNodeFlag(node, "Expensive",        NodeData::kFlagExpensive);
     flags |= GetNodeFlag(node, "AllowUnexpectedOutput", NodeData::kFlagAllowUnexpectedOutput, false);
     flags |= GetNodeFlag(node, "AllowUnwrittenOutputFiles", NodeData::kFlagAllowUnwrittenOutputFiles, false);
     flags |= GetNodeFlag(node, "BanContentDigestForInputs", NodeData::kFlagBanContentDigestForInputs, false);
@@ -410,31 +405,6 @@ static bool WriteNodes(
   return true;
 }
 
-static bool WriteStrHashArray(
-    BinarySegment* main_seg,
-    BinarySegment* aux_seg,
-    BinarySegment* str_seg,
-    const JsonArrayValue* strings)
-{
-  BinarySegmentWriteInt32(main_seg, (int) strings->m_Count);
-  BinarySegmentWritePointer(main_seg, BinarySegmentPosition(aux_seg));
-  for (size_t i = 0, count = strings->m_Count; i < count; ++i)
-  {
-    const char* str = strings->m_Values[i]->GetString();
-    if (!str)
-      return false;
-    WriteStringPtr(aux_seg, str_seg, str);
-  }
-  BinarySegmentWritePointer(main_seg, BinarySegmentPosition(aux_seg));
-  for (size_t i = 0, count = strings->m_Count; i < count; ++i)
-  {
-    const char* str = strings->m_Values[i]->GetString();
-    uint32_t hash = Djb2Hash(str);
-    BinarySegmentWriteUint32(aux_seg, hash);
-  }
-
-  return true;
-}
 
 static bool WriteNodeArray(BinarySegment* top_seg, BinarySegment* data_seg, const JsonArrayValue* ints, const int32_t remap_table[])
 {
@@ -754,16 +724,9 @@ static bool CompileDag(const JsonObjectValue* root, BinaryWriter* writer, MemAll
 
 
   const JsonArrayValue  *nodes         = FindArrayValue(root, "Nodes");
-  const JsonArrayValue  *passes        = FindArrayValue(root, "Passes");
   const JsonArrayValue  *scanners      = FindArrayValue(root, "Scanners");
   const JsonArrayValue  *shared_resources = FindArrayValue(root, "SharedResources");
   const char*           identifier     = FindStringValue(root, "Identifier", "default");
-
-  if (EmptyArray(passes))
-  {
-    fprintf(stderr, "invalid Passes data\n");
-    return false;
-  }
   
   // Write scanners, store pointers
   BinaryLocator* scanner_ptrs = nullptr;
@@ -809,139 +772,41 @@ static bool CompileDag(const JsonObjectValue* root, BinaryWriter* writer, MemAll
   if (!WriteNodes(nodes, main_seg, node_data_seg, aux_seg, str_seg, writetextfile_payloads_seg, scanner_ptrs, heap, &shared_strings, scratch, guid_table, remap_table))
     return false;
 
-  // Write passes
-  BinarySegmentWriteInt32(main_seg, (int) passes->m_Count);
-  BinarySegmentWritePointer(main_seg, BinarySegmentPosition(aux_seg));
-  for (size_t i = 0, count = passes->m_Count; i < count; ++i)
+  const JsonObjectValue *named_nodes      = FindObjectValue(root, "NamedNodes");
+  if (named_nodes)
   {
-    const char* pass_name = passes->m_Values[i]->GetString();
-    if (!pass_name)
-      return false;
-    WriteStringPtr(aux_seg, str_seg, pass_name);
+    size_t ncount = named_nodes->m_Count;
+    BinarySegmentWriteInt32(main_seg, (int) ncount);
+    BinarySegmentWritePointer(main_seg, BinarySegmentPosition(aux2_seg));
+    for (size_t i = 0; i < ncount; ++i)
+    {
+      WriteStringPtr(aux2_seg, str_seg, named_nodes->m_Names[i]);
+      const JsonNumberValue* node_index = named_nodes->m_Values[i]->AsNumber();
+      if (!node_index)
+      {
+        fprintf(stderr, "named node index must be number\n");
+        return false;
+      }
+      int remapped_index = remap_table[(int) node_index->m_Number];
+      BinarySegmentWriteInt32(aux2_seg, remapped_index);
+    }
+  }
+  else
+  {
+    BinarySegmentWriteInt32(main_seg, 0);
+    BinarySegmentWriteNullPointer(main_seg);
+  }
+
+  const JsonArrayValue  *default_nodes    = FindArrayValue(root, "DefaultNodes");
+  if (!WriteNodeArray(main_seg, aux2_seg, default_nodes, remap_table))
+  {
+    fprintf(stderr, "bad DefaultNodes data\n");
+    return false;
   }
 
   // Write shared resources
   if (!WriteSharedResources(shared_resources, main_seg, aux_seg, aux2_seg, str_seg))
     return false;
-
-  // Write configs
-  const JsonObjectValue *setup       = FindObjectValue(root, "Setup");
-  const JsonArrayValue  *configs     = FindArrayValue(setup, "Configs");
-  const JsonArrayValue  *variants    = FindArrayValue(setup, "Variants");
-  const JsonArrayValue  *subvariants = FindArrayValue(setup, "SubVariants");
-  const JsonArrayValue  *tuples      = FindArrayValue(setup, "BuildTuples");
-
-  if (nullptr == setup || EmptyArray(configs) || EmptyArray(variants) || EmptyArray(subvariants) || EmptyArray(tuples))
-  {
-    fprintf(stderr, "invalid Setup data\n");
-    return false;
-  }
-
-  if (!WriteStrHashArray(main_seg, aux_seg, str_seg, configs))
-  {
-    fprintf(stderr, "invalid Setup.Configs data\n");
-    return false;
-  }
-
-  if (!WriteStrHashArray(main_seg, aux_seg, str_seg, variants))
-  {
-    fprintf(stderr, "invalid Setup.Variants data\n");
-    return false;
-  }
-
-  if (!WriteStrHashArray(main_seg, aux_seg, str_seg, subvariants))
-  {
-    fprintf(stderr, "invalid Setup.SubVariants data\n");
-    return false;
-  }
-
-  BinarySegmentWriteInt32(main_seg, (int) tuples->m_Count);
-  BinarySegmentWritePointer(main_seg, BinarySegmentPosition(aux_seg));
-
-  for (size_t i = 0, count = tuples->m_Count; i < count; ++i)
-  {
-    const JsonObjectValue* obj = tuples->m_Values[i]->AsObject();
-    if (!obj)
-    {
-      fprintf(stderr, "invalid Setup.BuildTuples[%d] data\n", (int) i);
-      return false;
-    }
-
-    int                    config_index     = (int) FindIntValue(obj, "ConfigIndex", -1);
-    int                    variant_index    = (int) FindIntValue(obj, "VariantIndex", -1);
-    int                    subvariant_index = (int) FindIntValue(obj, "SubVariantIndex", -1);
-    const JsonArrayValue  *default_nodes    = FindArrayValue(obj, "DefaultNodes");
-    const JsonArrayValue  *always_nodes     = FindArrayValue(obj, "AlwaysNodes");
-    const JsonObjectValue *named_nodes      = FindObjectValue(obj, "NamedNodes");
-
-    if (config_index == -1 || variant_index == -1 || subvariant_index == -1 ||
-        !default_nodes || !always_nodes)
-    {
-      fprintf(stderr, "invalid Setup.BuildTuples[%d] data\n", (int) i);
-      return false;
-    }
-
-    BinarySegmentWriteInt32(aux_seg, config_index);
-    BinarySegmentWriteInt32(aux_seg, variant_index);
-    BinarySegmentWriteInt32(aux_seg, subvariant_index);
-
-    if (!WriteNodeArray(aux_seg, aux2_seg, default_nodes, remap_table))
-    {
-      fprintf(stderr, "bad DefaultNodes data\n");
-      return false;
-    }
-
-    if (!WriteNodeArray(aux_seg, aux2_seg, always_nodes, remap_table))
-    {
-      fprintf(stderr, "bad AlwaysNodes data\n");
-      return false;
-    }
-
-    if (named_nodes)
-    {
-      size_t ncount = named_nodes->m_Count;
-      BinarySegmentWriteInt32(aux_seg, (int) ncount);
-      BinarySegmentWritePointer(aux_seg, BinarySegmentPosition(aux2_seg));
-      for (size_t i = 0; i < ncount; ++i)
-      {
-        WriteStringPtr(aux2_seg, str_seg, named_nodes->m_Names[i]);
-        const JsonNumberValue* node_index = named_nodes->m_Values[i]->AsNumber();
-        if (!node_index)
-        {
-          fprintf(stderr, "named node index must be number\n");
-          return false;
-        }
-        int remapped_index = remap_table[(int) node_index->m_Number];
-        BinarySegmentWriteInt32(aux2_seg, remapped_index);
-      }
-    }
-    else
-    {
-      BinarySegmentWriteInt32(aux_seg, 0);
-      BinarySegmentWriteNullPointer(aux_seg);
-    }
-  }
-
-  const JsonObjectValue* default_tuple = FindObjectValue(setup, "DefaultBuildTuple");
-  if (!default_tuple)
-  {
-    fprintf(stderr, "missing Setup.DefaultBuildTuple\n");
-    return false;
-  }
-
-  int def_config_index = (int) FindIntValue(default_tuple, "ConfigIndex", -2);
-  int def_variant_index = (int) FindIntValue(default_tuple, "VariantIndex", -2);
-  int def_subvariant_index = (int) FindIntValue(default_tuple, "SubVariantIndex", -2);
-
-  if (-2 == def_config_index || -2 == def_variant_index || -2 == def_subvariant_index)
-  {
-    fprintf(stderr, "bad Setup.DefaultBuildTuple data\n");
-    return false;
-  }
-
-  BinarySegmentWriteInt32(main_seg, def_config_index);
-  BinarySegmentWriteInt32(main_seg, def_variant_index);
-  BinarySegmentWriteInt32(main_seg, def_subvariant_index);
 
   if (const JsonArrayValue* file_sigs = FindArrayValue(root, "FileSignatures"))
   {
@@ -1043,7 +908,6 @@ static bool CompileDag(const JsonObjectValue* root, BinaryWriter* writer, MemAll
     BinarySegmentWriteNullPointer(main_seg);
   }
 
-  BinarySegmentWriteInt32(main_seg, (int) FindIntValue(root, "MaxExpensiveCount", -1));
   BinarySegmentWriteInt32(main_seg, (int) FindIntValue(root, "DaysToKeepUnreferencedNodesAround", -1));
 
   WriteStringPtr(main_seg, str_seg, FindStringValue(root, "StateFileName", ".tundra2.state"));

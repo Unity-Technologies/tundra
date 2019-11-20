@@ -29,11 +29,9 @@ static void DumpDag(const DagData* data)
     printf("  flags:");
     if (node.m_Flags & NodeData::kFlagPreciousOutputs) printf(" precious");
     if (node.m_Flags & NodeData::kFlagOverwriteOutputs) printf(" overwrite");
-    if (node.m_Flags & NodeData::kFlagExpensive) printf(" expensive");
+  
     printf("\n  action: %s\n", node.m_Action.Get());
-    printf("  preaction: %s\n", node.m_PreAction.Get() ? node.m_PreAction.Get() : "(null)");
     printf("  annotation: %s\n", node.m_Annotation.Get());
-    printf("  pass index: %u\n", node.m_PassIndex);
 
     printf("  dependencies:");
     for (int32_t dep : node.m_Dependencies)
@@ -112,54 +110,6 @@ static void DumpDag(const DagData* data)
     printf("\n");
   }
 
-  printf("\npass count: %u\n", data->m_Passes.GetCount());
-  for (const PassData& pass : data->m_Passes)
-  {
-    printf("  pass: %s\n", pass.m_PassName.Get());
-  }
-
-  printf("\nconfig count: %u\n", data->m_ConfigCount);
-  for (int i = 0; i < data->m_ConfigCount; ++i)
-  {
-    printf("  %d: name=\"%s\" hash=0x%08x\n", i, data->m_ConfigNames[i].Get(), data->m_ConfigNameHashes[i]);
-  }
-
-  printf("\nvariant count: %u\n", data->m_VariantCount);
-  for (int i = 0; i < data->m_VariantCount; ++i)
-  {
-    printf("  %d: name=\"%s\" hash=0x%08x\n", i, data->m_VariantNames[i].Get(), data->m_VariantNameHashes[i]);
-  }
-
-  printf("\nsubvariant count: %u\n", data->m_SubVariantCount);
-  for (int i = 0; i < data->m_SubVariantCount; ++i)
-  {
-    printf("  %d: name=\"%s\" hash=0x%08x\n", i, data->m_SubVariantNames[i].Get(), data->m_SubVariantNameHashes[i]);
-  }
-
-  printf("\ndefault config index: %d\n", data->m_DefaultConfigIndex);
-  printf("default variant index: %d\n", data->m_DefaultVariantIndex);
-  printf("default subvariant index: %d\n", data->m_DefaultSubVariantIndex);
-
-  printf("\nbuild tuples:\n");
-  for (const BuildTupleData& tuple : data->m_BuildTuples)
-  {
-    printf("config index    : %d\n", tuple.m_ConfigIndex);
-    printf("variant index   : %d\n", tuple.m_VariantIndex);
-    printf("subvariant index: %d\n", tuple.m_SubVariantIndex);
-    printf("always nodes    :");
-    for (int node : tuple.m_AlwaysNodes)
-      printf(" %d", node);
-    printf("\n");
-    printf("default nodes   :");
-    for (int node : tuple.m_DefaultNodes)
-      printf(" %d", node);
-    printf("\n");
-    printf("named nodes:\n");
-    for (const NamedNodeData& nn : tuple.m_NamedNodes)
-      printf("  %s - node %d\n", nn.m_Name.Get(), nn.m_NodeIndex);
-    printf("\n");
-  }
-
   printf("\nfile signatures:\n");
   for (const DagFileSignature& sig : data->m_FileSignatures)
   {
@@ -189,7 +139,6 @@ static void DumpDag(const DagData* data)
     printf("hash            : 0x%08x\n", ext);
   }
 
-  printf("\nMax expensive jobs: %d\n", data->m_MaxExpensiveCount);
   printf("Magic number at end: 0x%08x\n", data->m_MagicNumberEnd);
 }
 

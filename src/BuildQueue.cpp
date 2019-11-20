@@ -114,7 +114,6 @@ namespace t2
     CHECK(!NodeStateIsQueued(state));
     CHECK(!NodeStateIsActive(state));
     CHECK(!NodeStateIsCompleted(state));
-    CHECK(state->m_MmapData->m_PassIndex == queue->m_CurrentPassIndex);
 
 #if ENABLED(CHECKED_BUILD)
     const int avail_init = AvailableNodeCount(queue);
@@ -131,27 +130,6 @@ namespace t2
     CHECK(AvailableNodeCount(queue) == 1 + avail_init);
   }
 
-  static void ParkExpensiveNode(BuildQueue* queue, NodeState* state)
-  {
-    NodeStateFlagQueued(state);
-    CHECK(queue->m_ExpensiveWaitCount < (int) queue->m_QueueCapacity);
-    queue->m_ExpensiveWaitList[queue->m_ExpensiveWaitCount++] = state;
-  }
-
-  static void UnparkExpensiveNode(BuildQueue* queue)
-  {
-    if (queue->m_ExpensiveWaitCount > 0)
-    {
-      NodeState* node = queue->m_ExpensiveWaitList[--queue->m_ExpensiveWaitCount];
-      CHECK(NodeStateIsQueued(node));
-      // Really only to avoid tripping up checks in Enqueue()
-      NodeStateFlagUnqueued(node);
-      NodeStateFlagInactive(node);
-      Enqueue(queue, node);
-      CondSignal(&queue->m_WorkAvailable);
-    }
-  }
-
   static BuildProgress::Enum SetupDependencies(BuildQueue* queue, NodeState* node)
   {
     const NodeData *src_node         = node->m_MmapData;
@@ -166,8 +144,6 @@ namespace t2
       NodeState* state = GetStateForNode(queue, dep_index);
 
       CHECK(state != nullptr);
-
-      CHECK(state->m_MmapData->m_PassIndex <= src_node->m_PassIndex);
 
       if (NodeStateIsCompleted(state))
         continue;
@@ -375,22 +351,6 @@ namespace t2
       JsonWriteEndObject(msg);
     }
 
-    if (node_data->m_PreAction.Get() || prev_state->m_PreAction.Get())
-    {
-      if (!node_data->m_PreAction.Get() || !prev_state->m_PreAction.Get() || strcmp(node_data->m_PreAction, prev_state->m_PreAction) != 0)
-      {
-        JsonWriteStartObject(msg);
-
-        JsonWriteKeyName(msg, "key");
-        JsonWriteValueString(msg, "PreAction");
-
-        ReportValueWithOptionalTruncation(msg, "value", "value_truncated", node_data->m_PreAction);
-        ReportValueWithOptionalTruncation(msg, "oldvalue", "oldvalue_truncated", prev_state->m_PreAction);
-
-        JsonWriteEndObject(msg);
-      }
-    }
-
     bool explicitInputFilesListChanged = node_data->m_InputFiles.GetCount() != prev_state->m_InputFiles.GetCount();
     for (int32_t i = 0; i < node_data->m_InputFiles.GetCount() && !explicitInputFilesListChanged; ++i)
     {
@@ -574,12 +534,6 @@ namespace t2
     // Start with command line action. If that changes, we'll definitely have to rebuild.
     HashAddString(&sighash, node_data->m_Action);
     HashAddSeparator(&sighash);
-
-    if (const char* pre_action = node_data->m_PreAction)
-    {
-      HashAddString(&sighash, pre_action);
-      HashAddSeparator(&sighash);
-    }
 
     const ScannerData* scanner = node_data->m_Scanner;
 
@@ -893,27 +847,12 @@ namespace t2
   {
     const NodeData    *node_data    = node->m_MmapData;
     const bool        isWriteFileAction = node->m_MmapData->m_Flags & NodeData::kFlagIsWriteTextFileAction;
-    const bool        dry_run       = (queue->m_Config.m_Flags & BuildQueueConfig::kFlagDryRun) != 0;
     const char        *cmd_line     = node_data->m_Action;
-    const char        *pre_cmd_line = node_data->m_PreAction;
 
     if (!isWriteFileAction && (!cmd_line || cmd_line[0] == '\0'))
     {
       queue->m_ProcessedNodeCount++;
       return BuildProgress::kSucceeded;
-    }
-
-    if (node->m_MmapData->m_Flags & NodeData::kFlagExpensive && !dry_run)
-    {
-      if (queue->m_ExpensiveRunning == queue->m_Config.m_MaxExpensiveCount)
-      {
-        ParkExpensiveNode(queue, node);
-        return BuildProgress::kRunAction;
-      }
-      else
-      {
-        ++queue->m_ExpensiveRunning;
-      }
     }
 
     MutexUnlock(queue_lock);
@@ -943,34 +882,32 @@ namespace t2
       }
     }
 
-    if (!dry_run)
-    {
-      auto EnsureParentDirExistsFor = [=](const FrozenFileAndHash& fileAndHash) -> bool {
-          PathBuffer output;
-          PathInit(&output, fileAndHash.m_Filename);
+    
+    auto EnsureParentDirExistsFor = [=](const FrozenFileAndHash& fileAndHash) -> bool {
+        PathBuffer output;
+        PathInit(&output, fileAndHash.m_Filename);
 
-          if (!MakeDirectoriesForFile(stat_cache, output))
-          {
-            Log(kError, "failed to create output directories for %s", fileAndHash.m_Filename.Get());
-            MutexLock(queue_lock);
-            return false;
-          }
-          return true;
-      };
+        if (!MakeDirectoriesForFile(stat_cache, output))
+        {
+          Log(kError, "failed to create output directories for %s", fileAndHash.m_Filename.Get());
+          MutexLock(queue_lock);
+          return false;
+        }
+        return true;
+    };
 
-      for (const FrozenFileAndHash& output_file : node_data->m_OutputFiles)
-        if (!EnsureParentDirExistsFor(output_file))
-          return BuildProgress::kFailed;
+    for (const FrozenFileAndHash& output_file : node_data->m_OutputFiles)
+      if (!EnsureParentDirExistsFor(output_file))
+        return BuildProgress::kFailed;
 
-      for (const FrozenFileAndHash& output_file : node_data->m_AuxOutputFiles)
-        if (!EnsureParentDirExistsFor(output_file))
-          return BuildProgress::kFailed;
-    }
-
+    for (const FrozenFileAndHash& output_file : node_data->m_AuxOutputFiles)
+      if (!EnsureParentDirExistsFor(output_file))
+        return BuildProgress::kFailed;
+    
     ExecResult result = { 0, false };
 
     // See if we need to remove the output files before running anything.
-    if (0 == (node_data->m_Flags & NodeData::kFlagOverwriteOutputs) && !dry_run)
+    if (0 == (node_data->m_Flags & NodeData::kFlagOverwriteOutputs))
     {
       for (const FrozenFileAndHash& output : node_data->m_OutputFiles)
       {
@@ -993,19 +930,6 @@ namespace t2
     bool* untouched_outputs = (bool*)LinearAllocate(&thread_state->m_ScratchAlloc, n_outputs, (size_t)sizeof(bool));
     memset(untouched_outputs, 0, n_outputs * sizeof(bool));
 
-    if (pre_cmd_line)
-    {
-      Log(kSpam, "Launching pre-action process");
-      TimingScope timing_scope(&g_Stats.m_ExecCount, &g_Stats.m_ExecTimeCycles);
-      ProfilerScope prof_scope("Pre-build", profiler_thread_id);
-      last_cmd_line = pre_cmd_line;
-      if (!dry_run)
-      {
-        result = ExecuteProcess(pre_cmd_line, env_count, env_vars, thread_state->m_Queue->m_Config.m_Heap, job_id, false, SlowCallback, &slowCallbackData, 1);
-        Log(kSpam, "Process return code %d", result.m_ReturnCode);
-      }
-    }
-
     ValidationResult passedOutputValidation = ValidationResult::Pass;
     if (0 == result.m_ReturnCode)
     {
@@ -1013,42 +937,39 @@ namespace t2
       TimingScope timing_scope(&g_Stats.m_ExecCount, &g_Stats.m_ExecTimeCycles);
       ProfilerScope prof_scope(annotation, profiler_thread_id);
 
-      if (!dry_run)
+      
+      uint64_t* pre_timestamps = (uint64_t*)LinearAllocate(&thread_state->m_ScratchAlloc, n_outputs, (size_t)sizeof(uint64_t));
+
+      bool allowUnwrittenOutputFiles = (node_data->m_Flags & NodeData::kFlagAllowUnwrittenOutputFiles);
+      if (!allowUnwrittenOutputFiles)
+        for (int i = 0; i < n_outputs; i++)
+        {
+          FileInfo info = GetFileInfo(node_data->m_OutputFiles[i].m_Filename);
+          pre_timestamps[i] = info.m_Timestamp;
+        }
+
+      if (isWriteFileAction)
+        result = WriteTextFile(node_data->m_Action, node_data->m_OutputFiles[0].m_Filename, thread_state->m_Queue->m_Config.m_Heap);
+      else
       {
-        uint64_t* pre_timestamps = (uint64_t*)LinearAllocate(&thread_state->m_ScratchAlloc, n_outputs, (size_t)sizeof(uint64_t));
-
-        bool allowUnwrittenOutputFiles = (node_data->m_Flags & NodeData::kFlagAllowUnwrittenOutputFiles);
-        if (!allowUnwrittenOutputFiles)
-          for (int i = 0; i < n_outputs; i++)
-          {
-            FileInfo info = GetFileInfo(node_data->m_OutputFiles[i].m_Filename);
-            pre_timestamps[i] = info.m_Timestamp;
-          }
-
-        if (isWriteFileAction)
-          result = WriteTextFile(node_data->m_Action, node_data->m_OutputFiles[0].m_Filename, thread_state->m_Queue->m_Config.m_Heap);
-        else
-        {
-          last_cmd_line = cmd_line;
-          result = ExecuteProcess(cmd_line, env_count, env_vars, thread_state->m_Queue->m_Config.m_Heap, job_id, false, SlowCallback, &slowCallbackData);
-          passedOutputValidation = ValidateExecResultAgainstAllowedOutput(&result, node_data);
-        }
-
-        if (passedOutputValidation == ValidationResult::Pass && !allowUnwrittenOutputFiles)
-        {
-          for (int i = 0; i < n_outputs; i++)
-          {
-            FileInfo info = GetFileInfo(node_data->m_OutputFiles[i].m_Filename);
-            bool untouched = pre_timestamps[i] == info.m_Timestamp;
-            untouched_outputs[i] = untouched;
-            if (untouched)
-              passedOutputValidation = ValidationResult::UnwrittenOutputFileFail;
-          }
-        }
-
-        Log(kSpam, "Process return code %d", result.m_ReturnCode);
-
+        last_cmd_line = cmd_line;
+        result = ExecuteProcess(cmd_line, env_count, env_vars, thread_state->m_Queue->m_Config.m_Heap, job_id, false, SlowCallback, &slowCallbackData);
+        passedOutputValidation = ValidateExecResultAgainstAllowedOutput(&result, node_data);
       }
+
+      if (passedOutputValidation == ValidationResult::Pass && !allowUnwrittenOutputFiles)
+      {
+        for (int i = 0; i < n_outputs; i++)
+        {
+          FileInfo info = GetFileInfo(node_data->m_OutputFiles[i].m_Filename);
+          bool untouched = pre_timestamps[i] == info.m_Timestamp;
+          untouched_outputs[i] = untouched;
+          if (untouched)
+            passedOutputValidation = ValidationResult::UnwrittenOutputFileFail;
+        }
+      }
+
+      Log(kSpam, "Process return code %d", result.m_ReturnCode);
     }
 
     for (const FrozenFileAndHash& output : node_data->m_OutputFiles)
@@ -1097,10 +1018,6 @@ namespace t2
     {
       if (NodeState* waiter = GetStateForNode(queue, link))
       {
-        // Only wake nodes in our current pass
-        if (waiter->m_MmapData->m_PassIndex != queue->m_CurrentPassIndex)
-          continue;
-
         // If the node isn't ready, skip it.
         if (!AllDependenciesReady(queue, waiter))
           continue;
@@ -1175,24 +1092,6 @@ namespace t2
 
         case BuildProgress::kRunAction:
           node->m_Progress = RunAction(queue, thread_state, node, queue_lock);
-
-          // If we couldn't make progress, we're a parked expensive node.
-          // Another expensive job will put us back on the queue later when it
-          // has finished.
-          if (BuildProgress::kRunAction == node->m_Progress)
-            return;
-
-          // Otherwise, we just ran our action. If we were an expensive node,
-          // make sure to let other expensive nodes on to the cores now.
-          if (node->m_MmapData->m_Flags & NodeData::kFlagExpensive)
-          {
-            --queue->m_ExpensiveRunning;
-            CHECK(queue->m_ExpensiveRunning >= 0);
-
-            // We were an expensive job. We can unpark another expensive job if
-            // anything is waiting.
-            UnparkExpensiveNode(queue);
-          }
           break;
 
         case BuildProgress::kUpToDate:
@@ -1279,7 +1178,7 @@ namespace t2
     auto HibernateForThrottlingIfRequired = [=]() {
       //check if dynamic max jobs amount has been reduced to a point where we need this thread to hibernate.
       //Don't take a mutex lock for this check, as this if check will almost never hit and it's in a perf critical loop.
-      if (thread_state->m_ThreadIndex < queue->m_DynamicMaxJobs)
+      if (thread_state->m_ThreadIndex < (int)queue->m_DynamicMaxJobs)
         return false;
       
       ProfilerScope profiler_scope("HibernateForThrottling", thread_state->m_ProfilerThreadId, nullptr, "thread_state_sleeping");
@@ -1354,7 +1253,6 @@ namespace t2
   void BuildQueueInit(BuildQueue* queue, const BuildQueueConfig* config)
   {
     ProfilerScope prof_scope("Tundra BuildQueueInit", 0);
-    CHECK(config->m_MaxExpensiveCount > 0 && config->m_MaxExpensiveCount <= config->m_ThreadCount);
 
     MutexInit(&queue->m_Lock);
     CondInit(&queue->m_WorkAvailable);
@@ -1381,9 +1279,6 @@ namespace t2
     queue->m_ProcessedNodeCount = 0;
     queue->m_MainThreadWantsToCleanUp = false;
     queue->m_BuildFinishedConditionalVariableSignaled = false;
-    queue->m_ExpensiveRunning   = 0;
-    queue->m_ExpensiveWaitCount = 0;
-    queue->m_ExpensiveWaitList  = HeapAllocateArray<NodeState*>(heap, capacity);
     queue->m_SharedResourcesCreated = HeapAllocateArrayZeroed<uint32_t>(heap, config->m_SharedResourcesCount);
     MutexInit(&queue->m_SharedResourcesLock);
     
@@ -1455,7 +1350,6 @@ namespace t2
 
     // Deallocate storage.
     MemAllocHeap* heap = queue->m_Config.m_Heap;
-    HeapFree(heap, queue->m_ExpensiveWaitList);
     HeapFree(heap, queue->m_Queue);
     HeapFree(heap, queue->m_SharedResourcesCreated);
     MutexDestroy(&queue->m_SharedResourcesLock);
@@ -1529,14 +1423,12 @@ namespace t2
     throttled = false;
   }
 
-  BuildResult::Enum BuildQueueBuildNodeRange(BuildQueue* queue, int start_index, int count, int pass_index)
+  BuildResult::Enum BuildQueueBuildNodeRange(BuildQueue* queue, int start_index, int count)
   {
     // Make sure none of the build threads see in-progress state due to a spurious wakeup.
     MutexLock(&queue->m_Lock);
 
     CHECK(start_index + count <= queue->m_Config.m_MaxNodes);
-
-    queue->m_CurrentPassIndex = pass_index;
 
     // Initialize build queue with index range to build
     int32_t   *build_queue = queue->m_Queue;

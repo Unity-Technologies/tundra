@@ -8,7 +8,7 @@
 
 namespace t2
 {
-  static bool SharedResourceExecute(const SharedResourceData* sharedResource, const char* action, const char* formatString, MemAllocHeap* heap, int maxNodes, bool dry_run)
+  static bool SharedResourceExecute(const SharedResourceData* sharedResource, const char* action, const char* formatString, MemAllocHeap* heap, int maxNodes)
   {
     const int fullAnnotationLength = strlen(sharedResource->m_Annotation) + 20;
     char* fullAnnotation = (char*)alloca(fullAnnotationLength);
@@ -28,11 +28,11 @@ namespace t2
     return result.m_ReturnCode == 0;
   }
 
-  static bool SharedResourceCreate(const SharedResourceData* sharedResource, MemAllocHeap* heap, int maxNodes, bool dry_run)
+  static bool SharedResourceCreate(const SharedResourceData* sharedResource, MemAllocHeap* heap, int maxNodes)
   {
     bool result = true;
     if (sharedResource->m_CreateAction != nullptr)
-      result = SharedResourceExecute(sharedResource, sharedResource->m_CreateAction, "Creating %s", heap, maxNodes, dry_run);
+      result = SharedResourceExecute(sharedResource, sharedResource->m_CreateAction, "Creating %s", heap, maxNodes);
     return result;
   }
 
@@ -47,7 +47,7 @@ namespace t2
       // Check that another thread didn't start this resource while we were waiting for the lock
       if (refVar == 0)
       {
-        result = SharedResourceCreate(&queue->m_Config.m_SharedResources[sharedResourceIndex], heap, queue->m_Config.m_MaxNodes, (queue->m_Config.m_Flags & BuildQueueConfig::kFlagDryRun) != 0);
+        result = SharedResourceCreate(&queue->m_Config.m_SharedResources[sharedResourceIndex], heap, queue->m_Config.m_MaxNodes);
         AtomicIncrement(&refVar);
       }
       MutexUnlock(&queue->m_SharedResourcesLock);
@@ -60,7 +60,7 @@ namespace t2
   {
     const SharedResourceData* sharedResource = &queue->m_Config.m_SharedResources[sharedResourceIndex];
     if (sharedResource->m_DestroyAction != nullptr)
-      SharedResourceExecute(sharedResource, sharedResource->m_DestroyAction, "Destroying %s", heap, queue->m_Config.m_MaxNodes, (queue->m_Config.m_Flags & BuildQueueConfig::kFlagDryRun) != 0);
+      SharedResourceExecute(sharedResource, sharedResource->m_DestroyAction, "Destroying %s", heap, queue->m_Config.m_MaxNodes);
     queue->m_SharedResourcesCreated[sharedResourceIndex] = 0;
   }
 }

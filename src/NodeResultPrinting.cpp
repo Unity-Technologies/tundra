@@ -224,7 +224,7 @@ static void TrimOutputBuffer(OutputBufferData* buffer)
   }
 }
 
-static void PrintLineWithDurationAndAnnotation(int duration, const char* progressStr, MessageStatusLevel::Enum status_level, const char* annotation)
+static void PrintLineWithDurationAndAnnotation(double duration, const char* progressStr, MessageStatusLevel::Enum status_level, const char* annotation)
 {
   EmitColorForLevel(status_level);
 
@@ -232,7 +232,7 @@ static void PrintLineWithDurationAndAnnotation(int duration, const char* progres
   if (status_level == MessageStatusLevel::Failure && !EmitColors)
     printf("!FAILED! ");
   printf("%s ", progressStr);
-  printf("%2ds] ", duration);
+  printf("%2ds] ", (int)duration);
   // for failures, color the whole line red and only reset at the end
   if (status_level != MessageStatusLevel::Failure)
     EmitColor(RESET);
@@ -241,7 +241,7 @@ static void PrintLineWithDurationAndAnnotation(int duration, const char* progres
     EmitColor(RESET);
 }
 
-static void PrintLineWithDurationAndAnnotation(int duration, int nodeCount, int max_nodes, MessageStatusLevel::Enum status_level, const char* annotation)
+static void PrintLineWithDurationAndAnnotation(double duration, int nodeCount, int max_nodes, MessageStatusLevel::Enum status_level, const char* annotation)
 {
     int maxDigits = ceil(log10(max_nodes+1));
     char* progressStr = (char*)alloca(maxDigits * 2 + 2);
@@ -249,7 +249,7 @@ static void PrintLineWithDurationAndAnnotation(int duration, int nodeCount, int 
     PrintLineWithDurationAndAnnotation(duration, progressStr, status_level, annotation);
 }
 
-void PrintNonNodeActionResult(int duration, int max_nodes, MessageStatusLevel::Enum status_level, const char* annotation, ExecResult* result)
+void PrintNonNodeActionResult(double duration, int max_nodes, MessageStatusLevel::Enum status_level, const char* annotation, ExecResult* result)
 {
   int maxDigits = ceil(log10(max_nodes + 1));
   char* progressStr = (char*)alloca(maxDigits * 2 + 2);
