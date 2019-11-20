@@ -31,7 +31,6 @@ struct NodeStateData;
 struct NodeState
 {
   uint16_t                  m_Flags;
-  uint16_t                  m_PassIndex;
 
   const char*               m_DebugAnnotation;
   const NodeData*           m_MmapData;
