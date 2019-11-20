@@ -175,6 +175,8 @@ namespace t2{
                 if (queue->m_FinalBuildResult == BuildResult::kOk)
                     queue->m_FinalBuildResult = BuildResult::kRequireFrontendRerun;
                 break;
+            default:
+                break;
         }
       } else {
         MutexLock(queue_lock);
