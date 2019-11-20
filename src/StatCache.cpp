@@ -51,6 +51,7 @@ FileInfo StatCacheStat(StatCache* self, const char* path, uint32_t hash)
   {
     FileInfo result = *fi;
     ReadWriteUnlockRead(&self->m_HashLock);
+    AtomicIncrement(&g_Stats.m_StatCacheHits);
     return result;
   }
 
