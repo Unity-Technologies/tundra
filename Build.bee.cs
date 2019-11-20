@@ -30,8 +30,8 @@ class Build
     "IncludeScanner.cpp", "JsonParse.cpp", "JsonWriter.cpp", "MemAllocHeap.cpp",
     "MemAllocLinear.cpp", "MemoryMappedFile.cpp", "PathUtil.cpp", "Profiler.cpp",
     "ScanCache.cpp", "Scanner.cpp", "SignalHandler.cpp", "StatCache.cpp", "SharedResources.cpp",
-    "Thread.cpp",
-    "ExecUnix.cpp", "ExecWin32.cpp", "DigestCache.cpp", "FileSign.cpp",
+    "Thread.cpp", "InputSignature.cpp","MakeDirectories.cpp","BuildLoop.cpp",
+    "ExecUnix.cpp", "ExecWin32.cpp", "DigestCache.cpp", "FileSign.cpp", "RunAction.cpp",
     "HashSha1.cpp", "HashFast.cpp", "ConditionVar.cpp", "ReadWriteLock.cpp",
     "Exec.cpp", "NodeResultPrinting.cpp", "OutputValidation.cpp", "re.c", "HumanActivityDetection.cpp"
   }.Select(file => SourceFolder.Combine(file)).ToArray();

@@ -378,7 +378,7 @@ void PrintNodeResult(
   const bool* untouched_outputs
   )
 {
-  int processedNodeCount = ++queue->m_ProcessedNodeCount;
+  int processedNodeCount = queue->m_FinishedNodeCount;
   bool failed = result->m_ReturnCode != 0 || result->m_WasSignalled || validationResult >= ValidationResult::UnexpectedConsoleOutputFail;
   bool verbose = (failed && !result->m_WasAborted) || always_verbose;
 
@@ -408,7 +408,6 @@ void PrintNodeResult(
     TrimOutputBuffer(&result->m_OutputBuffer);
     data.output_buffer = result->m_OutputBuffer.buffer;
   }
-
   
   if (IsStructuredLogActive())
   {
@@ -442,7 +441,7 @@ void PrintNodeResult(
 
   // defer most of regular build failure output to the end of build, so that they are all
   // conveniently at the end of the log
-  bool defer = failed && (0 == (queue->m_Config.m_Flags & BuildQueueConfig::kFlagContinueOnError)) && deferred_message_count < ARRAY_SIZE(deferred_messages);
+  bool defer = failed && deferred_message_count < ARRAY_SIZE(deferred_messages);
   if (!defer)
   {
     PrintNodeResult(&data, queue);

@@ -68,33 +68,6 @@ namespace t2
     BuildQueue*       m_Queue;
   };
 
-  struct BuildQueue
-  {
-    Mutex              m_Lock;
-    ConditionVariable  m_WorkAvailable;
-    ConditionVariable  m_MaxJobsChangedConditionalVariable;
-    ConditionVariable  m_BuildFinishedConditionalVariable;
-    Mutex              m_BuildFinishedMutex;
-    bool               m_BuildFinishedConditionalVariableSignaled;
-
-    int32_t           *m_Queue;
-    uint32_t           m_QueueCapacity;
-    uint32_t           m_QueueReadIndex;
-    uint32_t           m_QueueWriteIndex;
-    BuildQueueConfig   m_Config;
-    int32_t            m_PendingNodeCount;
-    int32_t            m_FailedNodeCount;
-    int32_t            m_RequireFrontendRerunNodeCount;
-    uint32_t            m_ProcessedNodeCount;
-    int32_t            m_CurrentPassIndex;
-    ThreadId           m_Threads[kMaxBuildThreads];
-    ThreadState        m_ThreadState[kMaxBuildThreads];
-    uint32_t          *m_SharedResourcesCreated;
-    Mutex              m_SharedResourcesLock;
-    bool               m_MainThreadWantsToCleanUp;
-    uint32_t           m_DynamicMaxJobs;
-  };
-
   namespace BuildResult
   {
     enum Enum
@@ -109,6 +82,34 @@ namespace t2
 
     extern const char* Names[Enum::kCount];
   }
+
+  struct BuildQueue
+  {
+    Mutex              m_Lock;
+    ConditionVariable  m_WorkAvailable;
+    ConditionVariable  m_MaxJobsChangedConditionalVariable;
+    ConditionVariable  m_BuildFinishedConditionalVariable;
+    Mutex              m_BuildFinishedMutex;
+    bool               m_BuildFinishedConditionalVariableSignaled;
+
+    int32_t           *m_Queue;
+    uint32_t           m_QueueCapacity;
+    uint32_t           m_QueueReadIndex;
+    uint32_t           m_QueueWriteIndex;
+    BuildQueueConfig   m_Config;
+
+    BuildResult::Enum  m_FinalBuildResult;
+    uint32_t            m_FinishedNodeCount;
+    
+    ThreadId           m_Threads[kMaxBuildThreads];
+    ThreadState        m_ThreadState[kMaxBuildThreads];
+    uint32_t          *m_SharedResourcesCreated;
+    Mutex              m_SharedResourcesLock;
+    bool               m_MainThreadWantsToCleanUp;
+    uint32_t           m_DynamicMaxJobs;
+  };
+
+  
 
   void BuildQueueInit(BuildQueue* queue, const BuildQueueConfig* config);
 

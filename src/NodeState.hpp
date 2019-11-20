@@ -24,6 +24,18 @@ namespace BuildProgress
   };
 }
 
+namespace NodeBuildResult
+{
+  enum Enum
+  {
+    kDidNotRun = 0,
+    kUpToDate,
+    kRanSuccesfully,
+    kRanFailed,
+    kRanSuccessButDependeesRequireFrontendRerun
+  };
+}
+
 namespace NodeStateFlags
 {
   static const uint16_t kQueued = 1 << 0;
@@ -37,21 +49,15 @@ struct NodeState
 {
   uint16_t                  m_Flags;
   uint16_t                  m_PassIndex;
-  BuildProgress::Enum       m_Progress;
 
   const char*               m_DebugAnnotation;
   const NodeData*           m_MmapData;
   const NodeStateData*      m_MmapState;
 
-  int32_t                   m_BuildResult;
+  NodeBuildResult::Enum     m_BuildResult;
+  bool                      m_Finished;
   HashDigest                m_InputSignature;
 };
-
-
-inline bool NodeStateIsCompleted(const NodeState* state)
-{
-  return state->m_Progress == BuildProgress::kCompleted;
-}
 
 inline bool NodeStateIsQueued(const NodeState* state)
 {
@@ -81,11 +87,6 @@ inline void NodeStateFlagActive(NodeState* state)
 inline void NodeStateFlagInactive(NodeState* state)
 {
   state->m_Flags &= ~NodeStateFlags::kActive;
-}
-
-inline bool NodeStateIsWaitingForDependencies(const NodeState* state)
-{
-  return BuildProgress::kWaitingForDependencies == state->m_Progress;
 }
 
 }

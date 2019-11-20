@@ -953,11 +953,10 @@ static const char* GetFileNameFrom(const FrozenString& container)
 }
 
 template<class TNodeType>
-static void save_node_sharedcode(int build_result, const HashDigest* input_signature, const TNodeType* src_node, const HashDigest* guid, const StateSavingSegments& segments)
+static void save_node_sharedcode(const HashDigest* input_signature, const TNodeType* src_node, const HashDigest* guid, const StateSavingSegments& segments)
 {
   BinarySegmentWrite(segments.guid, (const char*) guid, sizeof(HashDigest));
 
-  BinarySegmentWriteInt32(segments.state, build_result);
   BinarySegmentWrite(segments.state, (const char*) input_signature, sizeof(HashDigest));
 
   int32_t file_count = src_node->m_OutputFiles.GetCount();
@@ -1039,11 +1038,11 @@ bool DriverSaveBuildState(Driver* self)
   int entry_count = 0;
   uint32_t this_dag_hashed_identifier =  self->m_DagData->m_HashedIdentifier;
 
-  auto save_node_state = [=](int build_result, const HashDigest* input_signature, const NodeData* src_node, const NodeStateData* node_data_state, const HashDigest* guid) -> void
+  auto save_node_state = [=](const HashDigest* input_signature, const NodeData* src_node, const NodeStateData* node_data_state, const HashDigest* guid) -> void
   {
     MemAllocLinear* scratch = &self->m_Allocator;
   
-    save_node_sharedcode(build_result, input_signature, src_node, guid, segments);
+    save_node_sharedcode(input_signature, src_node, guid, segments);
 
     HashSet<kFlagPathStrings> implicitDependencies;
     if (src_node->m_Scanner)
@@ -1130,9 +1129,9 @@ bool DriverSaveBuildState(Driver* self)
       BinarySegmentWriteUint32(array_seg, this_dag_hashed_identifier);
   };
 
-  auto save_node_state_old = [=](int build_result, const HashDigest* input_signature, const NodeStateData* src_node, const HashDigest* guid) -> void
+  auto save_node_state_old = [=](const HashDigest* input_signature, const NodeStateData* src_node, const HashDigest* guid) -> void
   {
-    save_node_sharedcode(build_result, input_signature, src_node, guid, segments);
+    save_node_sharedcode(input_signature, src_node, guid, segments);
 
     int32_t file_count = src_node->m_InputFiles.GetCount();
     BinarySegmentWriteInt32(state_seg, file_count);
@@ -1160,6 +1159,7 @@ bool DriverSaveBuildState(Driver* self)
     BinarySegmentWrite(array_seg, src_node->m_DagsWeHaveSeenThisNodeInPreviously.GetArray(), dag_count * sizeof(uint32_t));
   };
 
+
   auto save_new = [=, &entry_count](size_t index) {
     const NodeState  *elem      = new_state + index;
     const NodeData   *src_elem  = elem->m_MmapData;
@@ -1168,20 +1168,20 @@ bool DriverSaveBuildState(Driver* self)
 
     // If this node never computed an input signature (due to an error, or build cancellation), copy the old build progress over to retain the history.
     // Only do this if the output files and aux output files agree with the previously stored build state.
-    if (elem->m_Progress <= BuildProgress::kAllDependencesSucceeded)
+    if (elem->m_BuildResult == NodeBuildResult::kDidNotRun)
     {
       if (const HashDigest* old_guid = BinarySearch(old_guids, old_count, *guid))
       {
         size_t old_index = old_guid - old_guids;
         const NodeStateData* old_state_data = old_state + old_index;
-        save_node_state_old(old_state_data->m_BuildResult, &old_state_data->m_InputSignature, old_state_data, guid);
+        save_node_state_old(&old_state_data->m_InputSignature, old_state_data, guid);
         ++entry_count;
         ++g_Stats.m_StateSaveNew;
       }
     }
     else
-    {
-      save_node_state(elem->m_BuildResult, &elem->m_InputSignature, src_elem, elem->m_MmapState, guid);
+    { 
+      save_node_state(&elem->m_InputSignature, src_elem, elem->m_MmapState, guid);
       ++entry_count;
       ++g_Stats.m_StateSaveNew;
     }
@@ -1196,7 +1196,7 @@ bool DriverSaveBuildState(Driver* self)
  
     if (node_is_in_dag || !node_was_used_by_this_dag_previously(data, this_dag_hashed_identifier))
     {
-      save_node_state_old(data->m_BuildResult, &data->m_InputSignature, data, guid);
+      save_node_state_old(&data->m_InputSignature, data, guid);
       ++entry_count;
       ++g_Stats.m_StateSaveOld;
     }

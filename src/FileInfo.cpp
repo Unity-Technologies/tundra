@@ -1,5 +1,6 @@
 #include "FileInfo.hpp"
 #include "Stats.hpp"
+#include "PathUtil.hpp"
 
 #include <string.h>
 #include <stdlib.h>
@@ -30,6 +31,8 @@ extern "C" {
 
 namespace t2
 {
+
+  struct StatCache;
 
 FileInfo GetFileInfo(const char* path)
 {
@@ -122,6 +125,8 @@ bool ShouldFilter(const char* name, size_t len)
 
   return false;
 }
+
+
 
 void ListDirectory(
     const char* path,

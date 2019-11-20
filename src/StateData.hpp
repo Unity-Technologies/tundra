@@ -20,7 +20,6 @@ static_assert(sizeof(NodeInputFileData) == 12, "struct layout");
 
 struct NodeStateData
 {
-  int32_t                        m_BuildResult;
   HashDigest                     m_InputSignature;
   FrozenArray<FrozenString>      m_OutputFiles;
   FrozenArray<FrozenString>      m_AuxOutputFiles;
