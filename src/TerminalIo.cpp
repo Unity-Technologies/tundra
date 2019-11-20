@@ -1,5 +1,5 @@
 #include "TerminalIo.hpp"
-
+#if TUNDRA_UNIX
 #include "Mutex.hpp"
 #include "ConditionVar.hpp"
 
@@ -364,3 +364,4 @@ void TerminalIoPrintf(int job_id, int sort_key, const char *format, ...)
 }
 
 }
+#endif

@@ -23,27 +23,6 @@ class Build
   private static readonly NPath SourceFolder = "src";
   private static readonly NPath UnitTestSourceFolder = "unittest";
 
-  private static readonly NPath[] TundraSources = new[]
-  {
-    "BinaryWriter.cpp", "BuildQueue.cpp", "Common.cpp", "DagGenerator.cpp",
-    "Driver.cpp", "FileInfo.cpp", "Hash.cpp", "HashTable.cpp",
-    "IncludeScanner.cpp", "JsonParse.cpp", "JsonWriter.cpp", "MemAllocHeap.cpp",
-    "MemAllocLinear.cpp", "MemoryMappedFile.cpp", "PathUtil.cpp", "Profiler.cpp",
-    "ScanCache.cpp", "Scanner.cpp", "SignalHandler.cpp", "StatCache.cpp", "SharedResources.cpp",
-    "Thread.cpp", "InputSignature.cpp","MakeDirectories.cpp","BuildLoop.cpp",
-    "ExecUnix.cpp", "ExecWin32.cpp", "DigestCache.cpp", "FileSign.cpp", "RunAction.cpp",
-    "HashSha1.cpp", "HashFast.cpp", "ConditionVar.cpp", "ReadWriteLock.cpp",
-    "Exec.cpp", "NodeResultPrinting.cpp", "OutputValidation.cpp", "re.c", "HumanActivityDetection.cpp"
-  }.Select(file => SourceFolder.Combine(file)).ToArray();
-
-  private static readonly NPath[] TundraUnitTestSources = new[]
-  {
-    "TestHarness.cpp", "Test_BitFuncs.cpp", "Test_Buffer.cpp", "Test_Djb2.cpp", "Test_Hash.cpp",
-    "Test_IncludeScanner.cpp", "Test_Json.cpp", "Test_MemAllocLinear.cpp", "Test_Pow2.cpp",
-    "test_PathUtil.cpp", "Test_HashTable.cpp", "Test_StripAnsiColors.cpp"
-  }.Select(file => UnitTestSourceFolder.Combine(file)).ToArray();
-
-
   class TundraNativeProgram : NativeProgram
   {
     public TundraNativeProgram(string name) : base(name)
@@ -125,7 +104,7 @@ class Build
     // tundra library
     var tundraLibraryProgram = new TundraNativeProgram("libtundra");
     tundraLibraryProgram.CompilerSettingsForMsvc().Add(compiler => compiler.WithUnicode(false));
-    tundraLibraryProgram.Sources.Add(TundraSources);
+    tundraLibraryProgram.Sources.Add(SourceFolder.Files("*.c*").Where(f=>f.FileName != "Main.cpp" && f.FileName != "InspectMain.cpp").ToArray());
     tundraLibraryProgram.PublicIncludeDirectories.Add(SourceFolder);
     tundraLibraryProgram.Libraries.Add(IsWindows,
       new SystemLibrary("Rstrtmgr.lib"),
@@ -151,7 +130,7 @@ class Build
     // tundra unit tests
     var tundraUnitTestProgram = new TundraNativeProgram("tundra2-unittest");
     tundraUnitTestProgram.Libraries.Add(tundraLibraryProgram);
-    tundraUnitTestProgram.Sources.Add(TundraUnitTestSources);
+    tundraUnitTestProgram.Sources.Add(UnitTestSourceFolder.Files());
     tundraUnitTestProgram.IncludeDirectories.Add($"{UnitTestSourceFolder}/googletest/googletest");
     tundraUnitTestProgram.IncludeDirectories.Add($"{UnitTestSourceFolder}/googletest/googletest/include");
 
