@@ -208,14 +208,39 @@ namespace t2{
             passedOutputValidation = ValidationResult::UnwrittenOutputFileFail;
         }
 
-        for (int i = 0; i < node_data->m_OutputDirectories.GetCount(); i++)
+        auto VerifyNodeGlobSignatures = [=]() -> bool
         {
-          HashDigest hd = CalculateGlobSignatureFor(node_data->m_OutputDirectories[i].m_Filename, "*", true, &thread_state->m_LocalHeap, &thread_state->m_ScratchAlloc);
-          
-           HashDigest node_digest = node_data->m_OutputDirectoryGlobSignatures[i];
-           if (hd != node_digest)
-                requireFrontendRerun = true;
-        }
+            for (const DagGlobSignature& sig : node->m_MmapData->m_GlobSignatures)
+            {
+                HashDigest digest = CalculateGlobSignatureFor(sig.m_Path, sig.m_Filter, sig.m_Recurse, thread_state->m_Queue->m_Config.m_Heap, &thread_state->m_ScratchAlloc);
+
+                // Compare digest with the one stored in the signature block
+                if (0 != memcmp(&digest, &sig.m_Digest, sizeof digest))
+                    return false;
+            }
+            return true;
+        };
+
+        auto VerifyFileSignatures = [=]() -> bool
+        {
+              // Check timestamps of frontend files used to produce the DAG
+            for (const DagFileSignature& sig : node->m_MmapData->m_FileSignatures)
+            {
+                const char* path = sig.m_Path;
+
+                uint64_t timestamp = sig.m_Timestamp;
+                FileInfo info      = GetFileInfo(path);
+
+                if (info.m_Timestamp != timestamp)
+                    return false;
+            }
+            return true;
+        };
+
+        if (!VerifyNodeGlobSignatures())
+            requireFrontendRerun = true;
+        if (!VerifyFileSignatures())
+            requireFrontendRerun = true;
       }
 
       Log(kSpam, "Process return code %d", result.m_ReturnCode);

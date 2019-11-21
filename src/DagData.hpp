@@ -107,13 +107,14 @@ struct NodeData
   FrozenArray<FrozenFileAndHash>  m_InputFiles;
   FrozenArray<FrozenFileAndHash>  m_OutputFiles;
   FrozenArray<FrozenFileAndHash>  m_OutputDirectories;
-  FrozenArray<HashDigest>         m_OutputDirectoryGlobSignatures;
   FrozenArray<FrozenFileAndHash>  m_AuxOutputFiles;
   FrozenArray<FrozenFileAndHash>  m_FrontendResponseFiles;
   FrozenArray<FrozenString>       m_AllowedOutputSubstrings;
   FrozenArray<EnvVarData>         m_EnvVars;
   FrozenPtr<ScannerData>          m_Scanner;
   FrozenArray<int32_t>            m_SharedResources;
+  FrozenArray<DagFileSignature>   m_FileSignatures;
+  FrozenArray<DagGlobSignature>   m_GlobSignatures;
   uint32_t                        m_Flags;
   uint32_t                        m_OriginalIndex;
 };

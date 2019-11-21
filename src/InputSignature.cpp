@@ -292,18 +292,6 @@ namespace t2
     }
   }
 
-  static bool OutputFileInTargetDirectoryMissing(const NodeData* node_data, ThreadState* thread_state)
-  {
-    for (int i = 0; i < node_data->m_OutputDirectories.GetCount(); i++)
-    {
-        HashDigest hd = CalculateGlobSignatureFor(node_data->m_OutputDirectories[i].m_Filename, "*", true, &thread_state->m_LocalHeap, &thread_state->m_ScratchAlloc);      
-        HashDigest node_digest = node_data->m_OutputDirectoryGlobSignatures[i];
-        if (hd != node_digest)
-          return true;
-    }
-    return false;
-  }
-  
   static bool OutputFilesDiffer(const NodeData* node_data, const NodeStateData* prev_state)
   {
     int file_count = node_data->m_OutputFiles.GetCount();
@@ -578,32 +566,6 @@ namespace t2
 
       return true;
     }
-
-    if (OutputFileInTargetDirectoryMissing(node_data, thread_state))
-    {
-      if (IsStructuredLogActive())
-      {
-        MemAllocLinearScope allocScope(&thread_state->m_ScratchAlloc);
-
-        JsonWriter msg;
-        JsonWriteInit(&msg, &thread_state->m_ScratchAlloc);
-        JsonWriteStartObject(&msg);
-
-        JsonWriteKeyName(&msg, "msg");
-        JsonWriteValueString(&msg, "nodeOutputInTargetDirectoryMissing");
-
-        JsonWriteKeyName(&msg, "annotation");
-        JsonWriteValueString(&msg, node_data->m_Annotation);
-
-        JsonWriteKeyName(&msg, "index");
-        JsonWriteValueInteger(&msg, node_data->m_OriginalIndex);
-
-        JsonWriteEndObject(&msg);
-        LogStructured(&msg);
-      }
-
-      return true;
-    } 
 
     // Everything is up to date
     return false;
