@@ -32,7 +32,9 @@ struct NodeState
 {
   uint16_t                  m_Flags;
 
+#if ENABLED(CHECKED_BUILD)
   const char*               m_DebugAnnotation;
+#endif
   const NodeData*           m_MmapData;
   const NodeStateData*      m_MmapState;
 

@@ -708,7 +708,9 @@ bool DriverPrepareNodes(Driver* self, const char** targets, int target_count)
   {
     const NodeData* src_node = src_nodes + node_indices[i];
     out_nodes[i].m_MmapData  = src_node;
+#if ENABLED(CHECKED_BUILD)    
     out_nodes[i].m_DebugAnnotation = src_node->m_Annotation.Get();
+#endif
   }
 
   // Find frozen node state from previous build, if present.
