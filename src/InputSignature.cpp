@@ -318,6 +318,14 @@ namespace t2
         return true;
     }
 
+    for (const FrozenFileAndHash& f : node->m_OutputDirectories)
+    {
+      FileInfo i = StatCacheStat(stat_cache, f.m_Filename, f.m_FilenameHash);
+
+      if (!i.IsDirectory())
+        return true;
+    }
+    
     return false;
   }
 
@@ -556,6 +564,17 @@ namespace t2
         {
           FileInfo i = StatCacheStat(stat_cache, f.m_Filename, f.m_FilenameHash);
           if (!i.Exists())
+            JsonWriteValueString(&msg, f.m_Filename);
+        }
+        JsonWriteEndArray(&msg);
+
+        JsonWriteKeyName(&msg, "directories");
+        JsonWriteStartArray(&msg);
+        for (auto& f : node_data->m_OutputDirectories)
+        {
+          FileInfo i = StatCacheStat(stat_cache, f.m_Filename, f.m_FilenameHash);
+          
+          if (!i.IsDirectory())
             JsonWriteValueString(&msg, f.m_Filename);
         }
         JsonWriteEndArray(&msg);
