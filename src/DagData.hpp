@@ -129,7 +129,7 @@ struct SharedResourceData
 
 struct DagData
 {
-  static const uint32_t         MagicNumber   = 0x2B29014f ^ kTundraHashMagic;
+  static const uint32_t         MagicNumber   = 0x2B29024f ^ kTundraHashMagic;
 
   uint32_t                      m_MagicNumber;
 
