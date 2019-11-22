@@ -237,7 +237,7 @@ BuildResult::Enum BuildQueueBuildNodeRange(BuildQueue *queue, int start_index, i
 
     // Initialize build queue with index range to build
     int32_t *build_queue = queue->m_Queue;
-    RuntimeNode *node_states = queue->m_Config.m_NodeState;
+    RuntimeNode *node_states = queue->m_Config.m_RuntimeNodes;
 
     int amountQueued = 0;
     for (int i = 0; i < count; ++i)

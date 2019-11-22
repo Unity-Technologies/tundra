@@ -45,7 +45,7 @@ static RuntimeNode *GetStateForNode(BuildQueue *queue, int32_t src_index)
     if (state_index == -1)
         return nullptr;
 
-    RuntimeNode *state = queue->m_Config.m_NodeState + state_index;
+    RuntimeNode *state = queue->m_Config.m_RuntimeNodes + state_index;
 
     CHECK(int(state->m_DagNode - queue->m_Config.m_DagNodes) == src_index);
 
@@ -73,7 +73,7 @@ static void Enqueue(BuildQueue *queue, RuntimeNode *state)
     const int avail_init = AvailableNodeCount(queue);
 #endif
 
-    int state_index = int(state - queue->m_Config.m_NodeState);
+    int state_index = int(state - queue->m_Config.m_RuntimeNodes);
 
     build_queue[write_index] = state_index;
     write_index = (write_index + 1) & queue_mask;
@@ -207,7 +207,7 @@ static RuntimeNode *NextNode(BuildQueue *queue)
     // Update read index
     queue->m_QueueReadIndex = (read_index + 1) & (queue->m_QueueCapacity - 1);
 
-    RuntimeNode *state = queue->m_Config.m_NodeState + node_index;
+    RuntimeNode *state = queue->m_Config.m_RuntimeNodes + node_index;
 
     CHECK(NodeStateIsQueued(state));
     CHECK(!NodeStateIsActive(state));

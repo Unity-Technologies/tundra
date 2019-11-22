@@ -38,7 +38,7 @@ struct BuildQueueConfig
     int m_ThreadCount;
     int m_ThrottleInactivityPeriod;
     const Frozen::DagNode *m_DagNodes;
-    RuntimeNode *m_NodeState;
+    RuntimeNode *m_RuntimeNodes;
     int m_MaxNodes;
     const int32_t *m_NodeRemappingTable;
     ScanCache *m_ScanCache;
