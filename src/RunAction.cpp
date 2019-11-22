@@ -239,10 +239,7 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
             requireFrontendRerun = true;
         if (!VerifyFileSignatures())
             requireFrontendRerun = true;
-        if (requireFrontendRerun)
-        {
-            printf("FrontendRerun for %s\n", node->m_DagNode->m_Annotation.Get());
-        }
+
         Log(kSpam, "Process return code %d", result.m_ReturnCode);
     }
 
