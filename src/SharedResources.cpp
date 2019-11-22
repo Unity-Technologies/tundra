@@ -7,7 +7,7 @@
 #include "BuildQueue.hpp"
 
 
-static bool SharedResourceExecute(const SharedResourceData *sharedResource, const char *action, const char *formatString, MemAllocHeap *heap, int maxNodes)
+static bool SharedResourceExecute(const Frozen::SharedResourceData *sharedResource, const char *action, const char *formatString, MemAllocHeap *heap, int maxNodes)
 {
     const int fullAnnotationLength = strlen(sharedResource->m_Annotation) + 20;
     char *fullAnnotation = (char *)alloca(fullAnnotationLength);
@@ -27,7 +27,7 @@ static bool SharedResourceExecute(const SharedResourceData *sharedResource, cons
     return result.m_ReturnCode == 0;
 }
 
-static bool SharedResourceCreate(const SharedResourceData *sharedResource, MemAllocHeap *heap, int maxNodes)
+static bool SharedResourceCreate(const Frozen::SharedResourceData *sharedResource, MemAllocHeap *heap, int maxNodes)
 {
     bool result = true;
     if (sharedResource->m_CreateAction != nullptr)
@@ -57,7 +57,7 @@ bool SharedResourceAcquire(BuildQueue *queue, MemAllocHeap *heap, uint32_t share
 
 void SharedResourceDestroy(BuildQueue *queue, MemAllocHeap *heap, uint32_t sharedResourceIndex)
 {
-    const SharedResourceData *sharedResource = &queue->m_Config.m_SharedResources[sharedResourceIndex];
+    const Frozen::SharedResourceData *sharedResource = &queue->m_Config.m_SharedResources[sharedResourceIndex];
     if (sharedResource->m_DestroyAction != nullptr)
         SharedResourceExecute(sharedResource, sharedResource->m_DestroyAction, "Destroying %s", heap, queue->m_Config.m_MaxNodes);
     queue->m_SharedResourcesCreated[sharedResourceIndex] = 0;

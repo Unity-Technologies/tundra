@@ -1,11 +1,10 @@
-#ifndef STATEDATA_HPP
-#define STATEDATA_HPP
+#pragma once
 
 #include "Common.hpp"
 #include "BinaryData.hpp"
 
-
-
+namespace Frozen
+{
 #pragma pack(push, 4)
 struct NodeInputFileData
 {
@@ -41,7 +40,4 @@ struct StateData
 
     uint32_t m_MagicNumberEnd;
 };
-
-
-
-#endif
+}

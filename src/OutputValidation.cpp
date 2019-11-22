@@ -20,10 +20,10 @@ static bool HasAnyNonNewLine(const char *buffer)
     }
 }
 
-ValidationResult ValidateExecResultAgainstAllowedOutput(ExecResult *result, const NodeData *node_data)
+ValidationResult ValidateExecResultAgainstAllowedOutput(ExecResult *result, const Frozen::NodeData *node_data)
 {
     auto &allowed = node_data->m_AllowedOutputSubstrings;
-    bool allowOutput = node_data->m_Flags & NodeData::kFlagAllowUnexpectedOutput;
+    bool allowOutput = node_data->m_Flags & Frozen::NodeData::kFlagAllowUnexpectedOutput;
 
     if (allowOutput && allowed.GetCount() == 0)
         return ValidationResult::Pass;

@@ -32,7 +32,7 @@
 struct SlowCallbackData
 {
     Mutex *queue_lock;
-    const NodeData *node_data;
+    const Frozen::NodeData *node_data;
     uint64_t time_of_start;
     const BuildQueue *build_queue;
 };
@@ -82,8 +82,8 @@ static ExecResult WriteTextFile(const char *payload, const char *target_file, Me
 
 NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, NodeState *node, Mutex *queue_lock)
 {
-    const NodeData *node_data = node->m_MmapData;
-    const bool isWriteFileAction = node->m_MmapData->m_Flags & NodeData::kFlagIsWriteTextFileAction;
+    const Frozen::NodeData *node_data = node->m_MmapData;
+    const bool isWriteFileAction = node->m_MmapData->m_Flags & Frozen::NodeData::kFlagIsWriteTextFileAction;
     const char *cmd_line = node_data->m_Action;
 
     if (!isWriteFileAction && (!cmd_line || cmd_line[0] == '\0'))
@@ -145,7 +145,7 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, No
     ExecResult result = {0, false};
 
     // See if we need to remove the output files before running anything.
-    if (0 == (node_data->m_Flags & NodeData::kFlagOverwriteOutputs))
+    if (0 == (node_data->m_Flags & Frozen::NodeData::kFlagOverwriteOutputs))
     {
         for (const FrozenFileAndHash &output : node_data->m_OutputFiles)
         {
@@ -179,7 +179,7 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, No
 
         uint64_t *pre_timestamps = (uint64_t *)LinearAllocate(&thread_state->m_ScratchAlloc, n_outputs, (size_t)sizeof(uint64_t));
 
-        bool allowUnwrittenOutputFiles = (node_data->m_Flags & NodeData::kFlagAllowUnwrittenOutputFiles);
+        bool allowUnwrittenOutputFiles = (node_data->m_Flags & Frozen::NodeData::kFlagAllowUnwrittenOutputFiles);
         if (!allowUnwrittenOutputFiles)
             for (int i = 0; i < n_outputs; i++)
             {
@@ -209,7 +209,7 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, No
         }
 
         auto VerifyNodeGlobSignatures = [=]() -> bool {
-            for (const DagGlobSignature &sig : node->m_MmapData->m_GlobSignatures)
+            for (const Frozen::DagGlobSignature &sig : node->m_MmapData->m_GlobSignatures)
             {
                 HashDigest digest = CalculateGlobSignatureFor(sig.m_Path, sig.m_Filter, sig.m_Recurse, thread_state->m_Queue->m_Config.m_Heap, &thread_state->m_ScratchAlloc);
 
@@ -222,7 +222,7 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, No
 
         auto VerifyFileSignatures = [=]() -> bool {
             // Check timestamps of frontend files used to produce the DAG
-            for (const DagFileSignature &sig : node->m_MmapData->m_FileSignatures)
+            for (const Frozen::DagFileSignature &sig : node->m_MmapData->m_FileSignatures)
             {
                 const char *path = sig.m_Path;
 
@@ -265,7 +265,7 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, No
 
     // Clean up output files after a failed build unless they are precious,
     // or unless the failure was from failing to write one of them
-    if (0 == (NodeData::kFlagPreciousOutputs & node_data->m_Flags) && !(0 == result.m_ReturnCode && passedOutputValidation == ValidationResult::UnwrittenOutputFileFail))
+    if (0 == (Frozen::NodeData::kFlagPreciousOutputs & node_data->m_Flags) && !(0 == result.m_ReturnCode && passedOutputValidation == ValidationResult::UnwrittenOutputFileFail))
     {
         for (const FrozenFileAndHash &output : node_data->m_OutputFiles)
         {

@@ -1,9 +1,9 @@
-#ifndef SCANDATA_HPP
-#define SCANDATA_HPP
+#pragma once
 
 #include "BinaryData.hpp"
 
-
+namespace Frozen
+{
 struct ScanCacheEntry
 {
     uint64_t m_FileTimestamp;
@@ -23,7 +23,4 @@ struct ScanData
     FrozenPtr<uint64_t> m_AccessTimes;
     uint32_t m_MagicNumberEnd;
 };
-
-
-
-#endif
+}

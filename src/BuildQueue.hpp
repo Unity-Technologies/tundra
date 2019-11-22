@@ -12,7 +12,6 @@
 
 struct MemAllocHeap;
 struct NodeState;
-struct NodeData;
 struct ScanCache;
 struct StatCache;
 struct DigestCache;
@@ -38,7 +37,7 @@ struct BuildQueueConfig
     MemAllocHeap *m_Heap;
     int m_ThreadCount;
     int m_ThrottleInactivityPeriod;
-    const NodeData *m_NodeData;
+    const Frozen::NodeData *m_NodeData;
     NodeState *m_NodeState;
     int m_MaxNodes;
     const int32_t *m_NodeRemappingTable;
@@ -49,7 +48,7 @@ struct BuildQueueConfig
     const uint32_t *m_ShaDigestExtensions;
     void *m_FileSigningLog;
     Mutex *m_FileSigningLogMutex;
-    const SharedResourceData *m_SharedResources;
+    const Frozen::SharedResourceData *m_SharedResources;
     int m_SharedResourcesCount;
     bool m_ThrottleOnHumanActivity;
     int m_ThrottledThreadsAmount;

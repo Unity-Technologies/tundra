@@ -2,7 +2,7 @@
 
 #include "Common.hpp"
 
-struct GenericScannerData;
+namespace Frozen { struct GenericScannerData; }
 struct MemAllocLinear;
 
 
@@ -23,5 +23,5 @@ ScanIncludesCpp(char *buffer, MemAllocLinear *allocator);
 // Scan generic includes from buffer (slower, customizable).
 // Buffer must be null-terminated and will be modified in place.
 IncludeData *
-ScanIncludesGeneric(char *buffer, MemAllocLinear *allocator, const GenericScannerData &config);
+ScanIncludesGeneric(char *buffer, MemAllocLinear *allocator, const Frozen::GenericScannerData &config);
 

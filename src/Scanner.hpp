@@ -4,9 +4,7 @@
 
 // High-level include scanner
 
-
-
-struct ScannerData;
+namespace Frozen { struct ScannerData; }
 struct MemAllocLinear;
 struct MemAllocHeap;
 struct ScanCache;
@@ -14,7 +12,7 @@ struct StatCache;
 
 struct ScanInput
 {
-    const ScannerData *m_ScannerConfig;
+    const Frozen::ScannerData *m_ScannerConfig;
     MemAllocLinear *m_ScratchAlloc;
     MemAllocHeap *m_ScratchHeap;
     const char *m_FileName;

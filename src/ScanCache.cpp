@@ -65,7 +65,7 @@ void ScanCacheDestroy(ScanCache *self)
     ReadWriteLockDestroy(&self->m_Lock);
 }
 
-void ScanCacheSetCache(ScanCache *self, const ScanData *frozen_data)
+void ScanCacheSetCache(ScanCache *self, const Frozen::ScanData *frozen_data)
 {
     self->m_FrozenData = frozen_data;
 
@@ -121,7 +121,7 @@ bool ScanCacheLookup(ScanCache *self, const HashDigest &key, uint64_t timestamp,
     // First check previously cached data. No lock needed for this as it is purely read-only
     //
     // We expect most data to be in here as header files don't change that frequently.
-    const ScanData *scan_data = self->m_FrozenData;
+    const Frozen::ScanData *scan_data = self->m_FrozenData;
 
     if (scan_data)
     {
@@ -130,7 +130,7 @@ bool ScanCacheLookup(ScanCache *self, const HashDigest &key, uint64_t timestamp,
         if (const HashDigest *ptr = BinarySearch(scan_data->m_Keys.Get(), count, key))
         {
             int index = int(ptr - scan_data->m_Keys.Get());
-            const ScanCacheEntry *entry = scan_data->m_Data.Get() + index;
+            const Frozen::ScanCacheEntry *entry = scan_data->m_Data.Get() + index;
 
             if (entry->m_FileTimestamp == timestamp)
             {
@@ -354,12 +354,12 @@ static void ScanCacheWriterDestroy(ScanCacheWriter *self)
 
 static bool ScanCacheWriterFlush(ScanCacheWriter *self, const char *filename)
 {
-    BinarySegmentWriteUint32(self->m_MainSeg, ScanData::MagicNumber);
+    BinarySegmentWriteUint32(self->m_MainSeg, Frozen::ScanData::MagicNumber);
     BinarySegmentWriteUint32(self->m_MainSeg, self->m_RecordsOut);
     BinarySegmentWritePointer(self->m_MainSeg, self->m_DigestPtr);
     BinarySegmentWritePointer(self->m_MainSeg, self->m_EntryPtr);
     BinarySegmentWritePointer(self->m_MainSeg, self->m_TimestampPtr);
-    BinarySegmentWriteUint32(self->m_MainSeg, ScanData::MagicNumber);
+    BinarySegmentWriteUint32(self->m_MainSeg, Frozen::ScanData::MagicNumber);
     return BinaryWriterFlush(&self->m_Writer, filename);
 }
 
@@ -456,10 +456,10 @@ bool ScanCacheSave(ScanCache *self, const char *fn, MemAllocHeap *heap)
     // - Sort these records in key order (by SHA-1 hash)
     std::sort(dyn_records, dyn_records + record_count, SortRecordsByHash);
 
-    const ScanData *scan_data = self->m_FrozenData;
+    const Frozen::ScanData *scan_data = self->m_FrozenData;
     uint32_t frozen_count = scan_data ? scan_data->m_EntryCount : 0;
     const HashDigest *frozen_digests = scan_data ? scan_data->m_Keys.Get() : nullptr;
-    const ScanCacheEntry *frozen_entries = scan_data ? scan_data->m_Data.Get() : nullptr;
+    const Frozen::ScanCacheEntry *frozen_entries = scan_data ? scan_data->m_Data.Get() : nullptr;
     const uint64_t *frozen_times = scan_data ? scan_data->m_AccessTimes.Get() : nullptr;
     const uint8_t *frozen_access = self->m_FrozenAccess;
 

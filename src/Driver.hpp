@@ -11,10 +11,12 @@
 #include "DigestCache.hpp"
 
 
+namespace Frozen {
+    struct DagData;
+    struct ScanData;
+    struct StateData;
+}
 
-struct DagData;
-struct ScanData;
-struct StateData;
 
 struct DriverOptions
 {
@@ -63,9 +65,9 @@ struct Driver
     MemoryMappedFile m_ScanFile;
 
     // Stores pointers to mmaped data.
-    const DagData *m_DagData;
-    const StateData *m_StateData;
-    const ScanData *m_ScanData;
+    const Frozen::DagData *m_DagData;
+    const Frozen::StateData *m_StateData;
+    const Frozen::ScanData *m_ScanData;
 
     DriverOptions m_Options;
 

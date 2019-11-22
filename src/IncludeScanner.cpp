@@ -129,14 +129,14 @@ ScanIncludesCpp(char *buffer, MemAllocLinear *allocator)
 }
 
 static IncludeData *
-ScanLineGeneric(MemAllocLinear *allocator, const char *start_in, const GenericScannerData &config)
+ScanLineGeneric(MemAllocLinear *allocator, const char *start_in, const Frozen::GenericScannerData &config)
 {
     const char *start = start_in;
     const char *str_start;
 
-    const bool require_ws = 0 != (config.m_Flags & GenericScannerData::kFlagRequireWhitespace);
-    const bool use_separators = 0 != (config.m_Flags & GenericScannerData::kFlagUseSeparators);
-    const bool bare_is_system = 0 != (config.m_Flags & GenericScannerData::kFlagBareMeansSystem);
+    const bool require_ws = 0 != (config.m_Flags & Frozen::GenericScannerData::kFlagRequireWhitespace);
+    const bool use_separators = 0 != (config.m_Flags & Frozen::GenericScannerData::kFlagUseSeparators);
+    const bool bare_is_system = 0 != (config.m_Flags & Frozen::GenericScannerData::kFlagBareMeansSystem);
 
     while (isspace(*start))
         ++start;
@@ -144,9 +144,9 @@ ScanLineGeneric(MemAllocLinear *allocator, const char *start_in, const GenericSc
     if (require_ws && start == start_in)
         return nullptr;
 
-    const KeywordData *keyword = nullptr;
+    const Frozen::KeywordData *keyword = nullptr;
 
-    for (const KeywordData &kwdata : config.m_Keywords)
+    for (const Frozen::KeywordData &kwdata : config.m_Keywords)
     {
         if (0 == strncmp(kwdata.m_String, start, kwdata.m_StringLength))
         {
@@ -224,7 +224,7 @@ ScanLineGeneric(MemAllocLinear *allocator, const char *start_in, const GenericSc
     return dest;
 }
 
-IncludeData *ScanIncludesGeneric(char *buffer, MemAllocLinear *allocator, const GenericScannerData &config)
+IncludeData *ScanIncludesGeneric(char *buffer, MemAllocLinear *allocator, const Frozen::GenericScannerData &config)
 {
     char *linep = buffer;
     IncludeDataList includes;

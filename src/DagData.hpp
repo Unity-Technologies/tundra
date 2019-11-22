@@ -6,7 +6,8 @@
 #include "PathUtil.hpp"
 
 
-
+namespace Frozen
+{
 namespace ScannerType
 {
 enum Enum
@@ -161,3 +162,4 @@ struct DagData
     uint32_t m_ForceDagRebuild;
     uint32_t m_MagicNumberEnd;
 };
+}

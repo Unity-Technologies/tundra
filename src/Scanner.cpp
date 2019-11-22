@@ -63,7 +63,7 @@ static bool FindFile(
     PathBuffer *buffer,
     char (&path_buf)[kMaxPathLength],
     const char *filename,
-    const ScannerData *scanner_config,
+    const Frozen::ScannerData *scanner_config,
     const IncludeData *include)
 {
     PathBuffer filename_buf;
@@ -107,15 +107,15 @@ static void ScanFile(
 {
     MemAllocHeap *heap = input->m_ScratchHeap;
     MemAllocLinear *scratch = input->m_ScratchAlloc;
-    const ScannerData *scanner_config = input->m_ScannerConfig;
+    const Frozen::ScannerData *scanner_config = input->m_ScannerConfig;
     IncludeData *includes = nullptr;
 
     switch (scanner_config->m_ScannerType)
     {
-    case ScannerType::kGeneric:
-        includes = ScanIncludesGeneric(file_data, scratch, *static_cast<const GenericScannerData *>(scanner_config));
+    case Frozen::ScannerType::kGeneric:
+        includes = ScanIncludesGeneric(file_data, scratch, *static_cast<const Frozen::GenericScannerData *>(scanner_config));
         break;
-    case ScannerType::kCpp:
+    case Frozen::ScannerType::kCpp:
         includes = ScanIncludesCpp(file_data, scratch);
         break;
     default:
@@ -143,7 +143,7 @@ bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput 
 {
     MemAllocHeap *scratch_heap = input->m_ScratchHeap;
     MemAllocLinear *scratch_alloc = input->m_ScratchAlloc;
-    const ScannerData *scanner_config = input->m_ScannerConfig;
+    const Frozen::ScannerData *scanner_config = input->m_ScannerConfig;
     ScanCache *scan_cache = input->m_ScanCache;
 
     Buffer<const char *> found_includes;

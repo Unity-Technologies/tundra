@@ -3,8 +3,7 @@
 #include "stddef.h"
 #include <thread>
 
-
-struct NodeData;
+namespace Frozen { struct NodeData; };
 struct MemAllocHeap;
 struct BuildQueue;
 
@@ -28,7 +27,7 @@ struct ExecResult
     bool m_WasSignalled;
     bool m_WasAborted;
     bool m_RequiresFrontendRerun;
-    NodeData *m_FrozenNodeData;
+    Frozen::NodeData *m_FrozenNodeData;
     OutputBufferData m_OutputBuffer;
 };
 

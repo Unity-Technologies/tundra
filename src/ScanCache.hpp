@@ -3,8 +3,7 @@
 #include "Hash.hpp"
 #include "ReadWriteLock.hpp"
 
-
-struct ScanData;
+namespace Frozen { struct ScanData; }
 struct MemAllocHeap;
 struct MemAllocLinear;
 struct MemoryMappedFile;
@@ -24,7 +23,7 @@ struct ScanCache
 {
     struct Record;
 
-    const ScanData *m_FrozenData;
+    const Frozen::ScanData *m_FrozenData;
 
     ReadWriteLock m_Lock;
     MemAllocHeap *m_Heap;
@@ -39,7 +38,7 @@ struct ScanCache
 
 void ScanCacheInit(ScanCache *self, MemAllocHeap *heap, MemAllocLinear *allocator);
 
-void ScanCacheSetCache(ScanCache *self, const ScanData *frozen_data);
+void ScanCacheSetCache(ScanCache *self, const Frozen::ScanData *frozen_data);
 
 void ScanCacheDestroy(ScanCache *self);
 

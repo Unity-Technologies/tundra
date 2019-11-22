@@ -6,7 +6,7 @@
 
 
 struct ExecResult;
-struct NodeData;
+namespace Frozen { struct NodeData; };
 struct BuildQueue;
 struct ThreadState;
 
@@ -24,7 +24,7 @@ enum Enum
 void InitNodeResultPrinting();
 void PrintNodeResult(
     ExecResult *result,
-    const NodeData *node_data,
+    const Frozen::NodeData *node_data,
     const char *cmd_line,
     BuildQueue *queue,
     ThreadState *thread_state,
@@ -32,7 +32,7 @@ void PrintNodeResult(
     uint64_t time_exec_started,
     ValidationResult validationResult,
     const bool *untouched_outputs);
-int PrintNodeInProgress(const NodeData *node_data, uint64_t time_of_start, const BuildQueue *queue);
+int PrintNodeInProgress(const Frozen::NodeData *node_data, uint64_t time_of_start, const BuildQueue *queue);
 void PrintDeferredMessages(BuildQueue *queue);
 void PrintNonNodeActionResult(double duration, int max_nodes, MessageStatusLevel::Enum status_level, const char *annotation, ExecResult *result = nullptr);
 void PrintServiceMessage(MessageStatusLevel::Enum statusLevel, const char *formatString, ...);

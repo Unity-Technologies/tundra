@@ -460,14 +460,14 @@ static bool WriteNodes(
 
         uint32_t flags = 0;
 
-        flags |= GetNodeFlag(node, "OverwriteOutputs", NodeData::kFlagOverwriteOutputs, true);
-        flags |= GetNodeFlag(node, "PreciousOutputs", NodeData::kFlagPreciousOutputs);
-        flags |= GetNodeFlag(node, "AllowUnexpectedOutput", NodeData::kFlagAllowUnexpectedOutput, false);
-        flags |= GetNodeFlag(node, "AllowUnwrittenOutputFiles", NodeData::kFlagAllowUnwrittenOutputFiles, false);
-        flags |= GetNodeFlag(node, "BanContentDigestForInputs", NodeData::kFlagBanContentDigestForInputs, false);
+        flags |= GetNodeFlag(node, "OverwriteOutputs", Frozen::NodeData::kFlagOverwriteOutputs, true);
+        flags |= GetNodeFlag(node, "PreciousOutputs", Frozen::NodeData::kFlagPreciousOutputs);
+        flags |= GetNodeFlag(node, "AllowUnexpectedOutput", Frozen::NodeData::kFlagAllowUnexpectedOutput, false);
+        flags |= GetNodeFlag(node, "AllowUnwrittenOutputFiles", Frozen::NodeData::kFlagAllowUnwrittenOutputFiles, false);
+        flags |= GetNodeFlag(node, "BanContentDigestForInputs", Frozen::NodeData::kFlagBanContentDigestForInputs, false);
 
         if (writetextfile_payload != nullptr)
-            flags |= NodeData::kFlagIsWriteTextFileAction;
+            flags |= Frozen::NodeData::kFlagIsWriteTextFileAction;
 
         BinarySegmentWriteUint32(node_data_seg, flags);
         BinarySegmentWriteUint32(node_data_seg, reverse_remap[ni]);
@@ -530,11 +530,11 @@ static bool WriteScanner(BinaryLocator *ptr_out, BinarySegment *seg, BinarySegme
     BinarySegmentAlign(seg, 4);
     *ptr_out = BinarySegmentPosition(seg);
 
-    ScannerType::Enum type;
+    Frozen::ScannerType::Enum type;
     if (0 == strcmp(kind, "cpp"))
-        type = ScannerType::kCpp;
+        type = Frozen::ScannerType::kCpp;
     else if (0 == strcmp(kind, "generic"))
-        type = ScannerType::kGeneric;
+        type = Frozen::ScannerType::kGeneric;
     else
         return false;
 
@@ -555,16 +555,16 @@ static bool WriteScanner(BinaryLocator *ptr_out, BinarySegment *seg, BinarySegme
 
     void *digest_space = BinarySegmentAlloc(seg, sizeof(HashDigest));
 
-    if (ScannerType::kGeneric == type)
+    if (Frozen::ScannerType::kGeneric == type)
     {
         uint32_t flags = 0;
 
         if (GetBoolean(data, "RequireWhitespace"))
-            flags |= GenericScannerData::kFlagRequireWhitespace;
+            flags |= Frozen::GenericScannerData::kFlagRequireWhitespace;
         if (GetBoolean(data, "UseSeparators"))
-            flags |= GenericScannerData::kFlagUseSeparators;
+            flags |= Frozen::GenericScannerData::kFlagUseSeparators;
         if (GetBoolean(data, "BareMeansSystem"))
-            flags |= GenericScannerData::kFlagBareMeansSystem;
+            flags |= Frozen::GenericScannerData::kFlagBareMeansSystem;
 
         BinarySegmentWriteUint32(seg, flags);
 
@@ -820,7 +820,7 @@ static bool CompileDag(const JsonObjectValue *root, BinaryWriter *writer, MemAll
     }
 
     // Write magic number
-    BinarySegmentWriteUint32(main_seg, DagData::MagicNumber);
+    BinarySegmentWriteUint32(main_seg, Frozen::DagData::MagicNumber);
 
     BinarySegmentWriteUint32(main_seg, Djb2Hash(identifier));
 
@@ -935,7 +935,7 @@ static bool CompileDag(const JsonObjectValue *root, BinaryWriter *writer, MemAll
     HashTableDestroy(&shared_strings);
 
     //write magic number again at the end to pretect against writing too much / too little data and not noticing.
-    BinarySegmentWriteUint32(main_seg, DagData::MagicNumber);
+    BinarySegmentWriteUint32(main_seg, Frozen::DagData::MagicNumber);
     return true;
 }
 

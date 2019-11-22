@@ -82,9 +82,9 @@ static void CheckAndReportChangedInputFile(
     }
 }
 
-static void ReportChangedInputFiles(JsonWriter *msg, const FrozenArray<NodeInputFileData> &files, const char *dependencyType, DigestCache *digest_cache, StatCache *stat_cache, const uint32_t sha_extension_hashes[], uint32_t sha_extension_hash_count, bool force_use_timestamp)
+static void ReportChangedInputFiles(JsonWriter *msg, const FrozenArray<Frozen::NodeInputFileData> &files, const char *dependencyType, DigestCache *digest_cache, StatCache *stat_cache, const uint32_t sha_extension_hashes[], uint32_t sha_extension_hash_count, bool force_use_timestamp)
 {
-    for (const NodeInputFileData &input : files)
+    for (const Frozen::NodeInputFileData &input : files)
     {
         uint32_t filenameHash = Djb2HashPath(input.m_Filename);
 
@@ -117,8 +117,8 @@ static void ReportValueWithOptionalTruncation(JsonWriter *msg, const char *keyNa
 static void ReportInputSignatureChanges(
     JsonWriter *msg,
     NodeState *node,
-    const NodeData *node_data,
-    const NodeStateData *prev_state,
+    const Frozen::NodeData *node_data,
+    const Frozen::NodeStateData *prev_state,
     StatCache *stat_cache,
     DigestCache *digest_cache,
     ScanCache *scan_cache,
@@ -146,7 +146,7 @@ static void ReportInputSignatureChanges(
         const char *oldFilename = prev_state->m_InputFiles[i].m_Filename;
         explicitInputFilesListChanged |= (strcmp(filename, oldFilename) != 0);
     }
-    bool force_use_timestamp = node->m_Flags & NodeData::kFlagBanContentDigestForInputs;
+    bool force_use_timestamp = node->m_Flags & Frozen::NodeData::kFlagBanContentDigestForInputs;
     if (explicitInputFilesListChanged)
     {
         JsonWriteStartObject(msg);
@@ -162,7 +162,7 @@ static void ReportInputSignatureChanges(
 
         JsonWriteKeyName(msg, "oldvalue");
         JsonWriteStartArray(msg);
-        for (const NodeInputFileData &input : prev_state->m_InputFiles)
+        for (const Frozen::NodeInputFileData &input : prev_state->m_InputFiles)
             JsonWriteValueString(msg, input.m_Filename);
         JsonWriteEndArray(msg);
 
@@ -174,7 +174,7 @@ static void ReportInputSignatureChanges(
         // We also want to catch if any of the input files (common to both old + new lists) have changed themselves,
         // because a common reason for the input list changing is the command changing, and the part of the
         // command that is different may be in response file(s).
-        for (const NodeInputFileData &oldInput : prev_state->m_InputFiles)
+        for (const Frozen::NodeInputFileData &oldInput : prev_state->m_InputFiles)
         {
             const FrozenFileAndHash *newInput;
             for (newInput = node_data->m_InputFiles.begin(); newInput != node_data->m_InputFiles.end(); ++newInput)
@@ -237,7 +237,7 @@ static void ReportInputSignatureChanges(
         bool implicitFilesListChanged = implicitDependencies.m_RecordCount != prev_state->m_ImplicitInputFiles.GetCount();
         if (!implicitFilesListChanged)
         {
-            for (const NodeInputFileData &implicitInput : prev_state->m_ImplicitInputFiles)
+            for (const Frozen::NodeInputFileData &implicitInput : prev_state->m_ImplicitInputFiles)
             {
                 bool *visited = HashTableLookup(&implicitDependencies, Djb2HashPath(implicitInput.m_Filename), implicitInput.m_Filename);
                 if (!visited)
@@ -271,7 +271,7 @@ static void ReportInputSignatureChanges(
 
             JsonWriteKeyName(msg, "oldvalue");
             JsonWriteStartArray(msg);
-            for (const NodeInputFileData &input : prev_state->m_ImplicitInputFiles)
+            for (const Frozen::NodeInputFileData &input : prev_state->m_ImplicitInputFiles)
                 JsonWriteValueString(msg, input.m_Filename);
             JsonWriteEndArray(msg);
 
@@ -289,7 +289,7 @@ static void ReportInputSignatureChanges(
     }
 }
 
-static bool OutputFilesDiffer(const NodeData *node_data, const NodeStateData *prev_state)
+static bool OutputFilesDiffer(const Frozen::NodeData *node_data, const Frozen::NodeStateData *prev_state)
 {
     int file_count = node_data->m_OutputFiles.GetCount();
 
@@ -305,7 +305,7 @@ static bool OutputFilesDiffer(const NodeData *node_data, const NodeStateData *pr
     return false;
 }
 
-static bool OutputFilesMissing(StatCache *stat_cache, const NodeData *node)
+static bool OutputFilesMissing(StatCache *stat_cache, const Frozen::NodeData *node)
 {
     for (const FrozenFileAndHash &f : node->m_OutputFiles)
     {
@@ -328,7 +328,7 @@ static bool OutputFilesMissing(StatCache *stat_cache, const NodeData *node)
 
 bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *thread_state, NodeState *node)
 {
-    const NodeData *node_data = node->m_MmapData;
+    const Frozen::NodeData *node_data = node->m_MmapData;
 
     ProfilerScope prof_scope("CheckInputSignature", thread_state->m_ProfilerThreadId, node_data->m_Annotation);
 
@@ -354,7 +354,7 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
     HashAddString(&sighash, node_data->m_Action);
     HashAddSeparator(&sighash);
 
-    const ScannerData *scanner = node_data->m_Scanner;
+    const Frozen::ScannerData *scanner = node_data->m_Scanner;
 
     // TODO: The input files are not guaranteed to be in a stably sorted order. If the order changes then the input
     // TODO: signature might change, giving us a false-positive for the node needing to be rebuilt. We should look into
@@ -371,7 +371,7 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
     if (scanner)
         HashSetInit(&implicitDeps, &thread_state->m_LocalHeap);
 
-    bool force_use_timestamp = node_data->m_Flags & NodeData::kFlagBanContentDigestForInputs;
+    bool force_use_timestamp = node_data->m_Flags & Frozen::NodeData::kFlagBanContentDigestForInputs;
 
     // Roll back scratch allocator after all file scans
     MemAllocLinearScope alloc_scope(&thread_state->m_ScratchAlloc);
@@ -436,8 +436,8 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
     for (const FrozenString &input : node_data->m_AllowedOutputSubstrings)
         HashAddString(&sighash, (const char *)input);
 
-    HashAddInteger(&sighash, (node_data->m_Flags & NodeData::kFlagAllowUnexpectedOutput) ? 1 : 0);
-    HashAddInteger(&sighash, (node_data->m_Flags & NodeData::kFlagAllowUnwrittenOutputFiles) ? 1 : 0);
+    HashAddInteger(&sighash, (node_data->m_Flags & Frozen::NodeData::kFlagAllowUnexpectedOutput) ? 1 : 0);
+    HashAddInteger(&sighash, (node_data->m_Flags & Frozen::NodeData::kFlagAllowUnwrittenOutputFiles) ? 1 : 0);
 
     HashFinalize(&sighash, &node->m_InputSignature);
 
@@ -450,7 +450,7 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
     }
 
     // Figure out if we need to rebuild this node.
-    const NodeStateData *prev_nodestatedata = node->m_MmapState;
+    const Frozen::NodeStateData *prev_nodestatedata = node->m_MmapState;
 
     if (!prev_nodestatedata)
     {

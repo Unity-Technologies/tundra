@@ -149,7 +149,7 @@ error:
 
 void DriverShowTargets(Driver *self)
 {
-    const DagData *dag = self->m_DagData;
+    const Frozen::DagData *dag = self->m_DagData;
 
     printf("\nNamed nodes and aliases:\n");
     printf("----------------------------------------------------------------\n");
@@ -168,7 +168,7 @@ void DriverShowTargets(Driver *self)
     }
 }
 
-static void GetIncludesRecursive(const HashDigest &scannerGuid, const char *fn, uint32_t fnHash, const ScanData *scan_data, int depth, HashTable<HashDigest, kFlagPathStrings> &seen, HashSet<kFlagPathStrings> &direct)
+static void GetIncludesRecursive(const HashDigest &scannerGuid, const char *fn, uint32_t fnHash, const Frozen::ScanData *scan_data, int depth, HashTable<HashDigest, kFlagPathStrings> &seen, HashSet<kFlagPathStrings> &direct)
 {
     if (depth == 0 && !HashSetLookup(&direct, fnHash, fn))
         HashSetInsert(&direct, fnHash, fn);
@@ -184,7 +184,7 @@ static void GetIncludesRecursive(const HashDigest &scannerGuid, const char *fn, 
     if (const HashDigest *ptr = BinarySearch(scan_data->m_Keys.Get(), count, scan_key))
     {
         int index = int(ptr - scan_data->m_Keys.Get());
-        const ScanCacheEntry *entry = scan_data->m_Data.Get() + index;
+        const Frozen::ScanCacheEntry *entry = scan_data->m_Data.Get() + index;
         int file_count = entry->m_IncludedFiles.GetCount();
         for (int i = 0; i < file_count; ++i)
         {
@@ -197,14 +197,14 @@ bool DriverReportIncludes(Driver *self)
 {
     MemAllocLinearScope allocScope(&self->m_Allocator);
 
-    const DagData *dag = self->m_DagData;
+    const Frozen::DagData *dag = self->m_DagData;
     if (dag == nullptr)
     {
         Log(kError, "No build DAG data");
         return false;
     }
 
-    const ScanData *scan_data = self->m_ScanData;
+    const Frozen::ScanData *scan_data = self->m_ScanData;
     if (scan_data == nullptr)
     {
         Log(kError, "No build file scan data (there was no previous build done?)");
@@ -222,9 +222,9 @@ bool DriverReportIncludes(Driver *self)
     int node_count = dag->m_NodeCount;
     for (int i = 0; i < node_count; ++i)
     {
-        const NodeData &node = dag->m_NodeData[i];
+        const Frozen::NodeData &node = dag->m_NodeData[i];
 
-        const ScannerData *s = node.m_Scanner;
+        const Frozen::ScannerData *s = node.m_Scanner;
         if (s != nullptr && node.m_InputFiles.GetCount() > 0)
         {
             const char *fn = node.m_InputFiles[0].m_Filename.Get();
@@ -252,7 +252,7 @@ bool DriverReportIncludes(Driver *self)
         if (const HashDigest *ptr = BinarySearch(scan_data->m_Keys.Get(), count, scan_key))
         {
             int index = int(ptr - scan_data->m_Keys.Get());
-            const ScanCacheEntry *entry = scan_data->m_Data.Get() + index;
+            const Frozen::ScanCacheEntry *entry = scan_data->m_Data.Get() + index;
             int file_count = entry->m_IncludedFiles.GetCount();
             JsonWriteStartObject(&msg);
             JsonWriteKeyName(&msg, "file");
@@ -333,9 +333,9 @@ bool DriverInitData(Driver *self)
 
     DigestCacheInit(&self->m_DigestCache, MB(128), self->m_DagData->m_DigestCacheFileName);
 
-    LoadFrozenData<StateData>(self->m_DagData->m_StateFileName, &self->m_StateFile, &self->m_StateData);
+    LoadFrozenData<Frozen::StateData>(self->m_DagData->m_StateFileName, &self->m_StateFile, &self->m_StateData);
 
-    LoadFrozenData<ScanData>(self->m_DagData->m_ScanCacheFileName, &self->m_ScanFile, &self->m_ScanData);
+    LoadFrozenData<Frozen::ScanData>(self->m_DagData->m_ScanCacheFileName, &self->m_ScanFile, &self->m_ScanData);
 
     ScanCacheSetCache(&self->m_ScanCache, self->m_ScanData);
 
@@ -352,7 +352,7 @@ static bool DriverPrepareDag(Driver *self, const char *dag_fn)
     if (self->m_Options.m_ForceDagRegen)
         snprintf(out_of_date_reason, out_of_date_reason_length, "Build frontend of %s ran (ForceDagRegen option used)", dag_fn);
 
-    bool loadFrozenDataResult = LoadFrozenData<DagData>(dag_fn, &self->m_DagFile, &self->m_DagData);
+    bool loadFrozenDataResult = LoadFrozenData<Frozen::DagData>(dag_fn, &self->m_DagFile, &self->m_DagData);
 
     if (!loadFrozenDataResult)
         snprintf(out_of_date_reason, out_of_date_reason_length, "Build frontend of %s ran (no suitable previous build dag file)", dag_fn);
@@ -403,7 +403,7 @@ static bool DriverPrepareDag(Driver *self, const char *dag_fn)
     PrintNonNodeActionResult(TimerDiffSeconds(time_exec_started, TimerGet()), 1, MessageStatusLevel::Success, out_of_date_reason);
 
     // The DAG had better map in now, or we can give up.
-    if (!LoadFrozenData<DagData>(dag_fn, &self->m_DagFile, &self->m_DagData))
+    if (!LoadFrozenData<Frozen::DagData>(dag_fn, &self->m_DagFile, &self->m_DagData))
     {
         Log(kError, "panic: couldn't load in freshly generated DAG");
         return false;
@@ -422,7 +422,7 @@ static bool DriverPrepareDag(Driver *self, const char *dag_fn)
 
 static bool DriverCheckDagSignatures(Driver *self, char *out_of_date_reason, int out_of_date_reason_maxlength)
 {
-    const DagData *dag_data = self->m_DagData;
+    const Frozen::DagData *dag_data = self->m_DagData;
 
 #if ENABLED(CHECKED_BUILD)
     // Paranoia - make sure the data is sorted.
@@ -436,7 +436,7 @@ static bool DriverCheckDagSignatures(Driver *self, char *out_of_date_reason, int
     Log(kDebug, "checking file signatures for DAG data");
 
     // Check timestamps of frontend files used to produce the DAG
-    for (const DagFileSignature &sig : dag_data->m_FileSignatures)
+    for (const Frozen::DagFileSignature &sig : dag_data->m_FileSignatures)
     {
         const char *path = sig.m_Path;
 
@@ -454,7 +454,7 @@ static bool DriverCheckDagSignatures(Driver *self, char *out_of_date_reason, int
     // Check directory listing fingerprints
     // Note that the digest computation in here must match the one in LuaListDirectory
     // The digests computed there are stored in the signature block by frontend code.
-    for (const DagGlobSignature &sig : dag_data->m_GlobSignatures)
+    for (const Frozen::DagGlobSignature &sig : dag_data->m_GlobSignatures)
     {
         HashDigest digest = CalculateGlobSignatureFor(sig.m_Path, sig.m_Filter, sig.m_Recurse, &self->m_Heap, &self->m_Allocator);
 
@@ -514,12 +514,12 @@ static int LevenshteinDistanceNoCase(const char *s, const char *t)
 
 // Match their source files and output files against the names specified.
 static void FindNodesByName(
-    const DagData *dag,
+    const Frozen::DagData *dag,
     Buffer<int32_t> *out_nodes,
     MemAllocHeap *heap,
     const char **names,
     size_t name_count,
-    const FrozenArray<NamedNodeData> &named_nodes)
+    const FrozenArray<Frozen::NamedNodeData> &named_nodes)
 {
     size_t node_bits_size = (dag->m_NodeCount + 31) / 32 * sizeof(uint32_t);
     uint32_t *node_bits = (uint32_t *)alloca(node_bits_size);
@@ -535,7 +535,7 @@ static void FindNodesByName(
         // Try all named nodes first
         bool foundMatchingPrefix = false;
         bool prefixIsAmbigious = false;
-        const NamedNodeData *nodeDataForMatchingPrefix = nullptr;
+        const Frozen::NamedNodeData *nodeDataForMatchingPrefix = nullptr;
         struct StringWithScore
         {
             StringWithScore(int _score, const char *_string) : score(_score), string(_string) {}
@@ -544,7 +544,7 @@ static void FindNodesByName(
         };
         std::vector<StringWithScore> fuzzyMatches;
         fuzzyMatches.reserve(named_nodes.GetCount());
-        for (const NamedNodeData &named_node : named_nodes)
+        for (const Frozen::NamedNodeData &named_node : named_nodes)
         {
             const int distance = LevenshteinDistanceNoCase(named_node.m_Name, name);
             const int fuzzyMatchLimit = std::max(0, std::min((int)strlen(name) - 2, 4));
@@ -599,7 +599,7 @@ static void FindNodesByName(
         const uint32_t filename_hash = Djb2HashPath(cleaned_path);
         for (int node_index = 0; node_index != dag->m_NodeCount; node_index++)
         {
-            const NodeData &node = dag->m_NodeData[node_index];
+            const Frozen::NodeData &node = dag->m_NodeData[node_index];
             for (const FrozenFileAndHash &output : node.m_OutputFiles)
             {
                 if (filename_hash == output.m_FilenameHash && 0 == PathCompare(output.m_Filename, cleaned_path))
@@ -629,7 +629,7 @@ static void FindNodesByName(
     }
 }
 
-static void DriverSelectNodes(const DagData *dag, const char **targets, int target_count, Buffer<int32_t> *out_nodes, MemAllocHeap *heap)
+static void DriverSelectNodes(const Frozen::DagData *dag, const char **targets, int target_count, Buffer<int32_t> *out_nodes, MemAllocHeap *heap)
 {
     if (target_count > 0)
     {
@@ -653,8 +653,8 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
 {
     ProfilerScope prof_scope("Tundra PrepareNodes", 0);
 
-    const DagData *dag = self->m_DagData;
-    const NodeData *src_nodes = dag->m_NodeData;
+    const Frozen::DagData *dag = self->m_DagData;
+    const Frozen::NodeData *src_nodes = dag->m_NodeData;
     const HashDigest *src_guids = dag->m_NodeGuids;
     MemAllocHeap *heap = &self->m_Heap;
 
@@ -679,7 +679,7 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
 
         if (0 == (node_visited_bits[dag_word] & dag_bit))
         {
-            const NodeData *node = src_nodes + dag_index;
+            const Frozen::NodeData *node = src_nodes + dag_index;
 
             BufferAppendOne(&node_indices, &self->m_Heap, dag_index);
 
@@ -702,7 +702,7 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
     // Initialize node state
     for (int i = 0; i < node_count; ++i)
     {
-        const NodeData *src_node = src_nodes + node_indices[i];
+        const Frozen::NodeData *src_node = src_nodes + node_indices[i];
         out_nodes[i].m_MmapData = src_node;
 #if ENABLED(CHECKED_BUILD)
         out_nodes[i].m_DebugAnnotation = src_node->m_Annotation.Get();
@@ -710,9 +710,9 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
     }
 
     // Find frozen node state from previous build, if present.
-    if (const StateData *state_data = self->m_StateData)
+    if (const Frozen::StateData *state_data = self->m_StateData)
     {
-        const NodeStateData *frozen_states = state_data->m_NodeStates;
+        const Frozen::NodeStateData *frozen_states = state_data->m_NodeStates;
         const HashDigest *state_guids = state_data->m_NodeGuids;
         const int state_guid_count = state_data->m_NodeCount;
 
@@ -736,7 +736,7 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
 
     for (int local_index = 0; local_index < node_count; ++local_index)
     {
-        const NodeData *global_node = out_nodes[local_index].m_MmapData;
+        const Frozen::NodeData *global_node = out_nodes[local_index].m_MmapData;
         const int global_index = int(global_node - src_nodes);
         CHECK(node_remap[global_index] == -1);
         node_remap[global_index] = local_index;
@@ -811,7 +811,7 @@ bool DriverAllocNodes(Driver *self);
 
 BuildResult::Enum DriverBuild(Driver *self)
 {
-    const DagData *dag = self->m_DagData;
+    const Frozen::DagData *dag = self->m_DagData;
 
     // Initialize build queue
     Mutex debug_signing_mutex;
@@ -867,7 +867,7 @@ BuildResult::Enum DriverBuild(Driver *self)
         for (size_t i = 0, count = self->m_Nodes.m_Size; i < count; ++i)
         {
             const NodeState *state = self->m_Nodes.m_Storage + i;
-            const NodeData *src = state->m_MmapData;
+            const Frozen::NodeData *src = state->m_MmapData;
             const int src_index = int(src - self->m_DagData->m_NodeData);
             int remapped_index = self->m_NodeRemap[src_index];
             CHECK(size_t(remapped_index) == i);
@@ -979,7 +979,7 @@ static void save_node_sharedcode(bool nodeWasBuiltSuccesfully, const HashDigest 
     BinarySegmentWriteStringData(segments.string, src_node->m_Action);
 }
 
-static bool node_was_used_by_this_dag_previously(const NodeStateData *node_state_data, uint32_t current_dag_identifier)
+static bool node_was_used_by_this_dag_previously(const Frozen::NodeStateData *node_state_data, uint32_t current_dag_identifier)
 {
     auto &previous_dags = node_state_data->m_DagsWeHaveSeenThisNodeInPreviously;
     return std::find(previous_dags.begin(), previous_dags.end(), current_dag_identifier) != previous_dags.end();
@@ -1013,7 +1013,7 @@ bool DriverSaveBuildState(Driver *self)
 
     uint32_t src_count = self->m_DagData->m_NodeCount;
     const HashDigest *src_guids = self->m_DagData->m_NodeGuids;
-    const NodeData *src_data = self->m_DagData->m_NodeData;
+    const Frozen::NodeData *src_data = self->m_DagData->m_NodeData;
     NodeState *new_state = self->m_Nodes.m_Storage;
     const size_t new_state_count = self->m_Nodes.m_Size;
 
@@ -1023,10 +1023,10 @@ bool DriverSaveBuildState(Driver *self)
     });
 
     const HashDigest *old_guids = nullptr;
-    const NodeStateData *old_state = nullptr;
+    const Frozen::NodeStateData *old_state = nullptr;
     uint32_t old_count = 0;
 
-    if (const StateData *state_data = self->m_StateData)
+    if (const Frozen::StateData *state_data = self->m_StateData)
     {
         old_guids = state_data->m_NodeGuids;
         old_state = state_data->m_NodeStates;
@@ -1036,7 +1036,7 @@ bool DriverSaveBuildState(Driver *self)
     int entry_count = 0;
     uint32_t this_dag_hashed_identifier = self->m_DagData->m_HashedIdentifier;
 
-    auto save_node_state = [=](bool nodeWasBuiltSuccessfully, const HashDigest *input_signature, const NodeData *src_node, const NodeStateData *node_data_state, const HashDigest *guid) -> void {
+    auto save_node_state = [=](bool nodeWasBuiltSuccessfully, const HashDigest *input_signature, const Frozen::NodeData *src_node, const Frozen::NodeStateData *node_data_state, const HashDigest *guid) -> void {
         MemAllocLinear *scratch = &self->m_Allocator;
 
         save_node_sharedcode(nodeWasBuiltSuccessfully, input_signature, src_node, guid, segments);
@@ -1126,7 +1126,7 @@ bool DriverSaveBuildState(Driver *self)
             BinarySegmentWriteUint32(array_seg, this_dag_hashed_identifier);
     };
 
-    auto save_node_state_old = [=](bool nodeWasBuiltSuccesfully, const HashDigest *input_signature, const NodeStateData *src_node, const HashDigest *guid) -> void {
+    auto save_node_state_old = [=](bool nodeWasBuiltSuccesfully, const HashDigest *input_signature, const Frozen::NodeStateData *src_node, const HashDigest *guid) -> void {
         save_node_sharedcode(nodeWasBuiltSuccesfully, input_signature, src_node, guid, segments);
 
         int32_t file_count = src_node->m_InputFiles.GetCount();
@@ -1157,7 +1157,7 @@ bool DriverSaveBuildState(Driver *self)
 
     auto save_new = [=, &entry_count](size_t index) {
         const NodeState *elem = new_state + index;
-        const NodeData *src_elem = elem->m_MmapData;
+        const Frozen::NodeData *src_elem = elem->m_MmapData;
         const int src_index = int(src_elem - src_data);
         const HashDigest *guid = src_guids + src_index;
 
@@ -1168,7 +1168,7 @@ bool DriverSaveBuildState(Driver *self)
             if (const HashDigest *old_guid = BinarySearch(old_guids, old_count, *guid))
             {
                 size_t old_index = old_guid - old_guids;
-                const NodeStateData *old_state_data = old_state + old_index;
+                const Frozen::NodeStateData *old_state_data = old_state + old_index;
                 save_node_state_old(old_state_data->m_WasBuiltSuccessfully > 0, &old_state_data->m_InputSignature, old_state_data, guid);
                 ++entry_count;
                 ++g_Stats.m_StateSaveNew;
@@ -1185,7 +1185,7 @@ bool DriverSaveBuildState(Driver *self)
 
     auto save_old = [=, &entry_count](size_t index) {
         const HashDigest *guid = old_guids + index;
-        const NodeStateData *data = old_state + index;
+        const Frozen::NodeStateData *data = old_state + index;
 
         // Make sure this node is still relevant before saving.
         bool node_is_in_dag = BinarySearch(src_guids, src_count, *guid) != nullptr;
@@ -1217,11 +1217,11 @@ bool DriverSaveBuildState(Driver *self)
         old_count, save_old, key_old);
 
     // Complete main data structure.
-    BinarySegmentWriteUint32(main_seg, StateData::MagicNumber);
+    BinarySegmentWriteUint32(main_seg, Frozen::StateData::MagicNumber);
     BinarySegmentWriteInt32(main_seg, entry_count);
     BinarySegmentWritePointer(main_seg, guid_ptr);
     BinarySegmentWritePointer(main_seg, state_ptr);
-    BinarySegmentWriteUint32(main_seg, StateData::MagicNumber);
+    BinarySegmentWriteUint32(main_seg, Frozen::StateData::MagicNumber);
 
     // Unmap old state data.
     MmapFileUnmap(&self->m_StateFile);
@@ -1268,8 +1268,8 @@ void DriverRemoveStaleOutputs(Driver *self)
     TimingScope timing_scope(nullptr, &g_Stats.m_StaleCheckTimeCycles);
     ProfilerScope prof_scope("Tundra RemoveStaleOutputs", 0);
 
-    const DagData *dag = self->m_DagData;
-    const StateData *state = self->m_StateData;
+    const Frozen::DagData *dag = self->m_DagData;
+    const Frozen::StateData *state = self->m_StateData;
     MemAllocLinear *scratch = &self->m_Allocator;
 
     MemAllocLinearScope scratch_scope(scratch);
@@ -1295,7 +1295,7 @@ void DriverRemoveStaleOutputs(Driver *self)
 
     for (int i = 0, node_count = dag->m_NodeCount; i < node_count; ++i)
     {
-        const NodeData *node = dag->m_NodeData + i;
+        const Frozen::NodeData *node = dag->m_NodeData + i;
 
         for (const FrozenFileAndHash &p : node->m_OutputFiles)
         {
@@ -1346,7 +1346,7 @@ void DriverRemoveStaleOutputs(Driver *self)
 
     for (int i = 0, state_count = state->m_NodeCount; i < state_count; ++i)
     {
-        const NodeStateData *node = state->m_NodeStates + i;
+        const Frozen::NodeStateData *node = state->m_NodeStates + i;
 
         if (!node_was_used_by_this_dag_previously(node, dag->m_HashedIdentifier))
             continue;

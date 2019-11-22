@@ -23,8 +23,11 @@ static const uint16_t kQueued = 1 << 0;
 static const uint16_t kActive = 1 << 1;
 } // namespace NodeStateFlags
 
-struct NodeData;
-struct NodeStateData;
+namespace Frozen
+{
+    struct NodeData;
+    struct NodeStateData;
+}
 
 struct NodeState
 {
@@ -33,8 +36,8 @@ struct NodeState
 #if ENABLED(CHECKED_BUILD)
     const char *m_DebugAnnotation;
 #endif
-    const NodeData *m_MmapData;
-    const NodeStateData *m_MmapState;
+    const Frozen::NodeData *m_MmapData;
+    const Frozen::NodeStateData *m_MmapState;
 
     NodeBuildResult::Enum m_BuildResult;
     bool m_Finished;
