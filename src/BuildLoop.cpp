@@ -47,7 +47,7 @@ static RuntimeNode *GetStateForNode(BuildQueue *queue, int32_t src_index)
 
     RuntimeNode *state = queue->m_Config.m_NodeState + state_index;
 
-    CHECK(int(state->m_MmapData - queue->m_Config.m_NodeData) == src_index);
+    CHECK(int(state->m_DagNode - queue->m_Config.m_NodeData) == src_index);
 
     return state;
 }
@@ -86,7 +86,7 @@ static void Enqueue(BuildQueue *queue, RuntimeNode *state)
 
 static bool AllDependenciesAreFinished(BuildQueue *queue, RuntimeNode *state)
 {
-    for (int32_t dep_index : state->m_MmapData->m_Dependencies)
+    for (int32_t dep_index : state->m_DagNode->m_Dependencies)
     {
         RuntimeNode *state = GetStateForNode(queue, dep_index);
         if (!state->m_Finished)
@@ -97,7 +97,7 @@ static bool AllDependenciesAreFinished(BuildQueue *queue, RuntimeNode *state)
 
 static bool AllDependenciesAreSuccesful(BuildQueue *queue, RuntimeNode *state)
 {
-    for (int32_t dep_index : state->m_MmapData->m_Dependencies)
+    for (int32_t dep_index : state->m_DagNode->m_Dependencies)
     {
         RuntimeNode *state = GetStateForNode(queue, dep_index);
         CHECK(state->m_Finished);
@@ -112,7 +112,7 @@ static void EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(BuildQueue *queue, R
 {
     int enqueue_count = 0;
 
-    for (int32_t link : node->m_MmapData->m_BackLinks)
+    for (int32_t link : node->m_DagNode->m_BackLinks)
     {
         if (RuntimeNode *waiter = GetStateForNode(queue, link))
         {
@@ -148,7 +148,7 @@ static void SignalMainThreadToStartCleaningUp(BuildQueue *queue)
 
 static void AdvanceNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node, Mutex *queue_lock)
 {
-    Log(kSpam, "T=%d, Advancing %s\n", thread_state->m_ThreadIndex, node->m_MmapData->m_Annotation.Get());
+    Log(kSpam, "T=%d, Advancing %s\n", thread_state->m_ThreadIndex, node->m_DagNode->m_Annotation.Get());
 
     CHECK(!node->m_Finished);
     CHECK(NodeStateIsActive(node));

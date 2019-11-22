@@ -245,7 +245,7 @@ BuildResult::Enum BuildQueueBuildNodeRange(BuildQueue *queue, int start_index, i
         RuntimeNode *state = node_states + start_index + i;
 
         //to start up, let's enqueue all nodes that have 0 dependencies.
-        if (state->m_MmapData->m_Dependencies.GetCount() == 0)
+        if (state->m_DagNode->m_Dependencies.GetCount() == 0)
         {
             NodeStateFlagQueued(state);
             build_queue[amountQueued++] = start_index + i;

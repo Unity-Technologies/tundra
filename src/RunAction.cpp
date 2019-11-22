@@ -82,8 +82,8 @@ static ExecResult WriteTextFile(const char *payload, const char *target_file, Me
 
 NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node, Mutex *queue_lock)
 {
-    const Frozen::DagNode *node_data = node->m_MmapData;
-    const bool isWriteFileAction = node->m_MmapData->m_Flags & Frozen::DagNode::kFlagIsWriteTextFileAction;
+    const Frozen::DagNode *node_data = node->m_DagNode;
+    const bool isWriteFileAction = node->m_DagNode->m_Flags & Frozen::DagNode::kFlagIsWriteTextFileAction;
     const char *cmd_line = node_data->m_Action;
 
     if (!isWriteFileAction && (!cmd_line || cmd_line[0] == '\0'))
@@ -209,7 +209,7 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
         }
 
         auto VerifyNodeGlobSignatures = [=]() -> bool {
-            for (const Frozen::DagGlobSignature &sig : node->m_MmapData->m_GlobSignatures)
+            for (const Frozen::DagGlobSignature &sig : node->m_DagNode->m_GlobSignatures)
             {
                 HashDigest digest = CalculateGlobSignatureFor(sig.m_Path, sig.m_Filter, sig.m_Recurse, thread_state->m_Queue->m_Config.m_Heap, &thread_state->m_ScratchAlloc);
 
@@ -222,7 +222,7 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
 
         auto VerifyFileSignatures = [=]() -> bool {
             // Check timestamps of frontend files used to produce the DAG
-            for (const Frozen::DagFileSignature &sig : node->m_MmapData->m_FileSignatures)
+            for (const Frozen::DagFileSignature &sig : node->m_DagNode->m_FileSignatures)
             {
                 const char *path = sig.m_Path;
 

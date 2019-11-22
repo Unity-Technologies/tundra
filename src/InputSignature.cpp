@@ -328,7 +328,7 @@ static bool OutputFilesMissing(StatCache *stat_cache, const Frozen::DagNode *nod
 
 bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node)
 {
-    const Frozen::DagNode *node_data = node->m_MmapData;
+    const Frozen::DagNode *node_data = node->m_DagNode;
 
     ProfilerScope prof_scope("CheckInputSignature", thread_state->m_ProfilerThreadId, node_data->m_Annotation);
 

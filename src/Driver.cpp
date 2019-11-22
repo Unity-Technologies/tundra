@@ -703,7 +703,7 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
     for (int i = 0; i < node_count; ++i)
     {
         const Frozen::DagNode *src_node = src_nodes + node_indices[i];
-        out_nodes[i].m_MmapData = src_node;
+        out_nodes[i].m_DagNode = src_node;
 #if ENABLED(CHECKED_BUILD)
         out_nodes[i].m_DebugAnnotation = src_node->m_Annotation.Get();
 #endif
@@ -736,7 +736,7 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
 
     for (int local_index = 0; local_index < node_count; ++local_index)
     {
-        const Frozen::DagNode *global_node = out_nodes[local_index].m_MmapData;
+        const Frozen::DagNode *global_node = out_nodes[local_index].m_DagNode;
         const int global_index = int(global_node - src_nodes);
         CHECK(node_remap[global_index] == -1);
         node_remap[global_index] = local_index;
@@ -867,7 +867,7 @@ BuildResult::Enum DriverBuild(Driver *self)
         for (size_t i = 0, count = self->m_Nodes.m_Size; i < count; ++i)
         {
             const RuntimeNode *state = self->m_Nodes.m_Storage + i;
-            const Frozen::DagNode *src = state->m_MmapData;
+            const Frozen::DagNode *src = state->m_DagNode;
             const int src_index = int(src - self->m_DagData->m_NodeData);
             int remapped_index = self->m_NodeRemap[src_index];
             CHECK(size_t(remapped_index) == i);
@@ -1019,7 +1019,7 @@ bool DriverSaveBuildState(Driver *self)
 
     std::sort(new_state, new_state + new_state_count, [=](const RuntimeNode &l, const RuntimeNode &r) {
         // We know guids are sorted, so all we need to do is compare pointers into that table.
-        return l.m_MmapData < r.m_MmapData;
+        return l.m_DagNode < r.m_DagNode;
     });
 
     const HashDigest *old_guids = nullptr;
@@ -1157,7 +1157,7 @@ bool DriverSaveBuildState(Driver *self)
 
     auto save_new = [=, &entry_count](size_t index) {
         const RuntimeNode *elem = new_state + index;
-        const Frozen::DagNode *src_elem = elem->m_MmapData;
+        const Frozen::DagNode *src_elem = elem->m_DagNode;
         const int src_index = int(src_elem - src_data);
         const HashDigest *guid = src_guids + src_index;
 
@@ -1204,7 +1204,7 @@ bool DriverSaveBuildState(Driver *self)
     };
 
     auto key_new = [=](size_t index) -> const HashDigest * {
-        int dag_index = int(new_state[index].m_MmapData - src_data);
+        int dag_index = int(new_state[index].m_DagNode - src_data);
         return src_guids + dag_index;
     };
 
@@ -1400,7 +1400,7 @@ void DriverCleanOutputs(Driver *self)
     int count = 0;
     for (RuntimeNode &state : self->m_Nodes)
     {
-        for (const FrozenFileAndHash &fh : state.m_MmapData->m_OutputFiles)
+        for (const FrozenFileAndHash &fh : state.m_DagNode->m_OutputFiles)
         {
             if (0 == RemoveFileOrDir(fh.m_Filename))
                 ++count;
