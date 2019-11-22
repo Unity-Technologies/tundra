@@ -32,7 +32,7 @@
 struct SlowCallbackData
 {
     Mutex *queue_lock;
-    const Frozen::Node *node_data;
+    const Frozen::DagNode *node_data;
     uint64_t time_of_start;
     const BuildQueue *build_queue;
 };
@@ -82,8 +82,8 @@ static ExecResult WriteTextFile(const char *payload, const char *target_file, Me
 
 NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node, Mutex *queue_lock)
 {
-    const Frozen::Node *node_data = node->m_MmapData;
-    const bool isWriteFileAction = node->m_MmapData->m_Flags & Frozen::Node::kFlagIsWriteTextFileAction;
+    const Frozen::DagNode *node_data = node->m_MmapData;
+    const bool isWriteFileAction = node->m_MmapData->m_Flags & Frozen::DagNode::kFlagIsWriteTextFileAction;
     const char *cmd_line = node_data->m_Action;
 
     if (!isWriteFileAction && (!cmd_line || cmd_line[0] == '\0'))
@@ -145,7 +145,7 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
     ExecResult result = {0, false};
 
     // See if we need to remove the output files before running anything.
-    if (0 == (node_data->m_Flags & Frozen::Node::kFlagOverwriteOutputs))
+    if (0 == (node_data->m_Flags & Frozen::DagNode::kFlagOverwriteOutputs))
     {
         for (const FrozenFileAndHash &output : node_data->m_OutputFiles)
         {
@@ -179,7 +179,7 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
 
         uint64_t *pre_timestamps = (uint64_t *)LinearAllocate(&thread_state->m_ScratchAlloc, n_outputs, (size_t)sizeof(uint64_t));
 
-        bool allowUnwrittenOutputFiles = (node_data->m_Flags & Frozen::Node::kFlagAllowUnwrittenOutputFiles);
+        bool allowUnwrittenOutputFiles = (node_data->m_Flags & Frozen::DagNode::kFlagAllowUnwrittenOutputFiles);
         if (!allowUnwrittenOutputFiles)
             for (int i = 0; i < n_outputs; i++)
             {
@@ -265,7 +265,7 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
 
     // Clean up output files after a failed build unless they are precious,
     // or unless the failure was from failing to write one of them
-    if (0 == (Frozen::Node::kFlagPreciousOutputs & node_data->m_Flags) && !(0 == result.m_ReturnCode && passedOutputValidation == ValidationResult::UnwrittenOutputFileFail))
+    if (0 == (Frozen::DagNode::kFlagPreciousOutputs & node_data->m_Flags) && !(0 == result.m_ReturnCode && passedOutputValidation == ValidationResult::UnwrittenOutputFileFail))
     {
         for (const FrozenFileAndHash &output : node_data->m_OutputFiles)
         {

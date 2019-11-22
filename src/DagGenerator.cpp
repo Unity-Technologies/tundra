@@ -460,14 +460,14 @@ static bool WriteNodes(
 
         uint32_t flags = 0;
 
-        flags |= GetNodeFlag(node, "OverwriteOutputs", Frozen::Node::kFlagOverwriteOutputs, true);
-        flags |= GetNodeFlag(node, "PreciousOutputs", Frozen::Node::kFlagPreciousOutputs);
-        flags |= GetNodeFlag(node, "AllowUnexpectedOutput", Frozen::Node::kFlagAllowUnexpectedOutput, false);
-        flags |= GetNodeFlag(node, "AllowUnwrittenOutputFiles", Frozen::Node::kFlagAllowUnwrittenOutputFiles, false);
-        flags |= GetNodeFlag(node, "BanContentDigestForInputs", Frozen::Node::kFlagBanContentDigestForInputs, false);
+        flags |= GetNodeFlag(node, "OverwriteOutputs", Frozen::DagNode::kFlagOverwriteOutputs, true);
+        flags |= GetNodeFlag(node, "PreciousOutputs", Frozen::DagNode::kFlagPreciousOutputs);
+        flags |= GetNodeFlag(node, "AllowUnexpectedOutput", Frozen::DagNode::kFlagAllowUnexpectedOutput, false);
+        flags |= GetNodeFlag(node, "AllowUnwrittenOutputFiles", Frozen::DagNode::kFlagAllowUnwrittenOutputFiles, false);
+        flags |= GetNodeFlag(node, "BanContentDigestForInputs", Frozen::DagNode::kFlagBanContentDigestForInputs, false);
 
         if (writetextfile_payload != nullptr)
-            flags |= Frozen::Node::kFlagIsWriteTextFileAction;
+            flags |= Frozen::DagNode::kFlagIsWriteTextFileAction;
 
         BinarySegmentWriteUint32(node_data_seg, flags);
         BinarySegmentWriteUint32(node_data_seg, reverse_remap[ni]);

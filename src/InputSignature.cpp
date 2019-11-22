@@ -117,7 +117,7 @@ static void ReportValueWithOptionalTruncation(JsonWriter *msg, const char *keyNa
 static void ReportInputSignatureChanges(
     JsonWriter *msg,
     RuntimeNode *node,
-    const Frozen::Node *node_data,
+    const Frozen::DagNode *node_data,
     const Frozen::BuiltNode *prev_state,
     StatCache *stat_cache,
     DigestCache *digest_cache,
@@ -146,7 +146,7 @@ static void ReportInputSignatureChanges(
         const char *oldFilename = prev_state->m_InputFiles[i].m_Filename;
         explicitInputFilesListChanged |= (strcmp(filename, oldFilename) != 0);
     }
-    bool force_use_timestamp = node->m_Flags & Frozen::Node::kFlagBanContentDigestForInputs;
+    bool force_use_timestamp = node->m_Flags & Frozen::DagNode::kFlagBanContentDigestForInputs;
     if (explicitInputFilesListChanged)
     {
         JsonWriteStartObject(msg);
@@ -289,7 +289,7 @@ static void ReportInputSignatureChanges(
     }
 }
 
-static bool OutputFilesDiffer(const Frozen::Node *node_data, const Frozen::BuiltNode *prev_state)
+static bool OutputFilesDiffer(const Frozen::DagNode *node_data, const Frozen::BuiltNode *prev_state)
 {
     int file_count = node_data->m_OutputFiles.GetCount();
 
@@ -305,7 +305,7 @@ static bool OutputFilesDiffer(const Frozen::Node *node_data, const Frozen::Built
     return false;
 }
 
-static bool OutputFilesMissing(StatCache *stat_cache, const Frozen::Node *node)
+static bool OutputFilesMissing(StatCache *stat_cache, const Frozen::DagNode *node)
 {
     for (const FrozenFileAndHash &f : node->m_OutputFiles)
     {
@@ -328,7 +328,7 @@ static bool OutputFilesMissing(StatCache *stat_cache, const Frozen::Node *node)
 
 bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node)
 {
-    const Frozen::Node *node_data = node->m_MmapData;
+    const Frozen::DagNode *node_data = node->m_MmapData;
 
     ProfilerScope prof_scope("CheckInputSignature", thread_state->m_ProfilerThreadId, node_data->m_Annotation);
 
@@ -371,7 +371,7 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
     if (scanner)
         HashSetInit(&implicitDeps, &thread_state->m_LocalHeap);
 
-    bool force_use_timestamp = node_data->m_Flags & Frozen::Node::kFlagBanContentDigestForInputs;
+    bool force_use_timestamp = node_data->m_Flags & Frozen::DagNode::kFlagBanContentDigestForInputs;
 
     // Roll back scratch allocator after all file scans
     MemAllocLinearScope alloc_scope(&thread_state->m_ScratchAlloc);
@@ -436,8 +436,8 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
     for (const FrozenString &input : node_data->m_AllowedOutputSubstrings)
         HashAddString(&sighash, (const char *)input);
 
-    HashAddInteger(&sighash, (node_data->m_Flags & Frozen::Node::kFlagAllowUnexpectedOutput) ? 1 : 0);
-    HashAddInteger(&sighash, (node_data->m_Flags & Frozen::Node::kFlagAllowUnwrittenOutputFiles) ? 1 : 0);
+    HashAddInteger(&sighash, (node_data->m_Flags & Frozen::DagNode::kFlagAllowUnexpectedOutput) ? 1 : 0);
+    HashAddInteger(&sighash, (node_data->m_Flags & Frozen::DagNode::kFlagAllowUnwrittenOutputFiles) ? 1 : 0);
 
     HashFinalize(&sighash, &node->m_InputSignature);
 

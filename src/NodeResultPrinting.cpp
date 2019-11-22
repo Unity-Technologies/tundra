@@ -16,7 +16,7 @@
 
 struct NodeResultPrintData
 {
-    const Frozen::Node *node_data;
+    const Frozen::DagNode *node_data;
     const char *cmd_line;
     bool verbose;
     int duration;
@@ -33,7 +33,7 @@ struct NodeResultPrintData
 static bool EmitColors = false;
 
 static uint64_t last_progress_message_of_any_job;
-static const Frozen::Node *last_progress_message_job = nullptr;
+static const Frozen::DagNode *last_progress_message_job = nullptr;
 static int total_number_node_results_printed = 0;
 
 static int deferred_message_count = 0;
@@ -364,7 +364,7 @@ inline char *StrDup(MemAllocHeap *allocator, const char *str)
 
 void PrintNodeResult(
     ExecResult *result,
-    const Frozen::Node *node_data,
+    const Frozen::DagNode *node_data,
     const char *cmd_line,
     BuildQueue *queue,
     ThreadState *thread_state,
@@ -482,7 +482,7 @@ void PrintDeferredMessages(BuildQueue *queue)
     deferred_message_count = 0;
 }
 
-int PrintNodeInProgress(const Frozen::Node *node_data, uint64_t time_of_start, const BuildQueue *queue)
+int PrintNodeInProgress(const Frozen::DagNode *node_data, uint64_t time_of_start, const BuildQueue *queue)
 {
     uint64_t now = TimerGet();
     int seconds_job_has_been_running_for = TimerDiffSeconds(time_of_start, now);
