@@ -1,9 +1,9 @@
 #pragma once
-#include "NodeState.hpp"
+#include "RuntimeNode.hpp"
 
 struct BuildQueue;
 struct ThreadState;
 struct Mutex;
 
-NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, NodeState *node, Mutex *queue_lock);
+NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node, Mutex *queue_lock);
 

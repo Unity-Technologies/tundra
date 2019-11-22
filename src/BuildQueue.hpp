@@ -11,7 +11,7 @@
 
 
 struct MemAllocHeap;
-struct NodeState;
+struct RuntimeNode;
 struct ScanCache;
 struct StatCache;
 struct DigestCache;
@@ -38,7 +38,7 @@ struct BuildQueueConfig
     int m_ThreadCount;
     int m_ThrottleInactivityPeriod;
     const Frozen::Node *m_NodeData;
-    NodeState *m_NodeState;
+    RuntimeNode *m_NodeState;
     int m_MaxNodes;
     const int32_t *m_NodeRemappingTable;
     ScanCache *m_ScanCache;

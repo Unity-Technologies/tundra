@@ -29,7 +29,7 @@ namespace Frozen
     struct NodeStateData;
 }
 
-struct NodeState
+struct RuntimeNode
 {
     uint16_t m_Flags;
 
@@ -44,32 +44,32 @@ struct NodeState
     HashDigest m_InputSignature;
 };
 
-inline bool NodeStateIsQueued(const NodeState *state)
+inline bool NodeStateIsQueued(const RuntimeNode *state)
 {
     return 0 != (state->m_Flags & NodeStateFlags::kQueued);
 }
 
-inline void NodeStateFlagQueued(NodeState *state)
+inline void NodeStateFlagQueued(RuntimeNode *state)
 {
     state->m_Flags |= NodeStateFlags::kQueued;
 }
 
-inline void NodeStateFlagUnqueued(NodeState *state)
+inline void NodeStateFlagUnqueued(RuntimeNode *state)
 {
     state->m_Flags &= ~NodeStateFlags::kQueued;
 }
 
-inline bool NodeStateIsActive(const NodeState *state)
+inline bool NodeStateIsActive(const RuntimeNode *state)
 {
     return 0 != (state->m_Flags & NodeStateFlags::kActive);
 }
 
-inline void NodeStateFlagActive(NodeState *state)
+inline void NodeStateFlagActive(RuntimeNode *state)
 {
     state->m_Flags |= NodeStateFlags::kActive;
 }
 
-inline void NodeStateFlagInactive(NodeState *state)
+inline void NodeStateFlagInactive(RuntimeNode *state)
 {
     state->m_Flags &= ~NodeStateFlags::kActive;
 }

@@ -2,7 +2,7 @@
 #include "DagData.hpp"
 #include "MemAllocHeap.hpp"
 #include "MemAllocLinear.hpp"
-#include "NodeState.hpp"
+#include "RuntimeNode.hpp"
 #include "Scanner.hpp"
 #include "FileInfo.hpp"
 #include "StateData.hpp"
@@ -80,7 +80,7 @@ static ExecResult WriteTextFile(const char *payload, const char *target_file, Me
     return result;
 }
 
-NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, NodeState *node, Mutex *queue_lock)
+NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node, Mutex *queue_lock)
 {
     const Frozen::Node *node_data = node->m_MmapData;
     const bool isWriteFileAction = node->m_MmapData->m_Flags & Frozen::Node::kFlagIsWriteTextFileAction;

@@ -8,7 +8,7 @@
 #include "FileInfo.hpp"
 #include "MemAllocLinear.hpp"
 #include "MemoryMappedFile.hpp"
-#include "NodeState.hpp"
+#include "RuntimeNode.hpp"
 #include "ScanData.hpp"
 #include "Scanner.hpp"
 #include "SortedArrayUtil.hpp"
@@ -697,7 +697,7 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
     node_visited_bits = nullptr;
 
     // Allocate space for nodes
-    NodeState *out_nodes = BufferAllocZero(&self->m_Nodes, &self->m_Heap, node_count);
+    RuntimeNode *out_nodes = BufferAllocZero(&self->m_Nodes, &self->m_Heap, node_count);
 
     // Initialize node state
     for (int i = 0; i < node_count; ++i)
@@ -743,7 +743,7 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
     }
 
     Log(kDebug, "Node remap: %d src nodes, %d active nodes, using %d bytes of node state buffer space",
-        dag->m_NodeCount, node_count, sizeof(NodeState) * node_count);
+        dag->m_NodeCount, node_count, sizeof(RuntimeNode) * node_count);
 
     BufferDestroy(&node_stack, &self->m_Heap);
     BufferDestroy(&node_indices, &self->m_Heap);
@@ -866,7 +866,7 @@ BuildResult::Enum DriverBuild(Driver *self)
         // Paranoia - double check node remapping table
         for (size_t i = 0, count = self->m_Nodes.m_Size; i < count; ++i)
         {
-            const NodeState *state = self->m_Nodes.m_Storage + i;
+            const RuntimeNode *state = self->m_Nodes.m_Storage + i;
             const Frozen::Node *src = state->m_MmapData;
             const int src_index = int(src - self->m_DagData->m_NodeData);
             int remapped_index = self->m_NodeRemap[src_index];
@@ -1014,10 +1014,10 @@ bool DriverSaveBuildState(Driver *self)
     uint32_t src_count = self->m_DagData->m_NodeCount;
     const HashDigest *src_guids = self->m_DagData->m_NodeGuids;
     const Frozen::Node *src_data = self->m_DagData->m_NodeData;
-    NodeState *new_state = self->m_Nodes.m_Storage;
+    RuntimeNode *new_state = self->m_Nodes.m_Storage;
     const size_t new_state_count = self->m_Nodes.m_Size;
 
-    std::sort(new_state, new_state + new_state_count, [=](const NodeState &l, const NodeState &r) {
+    std::sort(new_state, new_state + new_state_count, [=](const RuntimeNode &l, const RuntimeNode &r) {
         // We know guids are sorted, so all we need to do is compare pointers into that table.
         return l.m_MmapData < r.m_MmapData;
     });
@@ -1156,7 +1156,7 @@ bool DriverSaveBuildState(Driver *self)
     };
 
     auto save_new = [=, &entry_count](size_t index) {
-        const NodeState *elem = new_state + index;
+        const RuntimeNode *elem = new_state + index;
         const Frozen::Node *src_elem = elem->m_MmapData;
         const int src_index = int(src_elem - src_data);
         const HashDigest *guid = src_guids + src_index;
@@ -1398,7 +1398,7 @@ void DriverCleanOutputs(Driver *self)
 {
     ProfilerScope prof_scope("Tundra Clean", 0);
     int count = 0;
-    for (NodeState &state : self->m_Nodes)
+    for (RuntimeNode &state : self->m_Nodes)
     {
         for (const FrozenFileAndHash &fh : state.m_MmapData->m_OutputFiles)
         {

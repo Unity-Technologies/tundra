@@ -5,7 +5,7 @@
 #include "SharedResources.hpp"
 #include "NodeResultPrinting.hpp"
 #include "HumanActivityDetection.hpp"
-#include "NodeState.hpp"
+#include "RuntimeNode.hpp"
 #include "BuildLoop.hpp"
 #include <stdarg.h>
 #include <algorithm>
@@ -237,12 +237,12 @@ BuildResult::Enum BuildQueueBuildNodeRange(BuildQueue *queue, int start_index, i
 
     // Initialize build queue with index range to build
     int32_t *build_queue = queue->m_Queue;
-    NodeState *node_states = queue->m_Config.m_NodeState;
+    RuntimeNode *node_states = queue->m_Config.m_NodeState;
 
     int amountQueued = 0;
     for (int i = 0; i < count; ++i)
     {
-        NodeState *state = node_states + start_index + i;
+        RuntimeNode *state = node_states + start_index + i;
 
         //to start up, let's enqueue all nodes that have 0 dependencies.
         if (state->m_MmapData->m_Dependencies.GetCount() == 0)

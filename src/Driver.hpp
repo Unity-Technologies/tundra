@@ -3,7 +3,7 @@
 #include "MemAllocHeap.hpp"
 #include "MemAllocLinear.hpp"
 #include "MemoryMappedFile.hpp"
-#include "NodeState.hpp"
+#include "RuntimeNode.hpp"
 #include "BuildQueue.hpp"
 #include "Buffer.hpp"
 #include "ScanCache.hpp"
@@ -75,7 +75,7 @@ struct Driver
     Buffer<int32_t> m_NodeRemap;
 
     // Space for dynamic DAG node state
-    Buffer<NodeState> m_Nodes;
+    Buffer<RuntimeNode> m_Nodes;
 
     MemAllocLinear m_ScanCacheAllocator;
     ScanCache m_ScanCache;

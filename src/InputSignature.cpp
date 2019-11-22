@@ -2,7 +2,7 @@
 #include "DagData.hpp"
 #include "MemAllocHeap.hpp"
 #include "MemAllocLinear.hpp"
-#include "NodeState.hpp"
+#include "RuntimeNode.hpp"
 #include "Scanner.hpp"
 #include "FileInfo.hpp"
 #include "StateData.hpp"
@@ -116,7 +116,7 @@ static void ReportValueWithOptionalTruncation(JsonWriter *msg, const char *keyNa
 
 static void ReportInputSignatureChanges(
     JsonWriter *msg,
-    NodeState *node,
+    RuntimeNode *node,
     const Frozen::Node *node_data,
     const Frozen::NodeStateData *prev_state,
     StatCache *stat_cache,
@@ -326,7 +326,7 @@ static bool OutputFilesMissing(StatCache *stat_cache, const Frozen::Node *node)
     return false;
 }
 
-bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *thread_state, NodeState *node)
+bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node)
 {
     const Frozen::Node *node_data = node->m_MmapData;
 

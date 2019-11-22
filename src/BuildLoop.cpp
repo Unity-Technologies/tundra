@@ -2,7 +2,7 @@
 #include "DagData.hpp"
 #include "MemAllocHeap.hpp"
 #include "MemAllocLinear.hpp"
-#include "NodeState.hpp"
+#include "RuntimeNode.hpp"
 #include "Scanner.hpp"
 #include "FileInfo.hpp"
 #include "StateData.hpp"
@@ -38,14 +38,14 @@ static int AvailableNodeCount(BuildQueue *queue)
     return (write_index - read_index) & queue_mask;
 }
 
-static NodeState *GetStateForNode(BuildQueue *queue, int32_t src_index)
+static RuntimeNode *GetStateForNode(BuildQueue *queue, int32_t src_index)
 {
     int32_t state_index = queue->m_Config.m_NodeRemappingTable[src_index];
 
     if (state_index == -1)
         return nullptr;
 
-    NodeState *state = queue->m_Config.m_NodeState + state_index;
+    RuntimeNode *state = queue->m_Config.m_NodeState + state_index;
 
     CHECK(int(state->m_MmapData - queue->m_Config.m_NodeData) == src_index);
 
@@ -60,7 +60,7 @@ static void WakeWaiters(BuildQueue *queue, int count)
         CondSignal(&queue->m_WorkAvailable);
 }
 
-static void Enqueue(BuildQueue *queue, NodeState *state)
+static void Enqueue(BuildQueue *queue, RuntimeNode *state)
 {
     uint32_t write_index = queue->m_QueueWriteIndex;
     const uint32_t queue_mask = queue->m_QueueCapacity - 1;
@@ -84,22 +84,22 @@ static void Enqueue(BuildQueue *queue, NodeState *state)
     CHECK(AvailableNodeCount(queue) == 1 + avail_init);
 }
 
-static bool AllDependenciesAreFinished(BuildQueue *queue, NodeState *state)
+static bool AllDependenciesAreFinished(BuildQueue *queue, RuntimeNode *state)
 {
     for (int32_t dep_index : state->m_MmapData->m_Dependencies)
     {
-        NodeState *state = GetStateForNode(queue, dep_index);
+        RuntimeNode *state = GetStateForNode(queue, dep_index);
         if (!state->m_Finished)
             return false;
     }
     return true;
 }
 
-static bool AllDependenciesAreSuccesful(BuildQueue *queue, NodeState *state)
+static bool AllDependenciesAreSuccesful(BuildQueue *queue, RuntimeNode *state)
 {
     for (int32_t dep_index : state->m_MmapData->m_Dependencies)
     {
-        NodeState *state = GetStateForNode(queue, dep_index);
+        RuntimeNode *state = GetStateForNode(queue, dep_index);
         CHECK(state->m_Finished);
 
         if (state->m_BuildResult != NodeBuildResult::kRanSuccesfully && state->m_BuildResult != NodeBuildResult::kUpToDate)
@@ -108,13 +108,13 @@ static bool AllDependenciesAreSuccesful(BuildQueue *queue, NodeState *state)
     return true;
 }
 
-static void EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(BuildQueue *queue, NodeState *node)
+static void EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(BuildQueue *queue, RuntimeNode *node)
 {
     int enqueue_count = 0;
 
     for (int32_t link : node->m_MmapData->m_BackLinks)
     {
-        if (NodeState *waiter = GetStateForNode(queue, link))
+        if (RuntimeNode *waiter = GetStateForNode(queue, link))
         {
             // Did someone else get to the node first?
             if (NodeStateIsQueued(waiter) || NodeStateIsActive(waiter))
@@ -146,7 +146,7 @@ static void SignalMainThreadToStartCleaningUp(BuildQueue *queue)
     MutexUnlock(&queue->m_BuildFinishedMutex);
 }
 
-static void AdvanceNode(BuildQueue *queue, ThreadState *thread_state, NodeState *node, Mutex *queue_lock)
+static void AdvanceNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node, Mutex *queue_lock)
 {
     Log(kSpam, "T=%d, Advancing %s\n", thread_state->m_ThreadIndex, node->m_MmapData->m_Annotation.Get());
 
@@ -193,7 +193,7 @@ static void AdvanceNode(BuildQueue *queue, ThreadState *thread_state, NodeState 
     EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(queue, node);
 }
 
-static NodeState *NextNode(BuildQueue *queue)
+static RuntimeNode *NextNode(BuildQueue *queue)
 {
     int avail_count = AvailableNodeCount(queue);
 
@@ -207,7 +207,7 @@ static NodeState *NextNode(BuildQueue *queue)
     // Update read index
     queue->m_QueueReadIndex = (read_index + 1) & (queue->m_QueueCapacity - 1);
 
-    NodeState *state = queue->m_Config.m_NodeState + node_index;
+    RuntimeNode *state = queue->m_Config.m_NodeState + node_index;
 
     CHECK(NodeStateIsQueued(state));
     CHECK(!NodeStateIsActive(state));
@@ -257,7 +257,7 @@ void BuildLoop(ThreadState *thread_state)
         if (HibernateForThrottlingIfRequired())
             continue;
 
-        if (NodeState *node = NextNode(queue))
+        if (RuntimeNode *node = NextNode(queue))
         {
             if (waitingForWork)
             {
