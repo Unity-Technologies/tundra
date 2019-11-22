@@ -79,7 +79,7 @@ static void Enqueue(BuildQueue *queue, RuntimeNode *state)
     write_index = (write_index + 1) & queue_mask;
     queue->m_QueueWriteIndex = write_index;
 
-    NodeStateFlagQueued(state);
+    RuntimeNodeFlagQueued(state);
 
     CHECK(AvailableNodeCount(queue) == 1 + avail_init);
 }

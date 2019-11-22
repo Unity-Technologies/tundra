@@ -47,7 +47,7 @@ inline bool RuntimeNodeIsQueued(const RuntimeNode *state)
     return 0 != (state->m_Flags & NodeStateFlags::kQueued);
 }
 
-inline void NodeStateFlagQueued(RuntimeNode *state)
+inline void RuntimeNodeFlagQueued(RuntimeNode *state)
 {
     state->m_Flags |= NodeStateFlags::kQueued;
 }
@@ -67,7 +67,7 @@ inline void RuntimeNodeFlagActive(RuntimeNode *state)
     state->m_Flags |= NodeStateFlags::kActive;
 }
 
-inline void NodeStateFlagInactive(RuntimeNode *state)
+inline void RuntimeNodeFlagInactive(RuntimeNode *state)
 {
     state->m_Flags &= ~NodeStateFlags::kActive;
 }
