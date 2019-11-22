@@ -47,7 +47,7 @@ static RuntimeNode *GetStateForNode(BuildQueue *queue, int32_t src_index)
 
     RuntimeNode *state = queue->m_Config.m_NodeState + state_index;
 
-    CHECK(int(state->m_DagNode - queue->m_Config.m_NodeData) == src_index);
+    CHECK(int(state->m_DagNode - queue->m_Config.m_DagNodes) == src_index);
 
     return state;
 }

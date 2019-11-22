@@ -22,7 +22,7 @@ static void DumpDag(const DagData *data)
         char digest_str[kDigestStringSize];
         DigestToString(digest_str, data->m_NodeGuids[i]);
 
-        const NodeData &node = data->m_NodeData[i];
+        const NodeData &node = data->m_DagNodes[i];
 
         printf("  guid: %s\n", digest_str);
         printf("  flags:");

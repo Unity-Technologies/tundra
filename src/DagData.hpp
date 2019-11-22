@@ -135,7 +135,7 @@ struct Dag
 
     int32_t m_NodeCount;
     FrozenPtr<HashDigest> m_NodeGuids;
-    FrozenPtr<DagNode> m_NodeData;
+    FrozenPtr<DagNode> m_DagNodes;
 
     FrozenArray<NamedNodeData> m_NamedNodes;
     FrozenArray<int32_t> m_DefaultNodes;

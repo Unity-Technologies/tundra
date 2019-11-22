@@ -222,7 +222,7 @@ bool DriverReportIncludes(Driver *self)
     int node_count = dag->m_NodeCount;
     for (int i = 0; i < node_count; ++i)
     {
-        const Frozen::DagNode &node = dag->m_NodeData[i];
+        const Frozen::DagNode &node = dag->m_DagNodes[i];
 
         const Frozen::ScannerData *s = node.m_Scanner;
         if (s != nullptr && node.m_InputFiles.GetCount() > 0)
@@ -599,7 +599,7 @@ static void FindNodesByName(
         const uint32_t filename_hash = Djb2HashPath(cleaned_path);
         for (int node_index = 0; node_index != dag->m_NodeCount; node_index++)
         {
-            const Frozen::DagNode &node = dag->m_NodeData[node_index];
+            const Frozen::DagNode &node = dag->m_DagNodes[node_index];
             for (const FrozenFileAndHash &output : node.m_OutputFiles)
             {
                 if (filename_hash == output.m_FilenameHash && 0 == PathCompare(output.m_Filename, cleaned_path))
@@ -654,7 +654,7 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
     ProfilerScope prof_scope("Tundra PrepareNodes", 0);
 
     const Frozen::Dag *dag = self->m_DagData;
-    const Frozen::DagNode *src_nodes = dag->m_NodeData;
+    const Frozen::DagNode *src_nodes = dag->m_DagNodes;
     const HashDigest *src_guids = dag->m_NodeGuids;
     MemAllocHeap *heap = &self->m_Heap;
 
@@ -712,7 +712,7 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
     // Find frozen node state from previous build, if present.
     if (const Frozen::AllBuiltNodes *state_data = self->m_StateData)
     {
-        const Frozen::BuiltNode *frozen_states = state_data->m_NodeStates;
+        const Frozen::BuiltNode *built_nodes = state_data->m_BuiltNodes;
         const HashDigest *state_guids = state_data->m_NodeGuids;
         const int state_guid_count = state_data->m_NodeCount;
 
@@ -723,7 +723,7 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
             if (const HashDigest *old_guid = BinarySearch(state_guids, state_guid_count, *src_guid))
             {
                 int state_index = int(old_guid - state_guids);
-                out_nodes[i].m_BuiltNode = frozen_states + state_index;
+                out_nodes[i].m_BuiltNode = built_nodes + state_index;
             }
         }
     }
@@ -820,7 +820,7 @@ BuildResult::Enum DriverBuild(Driver *self)
     queue_config.m_Flags = 0;
     queue_config.m_Heap = &self->m_Heap;
     queue_config.m_ThreadCount = (int)self->m_Options.m_ThreadCount;
-    queue_config.m_NodeData = self->m_DagData->m_NodeData;
+    queue_config.m_DagNodes = self->m_DagData->m_DagNodes;
     queue_config.m_NodeState = self->m_Nodes.m_Storage;
     queue_config.m_MaxNodes = (int)self->m_Nodes.m_Size;
     queue_config.m_NodeRemappingTable = self->m_NodeRemap.m_Storage;
@@ -868,7 +868,7 @@ BuildResult::Enum DriverBuild(Driver *self)
         {
             const RuntimeNode *state = self->m_Nodes.m_Storage + i;
             const Frozen::DagNode *src = state->m_DagNode;
-            const int src_index = int(src - self->m_DagData->m_NodeData);
+            const int src_index = int(src - self->m_DagData->m_DagNodes);
             int remapped_index = self->m_NodeRemap[src_index];
             CHECK(size_t(remapped_index) == i);
         }
@@ -1013,7 +1013,7 @@ bool DriverSaveBuildState(Driver *self)
 
     uint32_t src_count = self->m_DagData->m_NodeCount;
     const HashDigest *src_guids = self->m_DagData->m_NodeGuids;
-    const Frozen::DagNode *src_data = self->m_DagData->m_NodeData;
+    const Frozen::DagNode *src_data = self->m_DagData->m_DagNodes;
     RuntimeNode *new_state = self->m_Nodes.m_Storage;
     const size_t new_state_count = self->m_Nodes.m_Size;
 
@@ -1029,7 +1029,7 @@ bool DriverSaveBuildState(Driver *self)
     if (const Frozen::AllBuiltNodes *state_data = self->m_StateData)
     {
         old_guids = state_data->m_NodeGuids;
-        old_state = state_data->m_NodeStates;
+        old_state = state_data->m_BuiltNodes;
         old_count = state_data->m_NodeCount;
     }
 
@@ -1295,7 +1295,7 @@ void DriverRemoveStaleOutputs(Driver *self)
 
     for (int i = 0, node_count = dag->m_NodeCount; i < node_count; ++i)
     {
-        const Frozen::DagNode *node = dag->m_NodeData + i;
+        const Frozen::DagNode *node = dag->m_DagNodes + i;
 
         for (const FrozenFileAndHash &p : node->m_OutputFiles)
         {
@@ -1346,17 +1346,17 @@ void DriverRemoveStaleOutputs(Driver *self)
 
     for (int i = 0, state_count = state->m_NodeCount; i < state_count; ++i)
     {
-        const Frozen::BuiltNode *node = state->m_NodeStates + i;
+        const Frozen::BuiltNode *built_node = state->m_BuiltNodes + i;
 
-        if (!node_was_used_by_this_dag_previously(node, dag->m_HashedIdentifier))
+        if (!node_was_used_by_this_dag_previously(built_node, dag->m_HashedIdentifier))
             continue;
 
-        for (const char *path : node->m_OutputFiles)
+        for (const char *path : built_node->m_OutputFiles)
         {
             check_file(path);
         }
 
-        for (const char *path : node->m_AuxOutputFiles)
+        for (const char *path : built_node->m_AuxOutputFiles)
         {
             check_file(path);
         }

@@ -36,7 +36,7 @@ struct AllBuiltNodes
 
     int32_t m_NodeCount;
     FrozenPtr<HashDigest> m_NodeGuids;
-    FrozenPtr<BuiltNode> m_NodeStates;
+    FrozenPtr<BuiltNode> m_BuiltNodes;
 
     uint32_t m_MagicNumberEnd;
 };

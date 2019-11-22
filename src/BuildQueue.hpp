@@ -37,7 +37,7 @@ struct BuildQueueConfig
     MemAllocHeap *m_Heap;
     int m_ThreadCount;
     int m_ThrottleInactivityPeriod;
-    const Frozen::DagNode *m_NodeData;
+    const Frozen::DagNode *m_DagNodes;
     RuntimeNode *m_NodeState;
     int m_MaxNodes;
     const int32_t *m_NodeRemappingTable;

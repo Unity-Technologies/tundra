@@ -3,24 +3,22 @@
 #include "Common.hpp"
 #include "Hash.hpp"
 
-
-
 namespace NodeBuildResult
 {
-enum Enum
-{
-    kDidNotRun = 0,
-    kUpToDate,
-    kRanSuccesfully,
-    kRanFailed,
-    kRanSuccessButDependeesRequireFrontendRerun
-};
+    enum Enum
+    {
+        kDidNotRun = 0,
+        kUpToDate,
+        kRanSuccesfully,
+        kRanFailed,
+        kRanSuccessButDependeesRequireFrontendRerun
+    };
 }
 
 namespace NodeStateFlags
 {
-static const uint16_t kQueued = 1 << 0;
-static const uint16_t kActive = 1 << 1;
+    static const uint16_t kQueued = 1 << 0;
+    static const uint16_t kActive = 1 << 1;
 } // namespace NodeStateFlags
 
 namespace Frozen

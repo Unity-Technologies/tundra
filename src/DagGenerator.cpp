@@ -263,7 +263,7 @@ static bool WriteNodes(
     const TempNodeGuid *order,
     const int32_t *remap_table)
 {
-    BinarySegmentWritePointer(main_seg, BinarySegmentPosition(node_data_seg)); // m_NodeData
+    BinarySegmentWritePointer(main_seg, BinarySegmentPosition(node_data_seg)); // m_DagNodes
 
     MemAllocLinearScope scratch_scope(scratch);
 
