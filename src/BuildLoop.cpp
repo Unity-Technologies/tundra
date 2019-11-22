@@ -45,11 +45,11 @@ static RuntimeNode *GetRuntimeNodeForDagNodeIndex(BuildQueue *queue, int32_t src
     if (state_index == -1)
         return nullptr;
 
-    RuntimeNode *state = queue->m_Config.m_RuntimeNodes + state_index;
+    RuntimeNode *runtime_node = queue->m_Config.m_RuntimeNodes + state_index;
 
-    CHECK(int(state->m_DagNode - queue->m_Config.m_DagNodes) == src_index);
+    CHECK(int(runtime_node->m_DagNode - queue->m_Config.m_DagNodes) == src_index);
 
-    return state;
+    return runtime_node;
 }
 
 static void WakeWaiters(BuildQueue *queue, int count)
@@ -60,49 +60,49 @@ static void WakeWaiters(BuildQueue *queue, int count)
         CondSignal(&queue->m_WorkAvailable);
 }
 
-static void Enqueue(BuildQueue *queue, RuntimeNode *state)
+static void Enqueue(BuildQueue *queue, RuntimeNode *runtime_node)
 {
     uint32_t write_index = queue->m_QueueWriteIndex;
     const uint32_t queue_mask = queue->m_QueueCapacity - 1;
     int32_t *build_queue = queue->m_Queue;
 
-    CHECK(!RuntimeNodeIsQueued(state));
-    CHECK(!RuntimeNodeIsActive(state));
+    CHECK(!RuntimeNodeIsQueued(runtime_node));
+    CHECK(!RuntimeNodeIsActive(runtime_node));
 
 #if ENABLED(CHECKED_BUILD)
     const int avail_init = AvailableNodeCount(queue);
 #endif
 
-    int state_index = int(state - queue->m_Config.m_RuntimeNodes);
+    int runtime_node_index = int(runtime_node - queue->m_Config.m_RuntimeNodes);
 
-    build_queue[write_index] = state_index;
+    build_queue[write_index] = runtime_node_index;
     write_index = (write_index + 1) & queue_mask;
     queue->m_QueueWriteIndex = write_index;
 
-    RuntimeNodeFlagQueued(state);
+    RuntimeNodeFlagQueued(runtime_node);
 
     CHECK(AvailableNodeCount(queue) == 1 + avail_init);
 }
 
-static bool AllDependenciesAreFinished(BuildQueue *queue, RuntimeNode *state)
+static bool AllDependenciesAreFinished(BuildQueue *queue, RuntimeNode *runtime_node)
 {
-    for (int32_t dep_index : state->m_DagNode->m_Dependencies)
+    for (int32_t dep_index : runtime_node->m_DagNode->m_Dependencies)
     {
-        RuntimeNode *state = GetRuntimeNodeForDagNodeIndex(queue, dep_index);
-        if (!state->m_Finished)
+        RuntimeNode *runtime_node = GetRuntimeNodeForDagNodeIndex(queue, dep_index);
+        if (!runtime_node->m_Finished)
             return false;
     }
     return true;
 }
 
-static bool AllDependenciesAreSuccesful(BuildQueue *queue, RuntimeNode *state)
+static bool AllDependenciesAreSuccesful(BuildQueue *queue, RuntimeNode *runtime_node)
 {
-    for (int32_t dep_index : state->m_DagNode->m_Dependencies)
+    for (int32_t dep_index : runtime_node->m_DagNode->m_Dependencies)
     {
-        RuntimeNode *state = GetRuntimeNodeForDagNodeIndex(queue, dep_index);
-        CHECK(state->m_Finished);
+        RuntimeNode *runtime_node = GetRuntimeNodeForDagNodeIndex(queue, dep_index);
+        CHECK(runtime_node->m_Finished);
 
-        if (state->m_BuildResult != NodeBuildResult::kRanSuccesfully && state->m_BuildResult != NodeBuildResult::kUpToDate)
+        if (runtime_node->m_BuildResult != NodeBuildResult::kRanSuccesfully && runtime_node->m_BuildResult != NodeBuildResult::kUpToDate)
             return false;
     }
     return true;
@@ -187,6 +187,7 @@ static void AdvanceNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
     }
     node->m_Finished = true;
     queue->m_FinishedNodeCount++;
+    RuntimeNodeFlagInactive(node);
     if (queue->m_FinishedNodeCount == queue->m_Config.m_TotalRuntimeNodeCount)
         SignalMainThreadToStartCleaningUp(queue);
 
