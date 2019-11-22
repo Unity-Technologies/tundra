@@ -334,7 +334,7 @@ static bool WriteNodes(
         else
             WriteStringPtr(node_data_seg, writetextfile_payloads_seg, writetextfile_payload);
 
-        WriteCommonStringPtr(node_data_seg, str_seg, annotation, shared_strings, scratch);
+        WriteStringPtr(node_data_seg, str_seg, annotation);
 
         if (deps)
         {
