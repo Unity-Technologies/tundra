@@ -529,6 +529,35 @@ namespace t2
       return true;
     }
     
+    else if (!prev_nodestatedata->m_WasBuiltSuccessfully)
+    {
+      // The build progress failed the last time around - we need to retry it.
+      Log(kSpam, "T=%d: building %s - previous build failed", thread_state->m_ThreadIndex, node_data->m_Annotation.Get());
+
+      if (IsStructuredLogActive())
+      {
+        MemAllocLinearScope allocScope(&thread_state->m_ScratchAlloc);
+
+        JsonWriter msg;
+        JsonWriteInit(&msg, &thread_state->m_ScratchAlloc);
+        JsonWriteStartObject(&msg);
+
+        JsonWriteKeyName(&msg, "msg");
+        JsonWriteValueString(&msg, "nodeRetryBuild");
+
+        JsonWriteKeyName(&msg, "annotation");
+        JsonWriteValueString(&msg, node_data->m_Annotation);
+
+        JsonWriteKeyName(&msg, "index");
+        JsonWriteValueInteger(&msg, node_data->m_OriginalIndex);
+
+        JsonWriteEndObject(&msg);
+        LogStructured(&msg);
+      }
+
+      return true;
+    }
+
     if (OutputFilesDiffer(node_data, prev_nodestatedata))
     {
       // The output files are different - need to rebuild.

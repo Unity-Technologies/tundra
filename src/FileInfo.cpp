@@ -37,7 +37,7 @@ namespace t2
 FileInfo GetFileInfo(const char* path)
 {
   TimingScope timing_scope(&g_Stats.m_StatCount, &g_Stats.m_StatTimeCycles);
-
+  
   FileInfo result;
 #if defined(TUNDRA_UNIX)
   struct stat stbuf;
