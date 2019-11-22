@@ -981,9 +981,9 @@ static void save_node_sharedcode(bool nodeWasBuiltSuccesfully, const HashDigest 
     BinarySegmentWriteStringData(segments.string, src_node->m_Action);
 }
 
-static bool node_was_used_by_this_dag_previously(const Frozen::BuiltNode *node_state_data, uint32_t current_dag_identifier)
+static bool node_was_used_by_this_dag_previously(const Frozen::BuiltNode *previously_built_node, uint32_t current_dag_identifier)
 {
-    auto &previous_dags = node_state_data->m_DagsWeHaveSeenThisNodeInPreviously;
+    auto &previous_dags = previously_built_node->m_DagsWeHaveSeenThisNodeInPreviously;
     return std::find(previous_dags.begin(), previous_dags.end(), current_dag_identifier) != previous_dags.end();
 }
 

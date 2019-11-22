@@ -118,7 +118,7 @@ static void ReportInputSignatureChanges(
     JsonWriter *msg,
     RuntimeNode *node,
     const Frozen::DagNode *dagnode,
-    const Frozen::BuiltNode *prev_state,
+    const Frozen::BuiltNode *previously_built_node,
     StatCache *stat_cache,
     DigestCache *digest_cache,
     ScanCache *scan_cache,
@@ -126,7 +126,7 @@ static void ReportInputSignatureChanges(
     int sha_extension_hash_count,
     ThreadState *thread_state)
 {
-    if (strcmp(dagnode->m_Action, prev_state->m_Action) != 0)
+    if (strcmp(dagnode->m_Action, previously_built_node->m_Action) != 0)
     {
         JsonWriteStartObject(msg);
 
@@ -134,16 +134,16 @@ static void ReportInputSignatureChanges(
         JsonWriteValueString(msg, "Action");
 
         ReportValueWithOptionalTruncation(msg, "value", "value_truncated", dagnode->m_Action);
-        ReportValueWithOptionalTruncation(msg, "oldvalue", "oldvalue_truncated", prev_state->m_Action);
+        ReportValueWithOptionalTruncation(msg, "oldvalue", "oldvalue_truncated", previously_built_node->m_Action);
 
         JsonWriteEndObject(msg);
     }
 
-    bool explicitInputFilesListChanged = dagnode->m_InputFiles.GetCount() != prev_state->m_InputFiles.GetCount();
+    bool explicitInputFilesListChanged = dagnode->m_InputFiles.GetCount() != previously_built_node->m_InputFiles.GetCount();
     for (int32_t i = 0; i < dagnode->m_InputFiles.GetCount() && !explicitInputFilesListChanged; ++i)
     {
         const char *filename = dagnode->m_InputFiles[i].m_Filename;
-        const char *oldFilename = prev_state->m_InputFiles[i].m_Filename;
+        const char *oldFilename = previously_built_node->m_InputFiles[i].m_Filename;
         explicitInputFilesListChanged |= (strcmp(filename, oldFilename) != 0);
     }
     bool force_use_timestamp = node->m_Flags & Frozen::DagNode::kFlagBanContentDigestForInputs;
@@ -162,7 +162,7 @@ static void ReportInputSignatureChanges(
 
         JsonWriteKeyName(msg, "oldvalue");
         JsonWriteStartArray(msg);
-        for (const Frozen::NodeInputFileData &input : prev_state->m_InputFiles)
+        for (const Frozen::NodeInputFileData &input : previously_built_node->m_InputFiles)
             JsonWriteValueString(msg, input.m_Filename);
         JsonWriteEndArray(msg);
 
@@ -174,7 +174,7 @@ static void ReportInputSignatureChanges(
         // We also want to catch if any of the input files (common to both old + new lists) have changed themselves,
         // because a common reason for the input list changing is the command changing, and the part of the
         // command that is different may be in response file(s).
-        for (const Frozen::NodeInputFileData &oldInput : prev_state->m_InputFiles)
+        for (const Frozen::NodeInputFileData &oldInput : previously_built_node->m_InputFiles)
         {
             const FrozenFileAndHash *newInput;
             for (newInput = dagnode->m_InputFiles.begin(); newInput != dagnode->m_InputFiles.end(); ++newInput)
@@ -202,7 +202,7 @@ static void ReportInputSignatureChanges(
         return;
     }
 
-    ReportChangedInputFiles(msg, prev_state->m_InputFiles, "explicit", digest_cache, stat_cache, sha_extension_hashes, sha_extension_hash_count, force_use_timestamp);
+    ReportChangedInputFiles(msg, previously_built_node->m_InputFiles, "explicit", digest_cache, stat_cache, sha_extension_hashes, sha_extension_hash_count, force_use_timestamp);
 
     if (dagnode->m_Scanner)
     {
@@ -234,10 +234,10 @@ static void ReportInputSignatureChanges(
             }
         }
 
-        bool implicitFilesListChanged = implicitDependencies.m_RecordCount != prev_state->m_ImplicitInputFiles.GetCount();
+        bool implicitFilesListChanged = implicitDependencies.m_RecordCount != previously_built_node->m_ImplicitInputFiles.GetCount();
         if (!implicitFilesListChanged)
         {
-            for (const Frozen::NodeInputFileData &implicitInput : prev_state->m_ImplicitInputFiles)
+            for (const Frozen::NodeInputFileData &implicitInput : previously_built_node->m_ImplicitInputFiles)
             {
                 bool *visited = HashTableLookup(&implicitDependencies, Djb2HashPath(implicitInput.m_Filename), implicitInput.m_Filename);
                 if (!visited)
@@ -271,7 +271,7 @@ static void ReportInputSignatureChanges(
 
             JsonWriteKeyName(msg, "oldvalue");
             JsonWriteStartArray(msg);
-            for (const Frozen::NodeInputFileData &input : prev_state->m_ImplicitInputFiles)
+            for (const Frozen::NodeInputFileData &input : previously_built_node->m_ImplicitInputFiles)
                 JsonWriteValueString(msg, input.m_Filename);
             JsonWriteEndArray(msg);
 
@@ -285,20 +285,21 @@ static void ReportInputSignatureChanges(
         if (implicitFilesListChanged)
             return;
 
-        ReportChangedInputFiles(msg, prev_state->m_ImplicitInputFiles, "implicit", digest_cache, stat_cache, sha_extension_hashes, sha_extension_hash_count, force_use_timestamp);
+        ReportChangedInputFiles(msg, previously_built_node->m_ImplicitInputFiles, "implicit", digest_cache, stat_cache, sha_extension_hashes, sha_extension_hash_count, force_use_timestamp);
+
     }
 }
 
-static bool OutputFilesDiffer(const Frozen::DagNode *dagnode, const Frozen::BuiltNode *prev_state)
+static bool OutputFilesDiffer(const Frozen::DagNode *dagnode, const Frozen::BuiltNode *previously_built_node)
 {
     int file_count = dagnode->m_OutputFiles.GetCount();
 
-    if (file_count != prev_state->m_OutputFiles.GetCount())
+    if (file_count != previously_built_node->m_OutputFiles.GetCount())
         return true;
 
     for (int i = 0; i < file_count; ++i)
     {
-        if (0 != strcmp(dagnode->m_OutputFiles[i].m_Filename, prev_state->m_OutputFiles[i]))
+        if (0 != strcmp(dagnode->m_OutputFiles[i].m_Filename, previously_built_node->m_OutputFiles[i]))
             return true;
     }
 

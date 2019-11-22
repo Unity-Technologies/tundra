@@ -42,32 +42,32 @@ struct RuntimeNode
     HashDigest m_InputSignature;
 };
 
-inline bool RuntimeNodeIsQueued(const RuntimeNode *state)
+inline bool RuntimeNodeIsQueued(const RuntimeNode *runtime_node)
 {
-    return 0 != (state->m_Flags & RuntimeNodeFlags::kQueued);
+    return 0 != (runtime_node->m_Flags & RuntimeNodeFlags::kQueued);
 }
 
-inline void RuntimeNodeFlagQueued(RuntimeNode *state)
+inline void RuntimeNodeFlagQueued(RuntimeNode *runtime_node)
 {
-    state->m_Flags |= RuntimeNodeFlags::kQueued;
+    runtime_node->m_Flags |= RuntimeNodeFlags::kQueued;
 }
 
-inline void RuntimeNodeFlagUnqueued(RuntimeNode *state)
+inline void RuntimeNodeFlagUnqueued(RuntimeNode *runtime_node)
 {
-    state->m_Flags &= ~RuntimeNodeFlags::kQueued;
+    runtime_node->m_Flags &= ~RuntimeNodeFlags::kQueued;
 }
 
-inline bool RuntimeNodeIsActive(const RuntimeNode *state)
+inline bool RuntimeNodeIsActive(const RuntimeNode *runtime_node)
 {
-    return 0 != (state->m_Flags & RuntimeNodeFlags::kActive);
+    return 0 != (runtime_node->m_Flags & RuntimeNodeFlags::kActive);
 }
 
-inline void RuntimeNodeFlagActive(RuntimeNode *state)
+inline void RuntimeNodeFlagActive(RuntimeNode *runtime_node)
 {
-    state->m_Flags |= RuntimeNodeFlags::kActive;
+    runtime_node->m_Flags |= RuntimeNodeFlags::kActive;
 }
 
-inline void RuntimeNodeFlagInactive(RuntimeNode *state)
+inline void RuntimeNodeFlagInactive(RuntimeNode *runtime_node)
 {
-    state->m_Flags &= ~RuntimeNodeFlags::kActive;
+    runtime_node->m_Flags &= ~RuntimeNodeFlags::kActive;
 }
