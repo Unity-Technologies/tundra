@@ -25,8 +25,8 @@ void DigestCacheInit(DigestCache *self, size_t heap_size, const char *filename)
     MmapFileMap(&self->m_StateFile, filename);
     if (MmapFileValid(&self->m_StateFile))
     {
-        const DigestCacheState *state = (const DigestCacheState *)self->m_StateFile.m_Address;
-        if (DigestCacheState::MagicNumber == state->m_MagicNumber)
+        const Frozen::DigestCacheState *state = (const Frozen::DigestCacheState *)self->m_StateFile.m_Address;
+        if (Frozen::DigestCacheState::MagicNumber == state->m_MagicNumber)
         {
             const uint64_t time_now = time(nullptr);
 
@@ -37,7 +37,7 @@ void DigestCacheInit(DigestCache *self, size_t heap_size, const char *filename)
 
             //HashTablePrepareBulkInsert(&self->m_Table, state->m_Records.GetCount());
 
-            for (const FrozenDigestRecord &record : state->m_Records)
+            for (const Frozen::DigestRecord &record : state->m_Records)
             {
                 if (record.m_AccessTime < cutoff_time)
                     continue;
@@ -95,10 +95,10 @@ bool DigestCacheSave(DigestCache *self, MemAllocHeap *serialization_heap, const 
 
     HashTableWalk(&self->m_Table, save_record);
 
-    BinarySegmentWriteUint32(main_seg, DigestCacheState::MagicNumber);
+    BinarySegmentWriteUint32(main_seg, Frozen::DigestCacheState::MagicNumber);
     BinarySegmentWriteInt32(main_seg, (int)self->m_Table.m_RecordCount);
     BinarySegmentWritePointer(main_seg, array_ptr);
-    BinarySegmentWriteUint32(main_seg, DigestCacheState::MagicNumber);
+    BinarySegmentWriteUint32(main_seg, Frozen::DigestCacheState::MagicNumber);
 
     // Unmap old state to avoid sharing conflicts on Windows.
     MmapFileUnmap(&self->m_StateFile);
@@ -174,8 +174,8 @@ bool DigestCacheHasChanged(DigestCache *self, const char *filename, uint32_t has
         return false;
     }
 
-    const FrozenDigestRecord *prevDigest = nullptr;
-    for (const FrozenDigestRecord &frozenRecord : self->m_State->m_Records)
+    const Frozen::DigestRecord *prevDigest = nullptr;
+    for (const Frozen::DigestRecord &frozenRecord : self->m_State->m_Records)
     {
         if (frozenRecord.m_FilenameHash != hash)
             continue;

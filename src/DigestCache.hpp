@@ -14,28 +14,31 @@ struct MemAllocHeap;
 struct MemAllocLinear;
 struct DigestCacheState;
 
-struct FrozenDigestRecord
+namespace Frozen
 {
-    uint64_t m_Timestamp;
-    uint64_t m_AccessTime;
-    uint32_t m_FilenameHash;
-    HashDigest m_ContentDigest;
-    FrozenString m_Filename;
-#if ENABLED(USE_SHA1_HASH)
-    uint32_t m_Padding;
-#elif ENABLED(USE_FAST_HASH)
-    uint32_t m_Padding[2];
-#endif
-};
-static_assert(sizeof(FrozenDigestRecord) == 48, "struct size");
+    struct DigestRecord
+    {
+        uint64_t m_Timestamp;
+        uint64_t m_AccessTime;
+        uint32_t m_FilenameHash;
+        HashDigest m_ContentDigest;
+        FrozenString m_Filename;
+    #if ENABLED(USE_SHA1_HASH)
+        uint32_t m_Padding;
+    #elif ENABLED(USE_FAST_HASH)
+        uint32_t m_Padding[2];
+    #endif
+    };
+    static_assert(sizeof(Frozen::DigestRecord) == 48, "struct size");
 
-struct DigestCacheState
-{
-    static const uint32_t MagicNumber = 0x12781fa7 ^ kTundraHashMagic;
+    struct DigestCacheState
+    {
+        static const uint32_t MagicNumber = 0x12781fa7 ^ kTundraHashMagic;
 
-    uint32_t m_MagicNumber;
-    FrozenArray<FrozenDigestRecord> m_Records;
-};
+        uint32_t m_MagicNumber;
+        FrozenArray<Frozen::DigestRecord> m_Records;
+    };
+}
 
 struct DigestCacheRecord
 {
@@ -48,7 +51,7 @@ struct DigestCache
 {
     bool m_Initialized;
     ReadWriteLock m_Lock;
-    const DigestCacheState *m_State;
+    const Frozen::DigestCacheState *m_State;
     MemAllocHeap m_Heap;
     MemAllocLinear m_Allocator;
     MemoryMappedFile m_StateFile;
