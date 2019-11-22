@@ -14,20 +14,19 @@ struct MemAllocHeap;
 struct MemAllocLinear;
 
 void ComputeFileSignature(
-  HashState*          out,                  // out
-  StatCache*          stat_cache,
-  DigestCache*        digest_cache,
-  const char*         filename,
-  uint32_t            fn_hash,
-  const uint32_t      sha_extension_hashes[],
-  int                 sha_extension_hash_count,
-  bool                force_use_timestamp);
+    HashState *out, // out
+    StatCache *stat_cache,
+    DigestCache *digest_cache,
+    const char *filename,
+    uint32_t fn_hash,
+    const uint32_t sha_extension_hashes[],
+    int sha_extension_hash_count,
+    bool force_use_timestamp);
 
-  HashDigest CalculateGlobSignatureFor(const char* path, const char* filter, bool recurse, MemAllocHeap* heap, MemAllocLinear* scratch);
+HashDigest CalculateGlobSignatureFor(const char *path, const char *filter, bool recurse, MemAllocHeap *heap, MemAllocLinear *scratch);
 
-  bool ShouldUseSHA1SignatureFor(const char* filename, const uint32_t sha_extension_hashes[], int sha_extension_hash_count);
+bool ShouldUseSHA1SignatureFor(const char *filename, const uint32_t sha_extension_hashes[], int sha_extension_hash_count);
 
-}
-
+} // namespace t2
 
 #endif

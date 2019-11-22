@@ -45,251 +45,262 @@ static double s_PerfFrequency;
 static bool DebuggerAttached()
 {
 #if defined(TUNDRA_WIN32)
-  return IsDebuggerPresent() ? true : false;
+    return IsDebuggerPresent() ? true : false;
 #else
-  return false;
+    return false;
 #endif
 }
 
 static void NORETURN FlushAndAbort()
 {
-  // The C standard does not require 'abort' to flush stream buffers.
-  // On Windows at least, an explicit 'fflush' is required for stderr messages to actually be shown.
-  fflush(NULL);
-  abort();
+    // The C standard does not require 'abort' to flush stream buffers.
+    // On Windows at least, an explicit 'fflush' is required for stderr messages to actually be shown.
+    fflush(NULL);
+    abort();
 }
 
 void PrintErrno()
 {
 #if TUNDRA_WIN32
-  wchar_t buf[256];
-  DWORD lastError = GetLastError();
-  FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-    NULL, lastError, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-    buf, sizeof(buf), NULL);
-  fprintf(stderr, "errno: %d (%s) GetLastError: %d (0x%08X): %ls\n", errno, strerror(errno), (int)lastError, (unsigned int)lastError, buf);
+    wchar_t buf[256];
+    DWORD lastError = GetLastError();
+    FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                   NULL, lastError, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                   buf, sizeof(buf), NULL);
+    fprintf(stderr, "errno: %d (%s) GetLastError: %d (0x%08X): %ls\n", errno, strerror(errno), (int)lastError, (unsigned int)lastError, buf);
 #else
-  fprintf(stderr, "errno: %d (%s)\n", errno, strerror(errno));
+    fprintf(stderr, "errno: %d (%s)\n", errno, strerror(errno));
 #endif
 }
 
 void InitCommon(void)
 {
 #if defined(TUNDRA_WIN32)
-  static LARGE_INTEGER freq;
-  if (!QueryPerformanceFrequency(&freq))
-    CroakErrno("QueryPerformanceFrequency failed");
-  s_PerfFrequency = double(freq.QuadPart);
+    static LARGE_INTEGER freq;
+    if (!QueryPerformanceFrequency(&freq))
+        CroakErrno("QueryPerformanceFrequency failed");
+    s_PerfFrequency = double(freq.QuadPart);
 
-  SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX | SEM_NOALIGNMENTFAULTEXCEPT);
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX | SEM_NOALIGNMENTFAULTEXCEPT);
 #endif
 }
 
-void NORETURN Croak(const char* fmt, ...)
+void NORETURN Croak(const char *fmt, ...)
 {
-  fputs("tundra: error: ", stderr);
-  va_list args;
-  va_start(args, fmt);
-  vfprintf(stderr, fmt, args);
-  va_end(args);
-  fprintf(stderr, "\n");
-  if (DebuggerAttached())
+    fputs("tundra: error: ", stderr);
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+    fprintf(stderr, "\n");
+    if (DebuggerAttached())
+        FlushAndAbort();
+    else
+        exit(1);
+}
+
+void NORETURN CroakErrno(const char *fmt, ...)
+{
+    fputs("tundra: error: ", stderr);
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+    fprintf(stderr, "\n");
+    PrintErrno();
+    if (DebuggerAttached())
+        FlushAndAbort();
+    else
+        exit(1);
+}
+
+void NORETURN CroakAbort(const char *fmt, ...)
+{
+    fputs("tundra: error: ", stderr);
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+    fprintf(stderr, "\n");
     FlushAndAbort();
-  else
-    exit(1);
 }
 
-void NORETURN CroakErrno(const char* fmt, ...)
+void NORETURN CroakErrnoAbort(const char *fmt, ...)
 {
-  fputs("tundra: error: ", stderr);
-  va_list args;
-  va_start(args, fmt);
-  vfprintf(stderr, fmt, args);
-  va_end(args);
-  fprintf(stderr, "\n");
-  PrintErrno();
-  if (DebuggerAttached())
+    fputs("tundra: error: ", stderr);
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+    fprintf(stderr, "\n");
+    PrintErrno();
     FlushAndAbort();
-  else
-    exit(1);
-}
-
-void NORETURN CroakAbort(const char* fmt, ...)
-{
-  fputs("tundra: error: ", stderr);
-  va_list args;
-  va_start(args, fmt);
-  vfprintf(stderr, fmt, args);
-  va_end(args);
-  fprintf(stderr, "\n");
-  FlushAndAbort();
-}
-
-void NORETURN CroakErrnoAbort(const char* fmt, ...)
-{
-  fputs("tundra: error: ", stderr);
-  va_list args;
-  va_start(args, fmt);
-  vfprintf(stderr, fmt, args);
-  va_end(args);
-  fprintf(stderr, "\n");
-  PrintErrno();
-  FlushAndAbort();
 }
 
 uint32_t Djb2Hash(const char *str_)
 {
-  const uint8_t *str = (const uint8_t *) str_;
-  uint32_t hash      = 5381;
-  int c;
+    const uint8_t *str = (const uint8_t *)str_;
+    uint32_t hash = 5381;
+    int c;
 
-  while (0 != (c = *str++))
-  {
-    hash = (hash * 33) + c;
-  }
+    while (0 != (c = *str++))
+    {
+        hash = (hash * 33) + c;
+    }
 
-  return hash ? hash : 1;
+    return hash ? hash : 1;
 }
 
 uint64_t Djb2Hash64(const char *str_)
 {
-  const uint8_t *str = (const uint8_t *) str_;
-  uint64_t hash      = 5381;
-  int c;
+    const uint8_t *str = (const uint8_t *)str_;
+    uint64_t hash = 5381;
+    int c;
 
-  while (0 != (c = *str++))
-  {
-    hash = (hash * 33) + c;
-  }
+    while (0 != (c = *str++))
+    {
+        hash = (hash * 33) + c;
+    }
 
-  return hash ? hash : 1;
+    return hash ? hash : 1;
 }
 
 uint32_t Djb2HashNoCase(const char *str_)
 {
-  const uint8_t *str = (const uint8_t *) str_;
-  uint32_t hash = 5381;
-  int c;
+    const uint8_t *str = (const uint8_t *)str_;
+    uint32_t hash = 5381;
+    int c;
 
-  while (0 != (c = *str++))
-  {
-    hash = (hash * 33) + FoldCase(c);
-  }
+    while (0 != (c = *str++))
+    {
+        hash = (hash * 33) + FoldCase(c);
+    }
 
-  return hash ? hash : 1;
+    return hash ? hash : 1;
 }
 
 uint64_t Djb2HashNoCase64(const char *str_)
 {
-  const uint8_t *str = (const uint8_t *) str_;
-  uint64_t hash = 5381;
-  int c;
+    const uint8_t *str = (const uint8_t *)str_;
+    uint64_t hash = 5381;
+    int c;
 
-  while (0 != (c = *str++))
-  {
-    hash = (hash * 33) + FoldCase(c);
-  }
+    while (0 != (c = *str++))
+    {
+        hash = (hash * 33) + FoldCase(c);
+    }
 
-  return hash ? hash : 1;
+    return hash ? hash : 1;
 }
 
 static int s_LogFlags = 0;
 
 int GetLogFlags()
 {
-  return s_LogFlags;
+    return s_LogFlags;
 }
 
 void SetLogFlags(int log_flags)
 {
-  s_LogFlags = log_flags;
+    s_LogFlags = log_flags;
 }
 
-void Log(LogLevel level, const char* fmt, ...)
+void Log(LogLevel level, const char *fmt, ...)
 {
-  if (s_LogFlags & level)
-  {
-    const char* prefix = "?";
-
-    switch (level)
+    if (s_LogFlags & level)
     {
-      case kError   : prefix = "E"; break;
-      case kWarning : prefix = "W"; break;
-      case kInfo    : prefix = "I"; break;
-      case kDebug   : prefix = "D"; break;
-      case kSpam    : prefix = "S"; break;
-      default       : break;
+        const char *prefix = "?";
+
+        switch (level)
+        {
+        case kError:
+            prefix = "E";
+            break;
+        case kWarning:
+            prefix = "W";
+            break;
+        case kInfo:
+            prefix = "I";
+            break;
+        case kDebug:
+            prefix = "D";
+            break;
+        case kSpam:
+            prefix = "S";
+            break;
+        default:
+            break;
+        }
+        fprintf(stderr, "[%s] ", prefix);
+
+        va_list args;
+        va_start(args, fmt);
+        vfprintf(stderr, fmt, args);
+        va_end(args);
+
+        fprintf(stderr, "\n");
     }
-    fprintf(stderr, "[%s] ", prefix);
-
-    va_list args;
-    va_start(args, fmt);
-    vfprintf(stderr, fmt, args);
-    va_end(args);
-
-    fprintf(stderr, "\n");
-  }
 }
 
-static FILE* s_StructuredLog = nullptr;
+static FILE *s_StructuredLog = nullptr;
 static Mutex s_StructuredLogMutex;
 
-void SetStructuredLogFileName(const char* path)
+void SetStructuredLogFileName(const char *path)
 {
-  if (s_StructuredLog != nullptr)
-  {
-    fclose(s_StructuredLog);
-    MutexDestroy(&s_StructuredLogMutex);
-    s_StructuredLog = nullptr;
-  }
+    if (s_StructuredLog != nullptr)
+    {
+        fclose(s_StructuredLog);
+        MutexDestroy(&s_StructuredLogMutex);
+        s_StructuredLog = nullptr;
+    }
 
-  if (path != nullptr)
-  {
-    s_StructuredLog = fopen(path, "w");
-    MutexInit(&s_StructuredLogMutex);
-  }
+    if (path != nullptr)
+    {
+        s_StructuredLog = fopen(path, "w");
+        MutexInit(&s_StructuredLogMutex);
+    }
 }
 
 bool IsStructuredLogActive()
 {
-  return s_StructuredLog != nullptr;
+    return s_StructuredLog != nullptr;
 }
 
-void LogStructured(JsonWriter* writer)
+void LogStructured(JsonWriter *writer)
 {
-  if (s_StructuredLog == nullptr)
-    return;
+    if (s_StructuredLog == nullptr)
+        return;
 
-  MutexLock(&s_StructuredLogMutex);
+    MutexLock(&s_StructuredLogMutex);
 
-  JsonWriteToFile(writer, s_StructuredLog);
-  fputc('\n', s_StructuredLog);
+    JsonWriteToFile(writer, s_StructuredLog);
+    fputc('\n', s_StructuredLog);
 
-  MutexUnlock(&s_StructuredLogMutex);
+    MutexUnlock(&s_StructuredLogMutex);
 
-  fflush(s_StructuredLog);
+    fflush(s_StructuredLog);
 }
 
-void GetCwd(char* buffer, size_t buffer_size)
+void GetCwd(char *buffer, size_t buffer_size)
 {
 #if defined(TUNDRA_WIN32)
-  DWORD res = GetCurrentDirectoryA((DWORD)buffer_size, buffer);
-  if (0 == res || ((DWORD)buffer_size) <= res)
-    CroakErrno("couldn't get working directory");
+    DWORD res = GetCurrentDirectoryA((DWORD)buffer_size, buffer);
+    if (0 == res || ((DWORD)buffer_size) <= res)
+        CroakErrno("couldn't get working directory");
 #elif defined(TUNDRA_UNIX)
-  if (NULL == getcwd(buffer, buffer_size))
-    CroakErrno("couldn't get working directory");
+    if (NULL == getcwd(buffer, buffer_size))
+        CroakErrno("couldn't get working directory");
 #else
 #error Unsupported platform
 #endif
 }
 
-bool SetCwd(const char* dir)
+bool SetCwd(const char *dir)
 {
 #if defined(TUNDRA_WIN32)
-  return TRUE == SetCurrentDirectoryA(dir);
+    return TRUE == SetCurrentDirectoryA(dir);
 #elif defined(TUNDRA_UNIX)
-  return 0 == chdir(dir);
+    return 0 == chdir(dir);
 #else
 #error Unsupported platform
 #endif
@@ -297,178 +308,181 @@ bool SetCwd(const char* dir)
 
 static char s_ExePath[kMaxPathLength];
 
-const char* GetExePath()
+const char *GetExePath()
 {
-  if (s_ExePath[0] == '\0')
-  {
+    if (s_ExePath[0] == '\0')
+    {
 #if defined(TUNDRA_WIN32)
-    if (!GetModuleFileNameA(NULL, s_ExePath, (DWORD)sizeof s_ExePath))
-      CroakErrno("couldn't get module filename");
+        if (!GetModuleFileNameA(NULL, s_ExePath, (DWORD)sizeof s_ExePath))
+            CroakErrno("couldn't get module filename");
 #elif defined(TUNDRA_APPLE)
-    uint32_t size = sizeof s_ExePath;
-    if (0 != _NSGetExecutablePath(s_ExePath, &size))
-      Croak("_NSGetExecutablePath failed");
+        uint32_t size = sizeof s_ExePath;
+        if (0 != _NSGetExecutablePath(s_ExePath, &size))
+            Croak("_NSGetExecutablePath failed");
 #elif defined(TUNDRA_LINUX)
-    if (-1 == readlink("/proc/self/exe", s_ExePath, (sizeof s_ExePath) - 1))
-      CroakErrno("couldn't read /proc/self/exe to get exe path");
+        if (-1 == readlink("/proc/self/exe", s_ExePath, (sizeof s_ExePath) - 1))
+            CroakErrno("couldn't read /proc/self/exe to get exe path");
 #elif defined(TUNDRA_FREEBSD)
-    size_t cb = sizeof s_ExePath;
-    int mib[4];
-    mib[0] = CTL_KERN;
-    mib[1] = KERN_PROC;
-    mib[2] = KERN_PROC_PATHNAME;
-    mib[3] = -1;
-    if (0 !=sysctl(mib, 4, s_ExePath, &cb, NULL, 0))
-      CroakErrno("KERN_PROC_PATHNAME syscall failed");
+        size_t cb = sizeof s_ExePath;
+        int mib[4];
+        mib[0] = CTL_KERN;
+        mib[1] = KERN_PROC;
+        mib[2] = KERN_PROC_PATHNAME;
+        mib[3] = -1;
+        if (0 != sysctl(mib, 4, s_ExePath, &cb, NULL, 0))
+            CroakErrno("KERN_PROC_PATHNAME syscall failed");
 #else
 #error "unsupported platform"
 #endif
-  }
+    }
 
-  return s_ExePath;
+    return s_ExePath;
 }
 
 uint32_t NextPowerOfTwo(uint32_t val)
 {
-  uint32_t mask = val - 1;
+    uint32_t mask = val - 1;
 
-  mask |= mask >> 16;
-  mask |= mask >> 8;
-  mask |= mask >> 4;
-  mask |= mask >> 2;
-  mask |= mask >> 1;
+    mask |= mask >> 16;
+    mask |= mask >> 8;
+    mask |= mask >> 4;
+    mask |= mask >> 2;
+    mask |= mask >> 1;
 
-  uint32_t pow2 = mask + 1;
-  CHECK(pow2 >= val);
-  CHECK((pow2 & mask) == 0);
-  CHECK((pow2 & ~mask) == pow2);
+    uint32_t pow2 = mask + 1;
+    CHECK(pow2 >= val);
+    CHECK((pow2 & mask) == 0);
+    CHECK((pow2 & ~mask) == pow2);
 
-  return pow2;
+    return pow2;
 }
 
 uint64_t TimerGet()
 {
 #if defined(TUNDRA_UNIX)
-  struct timeval t;
-  if (0 != gettimeofday(&t, NULL))
-    CroakErrno("gettimeofday failed");
-  return t.tv_usec + uint64_t(t.tv_sec) * 1000000;
+    struct timeval t;
+    if (0 != gettimeofday(&t, NULL))
+        CroakErrno("gettimeofday failed");
+    return t.tv_usec + uint64_t(t.tv_sec) * 1000000;
 #elif defined(TUNDRA_WIN32)
-  LARGE_INTEGER c;
-  if (!QueryPerformanceCounter(&c))
-    CroakErrno("QueryPerformanceCounter failed");
-  return c.QuadPart;
+    LARGE_INTEGER c;
+    if (!QueryPerformanceCounter(&c))
+        CroakErrno("QueryPerformanceCounter failed");
+    return c.QuadPart;
 #endif
 }
 
 double TimerToSeconds(uint64_t t)
 {
 #if defined(TUNDRA_UNIX)
-  return t / 1000000.0;
+    return t / 1000000.0;
 #else
-  return double(t) / s_PerfFrequency;
+    return double(t) / s_PerfFrequency;
 #endif
 }
 
 uint64_t TimerFromSeconds(double seconds)
 {
 #if defined(TUNDRA_UNIX)
-  return seconds * 1000000.0;
+    return seconds * 1000000.0;
 #else
-  return (uint64_t) (seconds * s_PerfFrequency);
-#endif  
+    return (uint64_t)(seconds * s_PerfFrequency);
+#endif
 }
 
 double TimerDiffSeconds(uint64_t start, uint64_t end)
 {
-  return TimerToSeconds(end - start);
+    return TimerToSeconds(end - start);
 }
 
-bool MakeDirectory(const char* path)
+bool MakeDirectory(const char *path)
 {
 #if defined(TUNDRA_UNIX)
-  int rc = mkdir(path, 0777);
-  if (0 == rc || EEXIST == errno)
-    return true;
-  else
-    return false;
+    int rc = mkdir(path, 0777);
+    if (0 == rc || EEXIST == errno)
+        return true;
+    else
+        return false;
 #elif defined(TUNDRA_WIN32)
-  /* pretend we can always create device roots */
-  if (isalpha(path[0]) && 0 == memcmp(&path[1], ":\\\0", 3))
-    return true;
+    /* pretend we can always create device roots */
+    if (isalpha(path[0]) && 0 == memcmp(&path[1], ":\\\0", 3))
+        return true;
 
-  if (!CreateDirectoryA(path, NULL))
-  {
-    switch (GetLastError())
+    if (!CreateDirectoryA(path, NULL))
     {
-    case ERROR_ALREADY_EXISTS:
-      return true;
-    default:
-      return false;
+        switch (GetLastError())
+        {
+        case ERROR_ALREADY_EXISTS:
+            return true;
+        default:
+            return false;
+        }
     }
-  }
-  else
-    return true;
+    else
+        return true;
 #endif
-
 }
 
 int GetCpuCount()
 {
 #if defined(TUNDRA_WIN32)
-  SYSTEM_INFO si;
-  GetSystemInfo(&si);
-  return (int) si.dwNumberOfProcessors;
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+    return (int)si.dwNumberOfProcessors;
 #else
-  long nprocs_max = sysconf(_SC_NPROCESSORS_CONF);
-  if (nprocs_max < 0)
-    CroakErrno("couldn't get CPU count");
-  return (int) nprocs_max;
+    long nprocs_max = sysconf(_SC_NPROCESSORS_CONF);
+    if (nprocs_max < 0)
+        CroakErrno("couldn't get CPU count");
+    return (int)nprocs_max;
 #endif
 }
 
 int CountTrailingZeroes(uint32_t v)
 {
-  v &= -int32_t(v);
+    v &= -int32_t(v);
 
-  int bit_index = 32;
+    int bit_index = 32;
 
-  if (v)
-    --bit_index;
+    if (v)
+        --bit_index;
 
-  if (v & 0x0000ffff) bit_index -= 16;
-  if (v & 0x00ff00ff) bit_index -= 8;
-  if (v & 0x0f0f0f0f) bit_index -= 4;
-  if (v & 0x33333333) bit_index -= 2;
-  if (v & 0x55555555) bit_index -= 1;
+    if (v & 0x0000ffff)
+        bit_index -= 16;
+    if (v & 0x00ff00ff)
+        bit_index -= 8;
+    if (v & 0x0f0f0f0f)
+        bit_index -= 4;
+    if (v & 0x33333333)
+        bit_index -= 2;
+    if (v & 0x55555555)
+        bit_index -= 1;
 
-  return bit_index;
+    return bit_index;
 }
 
-bool RemoveFileOrDir(const char* path)
+bool RemoveFileOrDir(const char *path)
 {
 #if defined(TUNDRA_UNIX)
-  return 0 == remove(path);
+    return 0 == remove(path);
 #else
-  FileInfo info = GetFileInfo(path);
-  if (!info.Exists())
-    return true;
-  else if (info.IsDirectory())
-    return TRUE == RemoveDirectoryA(path);
-  else
-    return TRUE == DeleteFileA(path);
+    FileInfo info = GetFileInfo(path);
+    if (!info.Exists())
+        return true;
+    else if (info.IsDirectory())
+        return TRUE == RemoveDirectoryA(path);
+    else
+        return TRUE == DeleteFileA(path);
 #endif
 }
 
 // Like rename(), but also works when target file exists on Windows.
-bool RenameFile(const char* oldf, const char* newf)
+bool RenameFile(const char *oldf, const char *newf)
 {
 #if defined(TUNDRA_UNIX)
-  return 0 == rename(oldf, newf);
+    return 0 == rename(oldf, newf);
 #else
-  return FALSE != MoveFileExA(oldf, newf, MOVEFILE_REPLACE_EXISTING);
+    return FALSE != MoveFileExA(oldf, newf, MOVEFILE_REPLACE_EXISTING);
 #endif
 }
 
-}
-
+} // namespace t2

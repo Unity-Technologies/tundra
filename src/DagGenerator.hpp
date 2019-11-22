@@ -8,10 +8,10 @@ struct lua_State;
 namespace t2
 {
 
-bool GenerateDag(const char* build_file, const char* dag_fn);
+bool GenerateDag(const char *build_file, const char *dag_fn);
 
-bool GenerateIdeIntegrationFiles(const char* build_file, int argc, const char** argv);
+bool GenerateIdeIntegrationFiles(const char *build_file, int argc, const char **argv);
 
-}
+} // namespace t2
 
 #endif

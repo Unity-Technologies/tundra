@@ -3,5 +3,4 @@
 
 namespace t2
 {
-
 }

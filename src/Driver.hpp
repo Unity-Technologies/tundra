@@ -20,99 +20,99 @@ struct StateData;
 
 struct DriverOptions
 {
-  bool        m_ShowHelp;
-  bool        m_ForceDagRegen;
-  bool        m_ShowTargets;
-  bool        m_DebugMessages;
-  bool        m_Verbose;
-  bool        m_SpammyVerbose;
-  bool        m_DisplayStats;
-  bool        m_GenDagOnly;
-  bool        m_Quiet;
-  bool        m_SilenceIfPossible;
-  bool        m_IdeGen;
-  bool        m_Clean;
-  bool        m_Rebuild;
-  bool        m_DebugSigning;
-  bool        m_ContinueOnError;
-  bool        m_ThrottleOnHumanActivity;
-  int         m_ThrottleInactivityPeriod;
-  int         m_ThrottledThreadsAmount;
+    bool m_ShowHelp;
+    bool m_ForceDagRegen;
+    bool m_ShowTargets;
+    bool m_DebugMessages;
+    bool m_Verbose;
+    bool m_SpammyVerbose;
+    bool m_DisplayStats;
+    bool m_GenDagOnly;
+    bool m_Quiet;
+    bool m_SilenceIfPossible;
+    bool m_IdeGen;
+    bool m_Clean;
+    bool m_Rebuild;
+    bool m_DebugSigning;
+    bool m_ContinueOnError;
+    bool m_ThrottleOnHumanActivity;
+    int m_ThrottleInactivityPeriod;
+    int m_ThrottledThreadsAmount;
 #if defined(TUNDRA_WIN32)
-  bool        m_RunUnprotected;
+    bool m_RunUnprotected;
 #endif
-  int         m_ThreadCount;
-  const char *m_WorkingDir;
-  const char *m_DAGFileName;
-  const char *m_ProfileOutput;
-  const char *m_IncludesOutput;
+    int m_ThreadCount;
+    const char *m_WorkingDir;
+    const char *m_DAGFileName;
+    const char *m_ProfileOutput;
+    const char *m_IncludesOutput;
 };
 
-void DriverOptionsInit(DriverOptions* self);
+void DriverOptionsInit(DriverOptions *self);
 
 struct Driver
 {
-  MemAllocHeap      m_Heap;
-  MemAllocLinear    m_Allocator;
+    MemAllocHeap m_Heap;
+    MemAllocLinear m_Allocator;
 
-  // Read-only memory mapped data - DAG data
-  MemoryMappedFile  m_DagFile;
+    // Read-only memory mapped data - DAG data
+    MemoryMappedFile m_DagFile;
 
-  // Read-only memory mapped data - previous build state
-  MemoryMappedFile  m_StateFile;
+    // Read-only memory mapped data - previous build state
+    MemoryMappedFile m_StateFile;
 
-  // Read-only memory mapped data - header scanning cache
-  MemoryMappedFile  m_ScanFile;
+    // Read-only memory mapped data - header scanning cache
+    MemoryMappedFile m_ScanFile;
 
-  // Stores pointers to mmaped data.
-  const DagData*    m_DagData;
-  const StateData*  m_StateData;
-  const ScanData*   m_ScanData;
+    // Stores pointers to mmaped data.
+    const DagData *m_DagData;
+    const StateData *m_StateData;
+    const ScanData *m_ScanData;
 
-  DriverOptions     m_Options;
+    DriverOptions m_Options;
 
-  // Remapping table from dag data node index => node state
-  Buffer<int32_t> m_NodeRemap;
+    // Remapping table from dag data node index => node state
+    Buffer<int32_t> m_NodeRemap;
 
-  // Space for dynamic DAG node state
-  Buffer<NodeState> m_Nodes;
+    // Space for dynamic DAG node state
+    Buffer<NodeState> m_Nodes;
 
-  MemAllocLinear    m_ScanCacheAllocator;
-  ScanCache         m_ScanCache;
+    MemAllocLinear m_ScanCacheAllocator;
+    ScanCache m_ScanCache;
 
-  MemAllocLinear    m_StatCacheAllocator;
-  StatCache         m_StatCache;
+    MemAllocLinear m_StatCacheAllocator;
+    StatCache m_StatCache;
 
-  DigestCache       m_DigestCache;  
+    DigestCache m_DigestCache;
 };
 
-bool DriverInit(Driver* self, const DriverOptions* options);
+bool DriverInit(Driver *self, const DriverOptions *options);
 
-bool DriverPrepareNodes(Driver* self, const char** targets, int target_count);
+bool DriverPrepareNodes(Driver *self, const char **targets, int target_count);
 
-void DriverDestroy(Driver* self);
+void DriverDestroy(Driver *self);
 
-void DriverShowHelp(Driver* self);
+void DriverShowHelp(Driver *self);
 
-void DriverShowTargets(Driver* self);
-bool DriverReportIncludes(Driver* self);
+void DriverShowTargets(Driver *self);
+bool DriverReportIncludes(Driver *self);
 
-void DriverReportStartup(Driver* self, const char** targets, int target_count);
+void DriverReportStartup(Driver *self, const char **targets, int target_count);
 
-void DriverRemoveStaleOutputs(Driver* self);
+void DriverRemoveStaleOutputs(Driver *self);
 
-void DriverCleanOutputs(Driver* self);
+void DriverCleanOutputs(Driver *self);
 
-BuildResult::Enum DriverBuild(Driver* self);
+BuildResult::Enum DriverBuild(Driver *self);
 
-bool DriverInitData(Driver* self);
+bool DriverInitData(Driver *self);
 
-bool DriverSaveScanCache(Driver* self);
-bool DriverSaveBuildState(Driver* self);
-bool DriverSaveDigestCache(Driver* self);
+bool DriverSaveScanCache(Driver *self);
+bool DriverSaveBuildState(Driver *self);
+bool DriverSaveDigestCache(Driver *self);
 
-void DriverInitializeTundraFilePaths(DriverOptions* driverOptions);
+void DriverInitializeTundraFilePaths(DriverOptions *driverOptions);
 
-}
+} // namespace t2
 
 #endif

@@ -7,7 +7,7 @@
 namespace t2
 {
 
-static bool HasAnyNonNewLine(const char* buffer)
+static bool HasAnyNonNewLine(const char *buffer)
 {
     while (true)
     {
@@ -21,21 +21,21 @@ static bool HasAnyNonNewLine(const char* buffer)
     }
 }
 
-ValidationResult ValidateExecResultAgainstAllowedOutput(ExecResult* result, const NodeData* node_data)
+ValidationResult ValidateExecResultAgainstAllowedOutput(ExecResult *result, const NodeData *node_data)
 {
-    auto& allowed = node_data->m_AllowedOutputSubstrings;
+    auto &allowed = node_data->m_AllowedOutputSubstrings;
     bool allowOutput = node_data->m_Flags & NodeData::kFlagAllowUnexpectedOutput;
 
     if (allowOutput && allowed.GetCount() == 0)
         return ValidationResult::Pass;
 
-    const char* buffer = result->m_OutputBuffer.buffer;
+    const char *buffer = result->m_OutputBuffer.buffer;
     if (!HasAnyNonNewLine(buffer))
         return ValidationResult::Pass;
 
-    for (int i=0; i!=allowed.GetCount(); i++)
+    for (int i = 0; i != allowed.GetCount(); i++)
     {
-        const char* allowedSubstring = allowed[i];
+        const char *allowedSubstring = allowed[i];
 
         if (re_match(allowedSubstring, result->m_OutputBuffer.buffer) != -1)
         {
@@ -47,4 +47,4 @@ ValidationResult ValidateExecResultAgainstAllowedOutput(ExecResult* result, cons
     return allowOutput ? ValidationResult::Pass : ValidationResult::UnexpectedConsoleOutputFail;
 }
 
-}
+} // namespace t2
