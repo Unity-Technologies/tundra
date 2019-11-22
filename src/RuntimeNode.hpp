@@ -42,7 +42,7 @@ struct RuntimeNode
     HashDigest m_InputSignature;
 };
 
-inline bool NodeStateIsQueued(const RuntimeNode *state)
+inline bool RuntimeNodeIsQueued(const RuntimeNode *state)
 {
     return 0 != (state->m_Flags & NodeStateFlags::kQueued);
 }
@@ -52,17 +52,17 @@ inline void NodeStateFlagQueued(RuntimeNode *state)
     state->m_Flags |= NodeStateFlags::kQueued;
 }
 
-inline void NodeStateFlagUnqueued(RuntimeNode *state)
+inline void RuntimeNodeFlagUnqueued(RuntimeNode *state)
 {
     state->m_Flags &= ~NodeStateFlags::kQueued;
 }
 
-inline bool NodeStateIsActive(const RuntimeNode *state)
+inline bool RuntimeNodeIsActive(const RuntimeNode *state)
 {
     return 0 != (state->m_Flags & NodeStateFlags::kActive);
 }
 
-inline void NodeStateFlagActive(RuntimeNode *state)
+inline void RuntimeNodeFlagActive(RuntimeNode *state)
 {
     state->m_Flags |= NodeStateFlags::kActive;
 }

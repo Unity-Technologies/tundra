@@ -66,8 +66,8 @@ static void Enqueue(BuildQueue *queue, RuntimeNode *state)
     const uint32_t queue_mask = queue->m_QueueCapacity - 1;
     int32_t *build_queue = queue->m_Queue;
 
-    CHECK(!NodeStateIsQueued(state));
-    CHECK(!NodeStateIsActive(state));
+    CHECK(!RuntimeNodeIsQueued(state));
+    CHECK(!RuntimeNodeIsActive(state));
 
 #if ENABLED(CHECKED_BUILD)
     const int avail_init = AvailableNodeCount(queue);
@@ -117,7 +117,7 @@ static void EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(BuildQueue *queue, R
         if (RuntimeNode *waiter = GetStateForNode(queue, link))
         {
             // Did someone else get to the node first?
-            if (NodeStateIsQueued(waiter) || NodeStateIsActive(waiter))
+            if (RuntimeNodeIsQueued(waiter) || RuntimeNodeIsActive(waiter))
                 continue;
 
             // If the node isn't ready, skip it.
@@ -151,8 +151,8 @@ static void AdvanceNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
     Log(kSpam, "T=%d, Advancing %s\n", thread_state->m_ThreadIndex, node->m_DagNode->m_Annotation.Get());
 
     CHECK(!node->m_Finished);
-    CHECK(NodeStateIsActive(node));
-    CHECK(!NodeStateIsQueued(node));
+    CHECK(RuntimeNodeIsActive(node));
+    CHECK(!RuntimeNodeIsQueued(node));
     CHECK(AllDependenciesAreFinished(queue, node));
 
     if (AllDependenciesAreSuccesful(queue, node))
@@ -207,15 +207,15 @@ static RuntimeNode *NextNode(BuildQueue *queue)
     // Update read index
     queue->m_QueueReadIndex = (read_index + 1) & (queue->m_QueueCapacity - 1);
 
-    RuntimeNode *state = queue->m_Config.m_RuntimeNodes + node_index;
+    RuntimeNode *runtime_node = queue->m_Config.m_RuntimeNodes + node_index;
 
-    CHECK(NodeStateIsQueued(state));
-    CHECK(!NodeStateIsActive(state));
+    CHECK(RuntimeNodeIsQueued(runtime_node));
+    CHECK(!RuntimeNodeIsActive(runtime_node));
 
-    NodeStateFlagUnqueued(state);
-    NodeStateFlagActive(state);
+    RuntimeNodeFlagUnqueued(runtime_node);
+    RuntimeNodeFlagActive(runtime_node);
 
-    return state;
+    return runtime_node;
 }
 
 static bool ShouldKeepBuilding(BuildQueue *queue)
