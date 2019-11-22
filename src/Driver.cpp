@@ -1133,7 +1133,7 @@ bool DriverSaveBuildState(Driver *self)
             BinarySegmentWriteUint32(array_seg, this_dag_hashed_identifier);
     };
 
-    auto EmitBuiltNodeFromExistingBuiltNode = [=, &emitted_built_nodes_count](const Frozen::BuiltNode *built_node, const HashDigest *guid) -> void {
+    auto EmitBuiltNodeFromPreviouslyBuiltNode = [=, &emitted_built_nodes_count](const Frozen::BuiltNode *built_node, const HashDigest *guid) -> void {
         save_node_sharedcode(built_node->m_WasBuiltSuccessfully, &built_node->m_InputSignature, built_node, guid, segments);
         emitted_built_nodes_count++;
 
@@ -1183,6 +1183,8 @@ bool DriverSaveBuildState(Driver *self)
             case NodeBuildResult::kRanFailed:
                 return true;
         }
+        Croak("Unexpected NodeBuildResult");
+        return true;
     };
 
     auto IsPreviouslyBuiltNodeValidForWritingToBuiltNodes = [=](const Frozen::BuiltNode* built_node, const HashDigest* guid) -> bool {
@@ -1205,6 +1207,7 @@ bool DriverSaveBuildState(Driver *self)
         //Both input arrays are also guaranteed to be already sorted, so we just need to make sure we interleave both arrays according to guid sort order.
         while (runtime_nodes_iterator < runtime_nodes_count && previously_built_nodes_iterator < previously_built_nodes_count)
         {
+            //future optimization:  avoid doing the Is***ValidForWriting() checks this early, and instead do them after the GUID comparison.
             RuntimeNode* first_runtimenode_in_line = &runtime_nodes[runtime_nodes_iterator];
             if (!IsRuntimeNodeValidForWritingToBuiltNodes(first_runtimenode_in_line))
             {
@@ -1231,7 +1234,7 @@ bool DriverSaveBuildState(Driver *self)
             if (compare > 0)
             {
                 //the first in line from the builtnodes actually has a lower GUID, we need to write that one out first.
-                EmitBuiltNodeFromExistingBuiltNode(previously_built_node, previously_built_guid);
+                EmitBuiltNodeFromPreviouslyBuiltNode(previously_built_node, previously_built_guid);
 
                 previously_built_nodes_iterator++;
                 continue;
@@ -1266,7 +1269,7 @@ bool DriverSaveBuildState(Driver *self)
         {
             const Frozen::BuiltNode* previously_built_node = &old_state[previously_built_nodes_iterator];
             const HashDigest * previously_built_guid = BuiltNodeGuidForBuiltNodeIndex(previously_built_nodes_iterator);
-            EmitBuiltNodeFromExistingBuiltNode(previously_built_node,previously_built_guid);
+            EmitBuiltNodeFromPreviouslyBuiltNode(previously_built_node,previously_built_guid);
         }
     }
 

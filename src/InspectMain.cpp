@@ -11,7 +11,7 @@
 
 
 
-static void DumpDag(const DagData *data)
+static void DumpDag(const Frozen::Dag *data)
 {
     int node_count = data->m_NodeCount;
     printf("magic number: 0x%08x\n", data->m_MagicNumber);
@@ -22,13 +22,13 @@ static void DumpDag(const DagData *data)
         char digest_str[kDigestStringSize];
         DigestToString(digest_str, data->m_NodeGuids[i]);
 
-        const NodeData &node = data->m_DagNodes[i];
+        const Frozen::DagNode &node = data->m_DagNodes[i];
 
         printf("  guid: %s\n", digest_str);
         printf("  flags:");
-        if (node.m_Flags & NodeData::kFlagPreciousOutputs)
+        if (node.m_Flags & Frozen::DagNode::kFlagPreciousOutputs)
             printf(" precious");
-        if (node.m_Flags & NodeData::kFlagOverwriteOutputs)
+        if (node.m_Flags & Frozen::DagNode::kFlagOverwriteOutputs)
             printf(" overwrite");
 
         printf("\n  action: %s\n", node.m_Action.Get());
@@ -61,20 +61,20 @@ static void DumpDag(const DagData *data)
             printf("    %s (0x%08x)\n", f.m_Filename.Get(), f.m_FilenameHash);
 
         printf("  environment:\n");
-        for (const EnvVarData &env : node.m_EnvVars)
+        for (const Frozen::EnvVarData &env : node.m_EnvVars)
         {
             printf("    %s = %s\n", env.m_Name.Get(), env.m_Value.Get());
         }
 
-        if (const ScannerData *s = node.m_Scanner)
+        if (const Frozen::ScannerData *s = node.m_Scanner)
         {
             printf("  scanner:\n");
             switch (s->m_ScannerType)
             {
-            case ScannerType::kCpp:
+            case Frozen::ScannerType::kCpp:
                 printf("    type: cpp\n");
                 break;
-            case ScannerType::kGeneric:
+            case Frozen::ScannerType::kGeneric:
                 printf("    type: generic\n");
                 break;
             default:
@@ -90,20 +90,20 @@ static void DumpDag(const DagData *data)
             DigestToString(digest_str, s->m_ScannerGuid);
             printf("    scanner guid: %s\n", digest_str);
 
-            if (ScannerType::kGeneric == s->m_ScannerType)
+            if (Frozen::ScannerType::kGeneric == s->m_ScannerType)
             {
-                const GenericScannerData *gs = static_cast<const GenericScannerData *>(s);
+                const Frozen::GenericScannerData *gs = static_cast<const Frozen::GenericScannerData *>(s);
                 printf("    flags:");
-                if (GenericScannerData::kFlagRequireWhitespace & gs->m_Flags)
+                if (Frozen::GenericScannerData::kFlagRequireWhitespace & gs->m_Flags)
                     printf(" RequireWhitespace");
-                if (GenericScannerData::kFlagUseSeparators & gs->m_Flags)
+                if (Frozen::GenericScannerData::kFlagUseSeparators & gs->m_Flags)
                     printf(" UseSeparators");
-                if (GenericScannerData::kFlagBareMeansSystem & gs->m_Flags)
+                if (Frozen::GenericScannerData::kFlagBareMeansSystem & gs->m_Flags)
                     printf(" BareMeansSystem");
                 printf("\n");
 
                 printf("    keywords:\n");
-                for (const KeywordData &kw : gs->m_Keywords)
+                for (const Frozen::KeywordData &kw : gs->m_Keywords)
                 {
                     printf("      \"%s\" (%d bytes) follow: %s\n",
                            kw.m_String.Get(), kw.m_StringLength, kw.m_ShouldFollow ? "yes" : "no");
@@ -115,13 +115,13 @@ static void DumpDag(const DagData *data)
     }
 
     printf("\nfile signatures:\n");
-    for (const DagFileSignature &sig : data->m_FileSignatures)
+    for (const Frozen::DagFileSignature &sig : data->m_FileSignatures)
     {
         printf("file            : %s\n", sig.m_Path.Get());
         printf("timestamp       : %u\n", (unsigned int)sig.m_Timestamp);
     }
     printf("\nglob signatures:\n");
-    for (const DagGlobSignature &sig : data->m_GlobSignatures)
+    for (const Frozen::DagGlobSignature &sig : data->m_GlobSignatures)
     {
         char digest_str[kDigestStringSize];
         DigestToString(digest_str, sig.m_Digest);
@@ -146,7 +146,7 @@ static void DumpDag(const DagData *data)
     printf("Magic number at end: 0x%08x\n", data->m_MagicNumberEnd);
 }
 
-static void DumpState(const AllBuiltNodes *data)
+static void DumpState(const Frozen::AllBuiltNodes *data)
 {
     int node_count = data->m_NodeCount;
     printf("magic number: 0x%08x\n", data->m_MagicNumber);
@@ -156,11 +156,11 @@ static void DumpState(const AllBuiltNodes *data)
         printf("node %d:\n", i);
         char digest_str[kDigestStringSize];
 
-        const BuiltNode &node = data->m_NodeStates[i];
+        const Frozen::BuiltNode &node = data->m_BuiltNodes[i];
 
         DigestToString(digest_str, data->m_NodeGuids[i]);
         printf("  guid: %s\n", digest_str);
-        printf("  build result: %d\n", node.m_BuildResult);
+        printf("  m_WasBuiltSuccessfully: %d\n", node.m_WasBuiltSuccessfully);
         DigestToString(digest_str, node.m_InputSignature);
         printf("  input_signature: %s\n", digest_str);
         printf("  outputs:\n");
@@ -169,11 +169,20 @@ static void DumpState(const AllBuiltNodes *data)
         printf("  aux outputs:\n");
         for (const char *path : node.m_AuxOutputFiles)
             printf("    %s\n", path);
+
+        printf("  input files:\n");
+        for (int i=0; i!=node.m_InputFiles.GetCount(); i++)
+            printf("    %lld %s\n", node.m_InputFiles[i].m_Timestamp, node.m_InputFiles[i].m_Filename.Get());
+
+        printf("  Implicit inputs:\n");
+        for (int i=0; i!=node.m_ImplicitInputFiles.GetCount(); i++)
+            printf("    %lld %s\n", node.m_ImplicitInputFiles[i].m_Timestamp, node.m_ImplicitInputFiles[i].m_Filename.Get());
+
         printf("\n");
     }
 }
 
-static void DumpScanCache(const ScanData *data)
+static void DumpScanCache(const Frozen::ScanData *data)
 {
     int entry_count = data->m_EntryCount;
     printf("magic number: 0x%08x\n", data->m_MagicNumber);
@@ -183,7 +192,7 @@ static void DumpScanCache(const ScanData *data)
         printf("entry %d:\n", i);
         char digest_str[kDigestStringSize];
 
-        const ScanCacheEntry &entry = data->m_Data[i];
+        const Frozen::ScanCacheEntry &entry = data->m_Data[i];
 
         DigestToString(digest_str, data->m_Keys[i]);
         printf("  guid: %s\n", digest_str);
@@ -203,10 +212,10 @@ static const char *FmtTime(uint64_t t)
     return time_buf;
 }
 
-static void DumpDigestCache(const DigestCacheState *data)
+static void DumpDigestCache(const Frozen::DigestCacheState *data)
 {
     printf("record count: %d\n", data->m_Records.GetCount());
-    for (const FrozenDigestRecord &r : data->m_Records)
+    for (const Frozen::DigestRecord &r : data->m_Records)
     {
         char digest_str[kDigestStringSize];
         printf("  filename     : %s\n", r.m_Filename.Get());
@@ -234,8 +243,8 @@ int main(int argc, char *argv[])
 
         if (0 == strcmp(suffix, ".dag"))
         {
-            const DagData *data = (const DagData *)f.m_Address;
-            if (data->m_MagicNumber == DagData::MagicNumber)
+            const Frozen::Dag *data = (const Frozen::Dag *)f.m_Address;
+            if (data->m_MagicNumber == Frozen::Dag::MagicNumber)
             {
                 DumpDag(data);
             }
@@ -246,8 +255,8 @@ int main(int argc, char *argv[])
         }
         else if (0 == strcmp(suffix, ".state"))
         {
-            const AllBuiltNodes *data = (const AllBuiltNodes *)f.m_Address;
-            if (data->m_MagicNumber == AllBuiltNodes::MagicNumber)
+            const Frozen::AllBuiltNodes *data = (const Frozen::AllBuiltNodes *)f.m_Address;
+            if (data->m_MagicNumber == Frozen::AllBuiltNodes::MagicNumber)
             {
                 DumpState(data);
             }
@@ -258,8 +267,8 @@ int main(int argc, char *argv[])
         }
         else if (0 == strcmp(suffix, ".scancache"))
         {
-            const ScanData *data = (const ScanData *)f.m_Address;
-            if (data->m_MagicNumber == ScanData::MagicNumber)
+            const Frozen::ScanData *data = (const Frozen::ScanData *)f.m_Address;
+            if (data->m_MagicNumber == Frozen::ScanData::MagicNumber)
             {
                 DumpScanCache(data);
             }
@@ -270,8 +279,8 @@ int main(int argc, char *argv[])
         }
         else if (0 == strcmp(suffix, ".digestcache"))
         {
-            const DigestCacheState *data = (const DigestCacheState *)f.m_Address;
-            if (data->m_MagicNumber == DigestCacheState::MagicNumber)
+            const Frozen::DigestCacheState *data = (const Frozen::DigestCacheState *)f.m_Address;
+            if (data->m_MagicNumber == Frozen::DigestCacheState::MagicNumber)
             {
                 DumpDigestCache(data);
             }
