@@ -26,7 +26,7 @@ static const uint16_t kActive = 1 << 1;
 namespace Frozen
 {
     struct Node;
-    struct NodeStateData;
+    struct BuiltNode;
 }
 
 struct RuntimeNode
@@ -37,7 +37,7 @@ struct RuntimeNode
     const char *m_DebugAnnotation;
 #endif
     const Frozen::Node *m_MmapData;
-    const Frozen::NodeStateData *m_MmapState;
+    const Frozen::BuiltNode *m_MmapState;
 
     NodeBuildResult::Enum m_BuildResult;
     bool m_Finished;

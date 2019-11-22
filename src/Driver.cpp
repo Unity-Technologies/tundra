@@ -712,7 +712,7 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
     // Find frozen node state from previous build, if present.
     if (const Frozen::StateData *state_data = self->m_StateData)
     {
-        const Frozen::NodeStateData *frozen_states = state_data->m_NodeStates;
+        const Frozen::BuiltNode *frozen_states = state_data->m_NodeStates;
         const HashDigest *state_guids = state_data->m_NodeGuids;
         const int state_guid_count = state_data->m_NodeCount;
 
@@ -979,7 +979,7 @@ static void save_node_sharedcode(bool nodeWasBuiltSuccesfully, const HashDigest 
     BinarySegmentWriteStringData(segments.string, src_node->m_Action);
 }
 
-static bool node_was_used_by_this_dag_previously(const Frozen::NodeStateData *node_state_data, uint32_t current_dag_identifier)
+static bool node_was_used_by_this_dag_previously(const Frozen::BuiltNode *node_state_data, uint32_t current_dag_identifier)
 {
     auto &previous_dags = node_state_data->m_DagsWeHaveSeenThisNodeInPreviously;
     return std::find(previous_dags.begin(), previous_dags.end(), current_dag_identifier) != previous_dags.end();
@@ -1023,7 +1023,7 @@ bool DriverSaveBuildState(Driver *self)
     });
 
     const HashDigest *old_guids = nullptr;
-    const Frozen::NodeStateData *old_state = nullptr;
+    const Frozen::BuiltNode *old_state = nullptr;
     uint32_t old_count = 0;
 
     if (const Frozen::StateData *state_data = self->m_StateData)
@@ -1036,7 +1036,7 @@ bool DriverSaveBuildState(Driver *self)
     int entry_count = 0;
     uint32_t this_dag_hashed_identifier = self->m_DagData->m_HashedIdentifier;
 
-    auto save_node_state = [=](bool nodeWasBuiltSuccessfully, const HashDigest *input_signature, const Frozen::Node *src_node, const Frozen::NodeStateData *node_data_state, const HashDigest *guid) -> void {
+    auto save_node_state = [=](bool nodeWasBuiltSuccessfully, const HashDigest *input_signature, const Frozen::Node *src_node, const Frozen::BuiltNode *node_data_state, const HashDigest *guid) -> void {
         MemAllocLinear *scratch = &self->m_Allocator;
 
         save_node_sharedcode(nodeWasBuiltSuccessfully, input_signature, src_node, guid, segments);
@@ -1126,7 +1126,7 @@ bool DriverSaveBuildState(Driver *self)
             BinarySegmentWriteUint32(array_seg, this_dag_hashed_identifier);
     };
 
-    auto save_node_state_old = [=](bool nodeWasBuiltSuccesfully, const HashDigest *input_signature, const Frozen::NodeStateData *src_node, const HashDigest *guid) -> void {
+    auto save_node_state_old = [=](bool nodeWasBuiltSuccesfully, const HashDigest *input_signature, const Frozen::BuiltNode *src_node, const HashDigest *guid) -> void {
         save_node_sharedcode(nodeWasBuiltSuccesfully, input_signature, src_node, guid, segments);
 
         int32_t file_count = src_node->m_InputFiles.GetCount();
@@ -1168,7 +1168,7 @@ bool DriverSaveBuildState(Driver *self)
             if (const HashDigest *old_guid = BinarySearch(old_guids, old_count, *guid))
             {
                 size_t old_index = old_guid - old_guids;
-                const Frozen::NodeStateData *old_state_data = old_state + old_index;
+                const Frozen::BuiltNode *old_state_data = old_state + old_index;
                 save_node_state_old(old_state_data->m_WasBuiltSuccessfully > 0, &old_state_data->m_InputSignature, old_state_data, guid);
                 ++entry_count;
                 ++g_Stats.m_StateSaveNew;
@@ -1185,7 +1185,7 @@ bool DriverSaveBuildState(Driver *self)
 
     auto save_old = [=, &entry_count](size_t index) {
         const HashDigest *guid = old_guids + index;
-        const Frozen::NodeStateData *data = old_state + index;
+        const Frozen::BuiltNode *data = old_state + index;
 
         // Make sure this node is still relevant before saving.
         bool node_is_in_dag = BinarySearch(src_guids, src_count, *guid) != nullptr;
@@ -1346,7 +1346,7 @@ void DriverRemoveStaleOutputs(Driver *self)
 
     for (int i = 0, state_count = state->m_NodeCount; i < state_count; ++i)
     {
-        const Frozen::NodeStateData *node = state->m_NodeStates + i;
+        const Frozen::BuiltNode *node = state->m_NodeStates + i;
 
         if (!node_was_used_by_this_dag_previously(node, dag->m_HashedIdentifier))
             continue;

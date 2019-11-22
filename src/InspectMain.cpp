@@ -156,7 +156,7 @@ static void DumpState(const StateData *data)
         printf("node %d:\n", i);
         char digest_str[kDigestStringSize];
 
-        const NodeStateData &node = data->m_NodeStates[i];
+        const BuiltNode &node = data->m_NodeStates[i];
 
         DigestToString(digest_str, data->m_NodeGuids[i]);
         printf("  guid: %s\n", digest_str);

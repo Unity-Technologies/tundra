@@ -118,7 +118,7 @@ static void ReportInputSignatureChanges(
     JsonWriter *msg,
     RuntimeNode *node,
     const Frozen::Node *node_data,
-    const Frozen::NodeStateData *prev_state,
+    const Frozen::BuiltNode *prev_state,
     StatCache *stat_cache,
     DigestCache *digest_cache,
     ScanCache *scan_cache,
@@ -289,7 +289,7 @@ static void ReportInputSignatureChanges(
     }
 }
 
-static bool OutputFilesDiffer(const Frozen::Node *node_data, const Frozen::NodeStateData *prev_state)
+static bool OutputFilesDiffer(const Frozen::Node *node_data, const Frozen::BuiltNode *prev_state)
 {
     int file_count = node_data->m_OutputFiles.GetCount();
 
@@ -450,7 +450,7 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
     }
 
     // Figure out if we need to rebuild this node.
-    const Frozen::NodeStateData *prev_nodestatedata = node->m_MmapState;
+    const Frozen::BuiltNode *prev_nodestatedata = node->m_MmapState;
 
     if (!prev_nodestatedata)
     {

@@ -15,7 +15,7 @@ struct NodeInputFileData
 
 static_assert(sizeof(NodeInputFileData) == 12, "struct layout");
 
-struct NodeStateData
+struct BuiltNode
 {
     uint32_t m_WasBuiltSuccessfully;
     HashDigest m_InputSignature;
@@ -36,7 +36,7 @@ struct StateData
 
     int32_t m_NodeCount;
     FrozenPtr<HashDigest> m_NodeGuids;
-    FrozenPtr<NodeStateData> m_NodeStates;
+    FrozenPtr<BuiltNode> m_NodeStates;
 
     uint32_t m_MagicNumberEnd;
 };
