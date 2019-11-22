@@ -15,11 +15,11 @@ namespace NodeBuildResult
     };
 }
 
-namespace NodeStateFlags
+namespace RuntimeNodeFlags
 {
     static const uint16_t kQueued = 1 << 0;
     static const uint16_t kActive = 1 << 1;
-} // namespace NodeStateFlags
+}
 
 namespace Frozen
 {
@@ -44,30 +44,30 @@ struct RuntimeNode
 
 inline bool RuntimeNodeIsQueued(const RuntimeNode *state)
 {
-    return 0 != (state->m_Flags & NodeStateFlags::kQueued);
+    return 0 != (state->m_Flags & RuntimeNodeFlags::kQueued);
 }
 
 inline void RuntimeNodeFlagQueued(RuntimeNode *state)
 {
-    state->m_Flags |= NodeStateFlags::kQueued;
+    state->m_Flags |= RuntimeNodeFlags::kQueued;
 }
 
 inline void RuntimeNodeFlagUnqueued(RuntimeNode *state)
 {
-    state->m_Flags &= ~NodeStateFlags::kQueued;
+    state->m_Flags &= ~RuntimeNodeFlags::kQueued;
 }
 
 inline bool RuntimeNodeIsActive(const RuntimeNode *state)
 {
-    return 0 != (state->m_Flags & NodeStateFlags::kActive);
+    return 0 != (state->m_Flags & RuntimeNodeFlags::kActive);
 }
 
 inline void RuntimeNodeFlagActive(RuntimeNode *state)
 {
-    state->m_Flags |= NodeStateFlags::kActive;
+    state->m_Flags |= RuntimeNodeFlags::kActive;
 }
 
 inline void RuntimeNodeFlagInactive(RuntimeNode *state)
 {
-    state->m_Flags &= ~NodeStateFlags::kActive;
+    state->m_Flags &= ~RuntimeNodeFlags::kActive;
 }

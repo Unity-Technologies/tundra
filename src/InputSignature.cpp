@@ -117,7 +117,7 @@ static void ReportValueWithOptionalTruncation(JsonWriter *msg, const char *keyNa
 static void ReportInputSignatureChanges(
     JsonWriter *msg,
     RuntimeNode *node,
-    const Frozen::DagNode *node_data,
+    const Frozen::DagNode *dagnode,
     const Frozen::BuiltNode *prev_state,
     StatCache *stat_cache,
     DigestCache *digest_cache,
@@ -126,23 +126,23 @@ static void ReportInputSignatureChanges(
     int sha_extension_hash_count,
     ThreadState *thread_state)
 {
-    if (strcmp(node_data->m_Action, prev_state->m_Action) != 0)
+    if (strcmp(dagnode->m_Action, prev_state->m_Action) != 0)
     {
         JsonWriteStartObject(msg);
 
         JsonWriteKeyName(msg, "key");
         JsonWriteValueString(msg, "Action");
 
-        ReportValueWithOptionalTruncation(msg, "value", "value_truncated", node_data->m_Action);
+        ReportValueWithOptionalTruncation(msg, "value", "value_truncated", dagnode->m_Action);
         ReportValueWithOptionalTruncation(msg, "oldvalue", "oldvalue_truncated", prev_state->m_Action);
 
         JsonWriteEndObject(msg);
     }
 
-    bool explicitInputFilesListChanged = node_data->m_InputFiles.GetCount() != prev_state->m_InputFiles.GetCount();
-    for (int32_t i = 0; i < node_data->m_InputFiles.GetCount() && !explicitInputFilesListChanged; ++i)
+    bool explicitInputFilesListChanged = dagnode->m_InputFiles.GetCount() != prev_state->m_InputFiles.GetCount();
+    for (int32_t i = 0; i < dagnode->m_InputFiles.GetCount() && !explicitInputFilesListChanged; ++i)
     {
-        const char *filename = node_data->m_InputFiles[i].m_Filename;
+        const char *filename = dagnode->m_InputFiles[i].m_Filename;
         const char *oldFilename = prev_state->m_InputFiles[i].m_Filename;
         explicitInputFilesListChanged |= (strcmp(filename, oldFilename) != 0);
     }
@@ -156,7 +156,7 @@ static void ReportInputSignatureChanges(
 
         JsonWriteKeyName(msg, "value");
         JsonWriteStartArray(msg);
-        for (const FrozenFileAndHash &input : node_data->m_InputFiles)
+        for (const FrozenFileAndHash &input : dagnode->m_InputFiles)
             JsonWriteValueString(msg, input.m_Filename);
         JsonWriteEndArray(msg);
 
@@ -177,13 +177,13 @@ static void ReportInputSignatureChanges(
         for (const Frozen::NodeInputFileData &oldInput : prev_state->m_InputFiles)
         {
             const FrozenFileAndHash *newInput;
-            for (newInput = node_data->m_InputFiles.begin(); newInput != node_data->m_InputFiles.end(); ++newInput)
+            for (newInput = dagnode->m_InputFiles.begin(); newInput != dagnode->m_InputFiles.end(); ++newInput)
             {
                 if (strcmp(newInput->m_Filename, oldInput.m_Filename) == 0)
                     break;
             }
 
-            if (newInput == node_data->m_InputFiles.end())
+            if (newInput == dagnode->m_InputFiles.end())
                 continue;
 
             CheckAndReportChangedInputFile(msg,
@@ -204,18 +204,18 @@ static void ReportInputSignatureChanges(
 
     ReportChangedInputFiles(msg, prev_state->m_InputFiles, "explicit", digest_cache, stat_cache, sha_extension_hashes, sha_extension_hash_count, force_use_timestamp);
 
-    if (node_data->m_Scanner)
+    if (dagnode->m_Scanner)
     {
         HashTable<bool, kFlagPathStrings> implicitDependencies;
         HashTableInit(&implicitDependencies, &thread_state->m_LocalHeap);
 
-        for (const FrozenFileAndHash &input : node_data->m_InputFiles)
+        for (const FrozenFileAndHash &input : dagnode->m_InputFiles)
         {
             // Roll back scratch allocator between scans
             MemAllocLinearScope alloc_scope(&thread_state->m_ScratchAlloc);
 
             ScanInput scan_input;
-            scan_input.m_ScannerConfig = node_data->m_Scanner;
+            scan_input.m_ScannerConfig = dagnode->m_Scanner;
             scan_input.m_ScratchAlloc = &thread_state->m_ScratchAlloc;
             scan_input.m_ScratchHeap = &thread_state->m_LocalHeap;
             scan_input.m_FileName = input.m_Filename;
@@ -289,16 +289,16 @@ static void ReportInputSignatureChanges(
     }
 }
 
-static bool OutputFilesDiffer(const Frozen::DagNode *node_data, const Frozen::BuiltNode *prev_state)
+static bool OutputFilesDiffer(const Frozen::DagNode *dagnode, const Frozen::BuiltNode *prev_state)
 {
-    int file_count = node_data->m_OutputFiles.GetCount();
+    int file_count = dagnode->m_OutputFiles.GetCount();
 
     if (file_count != prev_state->m_OutputFiles.GetCount())
         return true;
 
     for (int i = 0; i < file_count; ++i)
     {
-        if (0 != strcmp(node_data->m_OutputFiles[i].m_Filename, prev_state->m_OutputFiles[i]))
+        if (0 != strcmp(dagnode->m_OutputFiles[i].m_Filename, prev_state->m_OutputFiles[i]))
             return true;
     }
 
@@ -328,9 +328,9 @@ static bool OutputFilesMissing(StatCache *stat_cache, const Frozen::DagNode *nod
 
 bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node)
 {
-    const Frozen::DagNode *node_data = node->m_DagNode;
+    const Frozen::DagNode *dagnode = node->m_DagNode;
 
-    ProfilerScope prof_scope("CheckInputSignature", thread_state->m_ProfilerThreadId, node_data->m_Annotation);
+    ProfilerScope prof_scope("CheckInputSignature", thread_state->m_ProfilerThreadId, dagnode->m_Annotation);
 
     const BuildQueueConfig &config = queue->m_Config;
     StatCache *stat_cache = config.m_StatCache;
@@ -342,7 +342,7 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
     if (debug_log)
     {
         MutexLock(queue->m_Config.m_FileSigningLogMutex);
-        fprintf(debug_log, "input_sig(\"%s\"):\n", node_data->m_Annotation.Get());
+        fprintf(debug_log, "input_sig(\"%s\"):\n", dagnode->m_Annotation.Get());
         HashInitDebug(&sighash, debug_log);
     }
     else
@@ -351,10 +351,10 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
     }
 
     // Start with command line action. If that changes, we'll definitely have to rebuild.
-    HashAddString(&sighash, node_data->m_Action);
+    HashAddString(&sighash, dagnode->m_Action);
     HashAddSeparator(&sighash);
 
-    const Frozen::ScannerData *scanner = node_data->m_Scanner;
+    const Frozen::ScannerData *scanner = dagnode->m_Scanner;
 
     // TODO: The input files are not guaranteed to be in a stably sorted order. If the order changes then the input
     // TODO: signature might change, giving us a false-positive for the node needing to be rebuilt. We should look into
@@ -371,12 +371,12 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
     if (scanner)
         HashSetInit(&implicitDeps, &thread_state->m_LocalHeap);
 
-    bool force_use_timestamp = node_data->m_Flags & Frozen::DagNode::kFlagBanContentDigestForInputs;
+    bool force_use_timestamp = dagnode->m_Flags & Frozen::DagNode::kFlagBanContentDigestForInputs;
 
     // Roll back scratch allocator after all file scans
     MemAllocLinearScope alloc_scope(&thread_state->m_ScratchAlloc);
 
-    for (const FrozenFileAndHash &input : node_data->m_InputFiles)
+    for (const FrozenFileAndHash &input : dagnode->m_InputFiles)
     {
         // Add path and timestamp of every direct input file.
         HashAddPath(&sighash, input.m_Filename);
@@ -433,11 +433,11 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
         HashSetDestroy(&implicitDeps);
     }
 
-    for (const FrozenString &input : node_data->m_AllowedOutputSubstrings)
+    for (const FrozenString &input : dagnode->m_AllowedOutputSubstrings)
         HashAddString(&sighash, (const char *)input);
 
-    HashAddInteger(&sighash, (node_data->m_Flags & Frozen::DagNode::kFlagAllowUnexpectedOutput) ? 1 : 0);
-    HashAddInteger(&sighash, (node_data->m_Flags & Frozen::DagNode::kFlagAllowUnwrittenOutputFiles) ? 1 : 0);
+    HashAddInteger(&sighash, (dagnode->m_Flags & Frozen::DagNode::kFlagAllowUnexpectedOutput) ? 1 : 0);
+    HashAddInteger(&sighash, (dagnode->m_Flags & Frozen::DagNode::kFlagAllowUnwrittenOutputFiles) ? 1 : 0);
 
     HashFinalize(&sighash, &node->m_InputSignature);
 
@@ -450,12 +450,12 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
     }
 
     // Figure out if we need to rebuild this node.
-    const Frozen::BuiltNode *prev_nodestatedata = node->m_BuiltNode;
+    const Frozen::BuiltNode *prev_builtnode = node->m_BuiltNode;
 
-    if (!prev_nodestatedata)
+    if (!prev_builtnode)
     {
         // This is a new node - we must built it
-        Log(kSpam, "T=%d: building %s - new node", thread_state->m_ThreadIndex, node_data->m_Annotation.Get());
+        Log(kSpam, "T=%d: building %s - new node", thread_state->m_ThreadIndex, dagnode->m_Annotation.Get());
 
         if (IsStructuredLogActive())
         {
@@ -469,10 +469,10 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
             JsonWriteValueString(&msg, "newNode");
 
             JsonWriteKeyName(&msg, "annotation");
-            JsonWriteValueString(&msg, node_data->m_Annotation);
+            JsonWriteValueString(&msg, dagnode->m_Annotation);
 
             JsonWriteKeyName(&msg, "index");
-            JsonWriteValueInteger(&msg, node_data->m_OriginalIndex);
+            JsonWriteValueInteger(&msg, dagnode->m_OriginalIndex);
 
             JsonWriteEndObject(&msg);
             LogStructured(&msg);
@@ -481,16 +481,16 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
         return true;
     }
 
-    if (prev_nodestatedata->m_InputSignature != node->m_InputSignature)
+    if (prev_builtnode->m_InputSignature != node->m_InputSignature)
     {
         // The input signature has changed (either direct inputs or includes)
         // We need to rebuild this node.
         char oldDigest[kDigestStringSize];
         char newDigest[kDigestStringSize];
-        DigestToString(oldDigest, prev_nodestatedata->m_InputSignature);
+        DigestToString(oldDigest, prev_builtnode->m_InputSignature);
         DigestToString(newDigest, node->m_InputSignature);
 
-        Log(kSpam, "T=%d: building %s - input signature changed. was:%s now:%s", thread_state->m_ThreadIndex, node_data->m_Annotation.Get(), oldDigest, newDigest);
+        Log(kSpam, "T=%d: building %s - input signature changed. was:%s now:%s", thread_state->m_ThreadIndex, dagnode->m_Annotation.Get(), oldDigest, newDigest);
 
         if (IsStructuredLogActive())
         {
@@ -504,15 +504,15 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
             JsonWriteValueString(&msg, "inputSignatureChanged");
 
             JsonWriteKeyName(&msg, "annotation");
-            JsonWriteValueString(&msg, node_data->m_Annotation);
+            JsonWriteValueString(&msg, dagnode->m_Annotation);
 
             JsonWriteKeyName(&msg, "index");
-            JsonWriteValueInteger(&msg, node_data->m_OriginalIndex);
+            JsonWriteValueInteger(&msg, dagnode->m_OriginalIndex);
 
             JsonWriteKeyName(&msg, "changes");
             JsonWriteStartArray(&msg);
 
-            ReportInputSignatureChanges(&msg, node, node_data, prev_nodestatedata, stat_cache, digest_cache, queue->m_Config.m_ScanCache, config.m_ShaDigestExtensions, config.m_ShaDigestExtensionCount, thread_state);
+            ReportInputSignatureChanges(&msg, node, dagnode, prev_builtnode, stat_cache, digest_cache, queue->m_Config.m_ScanCache, config.m_ShaDigestExtensions, config.m_ShaDigestExtensionCount, thread_state);
 
             JsonWriteEndArray(&msg);
             JsonWriteEndObject(&msg);
@@ -522,10 +522,10 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
         return true;
     }
 
-    else if (!prev_nodestatedata->m_WasBuiltSuccessfully)
+    else if (!prev_builtnode->m_WasBuiltSuccessfully)
     {
         // The build progress failed the last time around - we need to retry it.
-        Log(kSpam, "T=%d: building %s - previous build failed", thread_state->m_ThreadIndex, node_data->m_Annotation.Get());
+        Log(kSpam, "T=%d: building %s - previous build failed", thread_state->m_ThreadIndex, dagnode->m_Annotation.Get());
 
         if (IsStructuredLogActive())
         {
@@ -539,10 +539,10 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
             JsonWriteValueString(&msg, "nodeRetryBuild");
 
             JsonWriteKeyName(&msg, "annotation");
-            JsonWriteValueString(&msg, node_data->m_Annotation);
+            JsonWriteValueString(&msg, dagnode->m_Annotation);
 
             JsonWriteKeyName(&msg, "index");
-            JsonWriteValueInteger(&msg, node_data->m_OriginalIndex);
+            JsonWriteValueInteger(&msg, dagnode->m_OriginalIndex);
 
             JsonWriteEndObject(&msg);
             LogStructured(&msg);
@@ -551,17 +551,17 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
         return true;
     }
 
-    if (OutputFilesDiffer(node_data, prev_nodestatedata))
+    if (OutputFilesDiffer(dagnode, prev_builtnode))
     {
         // The output files are different - need to rebuild.
-        Log(kSpam, "T=%d: building %s - output files have changed", thread_state->m_ThreadIndex, node_data->m_Annotation.Get());
+        Log(kSpam, "T=%d: building %s - output files have changed", thread_state->m_ThreadIndex, dagnode->m_Annotation.Get());
         return true;
     }
 
-    if (OutputFilesMissing(stat_cache, node_data))
+    if (OutputFilesMissing(stat_cache, dagnode))
     {
         // One or more output files are missing - need to rebuild.
-        Log(kSpam, "T=%d: building %s - output files are missing", thread_state->m_ThreadIndex, node_data->m_Annotation.Get());
+        Log(kSpam, "T=%d: building %s - output files are missing", thread_state->m_ThreadIndex, dagnode->m_Annotation.Get());
 
         if (IsStructuredLogActive())
         {
@@ -575,14 +575,14 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
             JsonWriteValueString(&msg, "nodeOutputsMissing");
 
             JsonWriteKeyName(&msg, "annotation");
-            JsonWriteValueString(&msg, node_data->m_Annotation);
+            JsonWriteValueString(&msg, dagnode->m_Annotation);
 
             JsonWriteKeyName(&msg, "index");
-            JsonWriteValueInteger(&msg, node_data->m_OriginalIndex);
+            JsonWriteValueInteger(&msg, dagnode->m_OriginalIndex);
 
             JsonWriteKeyName(&msg, "files");
             JsonWriteStartArray(&msg);
-            for (auto &f : node_data->m_OutputFiles)
+            for (auto &f : dagnode->m_OutputFiles)
             {
                 FileInfo i = StatCacheStat(stat_cache, f.m_Filename, f.m_FilenameHash);
                 if (!i.Exists())
@@ -592,7 +592,7 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
 
             JsonWriteKeyName(&msg, "directories");
             JsonWriteStartArray(&msg);
-            for (auto &f : node_data->m_OutputDirectories)
+            for (auto &f : dagnode->m_OutputDirectories)
             {
                 FileInfo i = StatCacheStat(stat_cache, f.m_Filename, f.m_FilenameHash);
 
