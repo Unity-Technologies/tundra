@@ -5,8 +5,7 @@
 
 // Low-level scanning functions to grab dependencies from a file buffer.
 
-namespace t2
-{
+
 
 struct GenericScannerData;
 struct MemAllocLinear;
@@ -30,6 +29,6 @@ ScanIncludesCpp(char *buffer, MemAllocLinear *allocator);
 IncludeData *
 ScanIncludesGeneric(char *buffer, MemAllocLinear *allocator, const GenericScannerData &config);
 
-} // namespace t2
+
 
 #endif

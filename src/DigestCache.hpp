@@ -10,8 +10,7 @@
 #include "MemAllocHeap.hpp"
 #include "ReadWriteLock.hpp"
 
-namespace t2
-{
+
 struct MemAllocHeap;
 struct MemAllocLinear;
 struct DigestCacheState;
@@ -69,6 +68,6 @@ bool DigestCacheGet(DigestCache *self, const char *filename, uint32_t hash, uint
 void DigestCacheSet(DigestCache *self, const char *filename, uint32_t hash, uint64_t timestamp, const HashDigest &digest);
 
 bool DigestCacheHasChanged(DigestCache *self, const char *filename, uint32_t hash);
-} // namespace t2
+
 
 #endif

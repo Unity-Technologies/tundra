@@ -4,8 +4,7 @@
 #include "Common.hpp"
 #include "BinaryData.hpp"
 
-namespace t2
-{
+
 
 #pragma pack(push, 4)
 struct NodeInputFileData
@@ -43,6 +42,6 @@ struct StateData
     uint32_t m_MagicNumberEnd;
 };
 
-} // namespace t2
+
 
 #endif

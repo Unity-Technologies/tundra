@@ -3,8 +3,7 @@
 
 #include "Common.hpp"
 
-namespace t2
-{
+
 
 typedef uintptr_t ThreadId;
 
@@ -21,6 +20,6 @@ ThreadId ThreadStart(ThreadRoutine routine, void *param);
 void ThreadJoin(ThreadId thread_id);
 
 ThreadId ThreadCurrent();
-} // namespace t2
+
 
 #endif

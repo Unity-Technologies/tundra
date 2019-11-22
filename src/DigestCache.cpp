@@ -6,8 +6,7 @@
 #include <time.h>
 #include <stdio.h>
 
-namespace t2
-{
+
 
 void DigestCacheInit(DigestCache *self, size_t heap_size, const char *filename)
 {
@@ -201,4 +200,4 @@ bool DigestCacheHasChanged(DigestCache *self, const char *filename, uint32_t has
     return prevDigest->m_ContentDigest != r->m_ContentDigest;
 }
 
-} // namespace t2
+

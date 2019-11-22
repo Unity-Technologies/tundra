@@ -4,8 +4,7 @@
 #include "OutputValidation.hpp"
 #include <stdint.h>
 
-namespace t2
-{
+
 struct ExecResult;
 struct NodeData;
 struct BuildQueue;
@@ -38,5 +37,5 @@ void PrintDeferredMessages(BuildQueue *queue);
 void PrintNonNodeActionResult(double duration, int max_nodes, MessageStatusLevel::Enum status_level, const char *annotation, ExecResult *result = nullptr);
 void PrintServiceMessage(MessageStatusLevel::Enum statusLevel, const char *formatString, ...);
 void StripAnsiColors(char *buffer);
-} // namespace t2
+
 #endif

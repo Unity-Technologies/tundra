@@ -27,8 +27,7 @@
 #include <algorithm>
 #include <stdio.h>
 
-namespace t2
-{
+
 
 static int AvailableNodeCount(BuildQueue *queue)
 {
@@ -296,4 +295,4 @@ void BuildLoop(ThreadState *thread_state)
 
     Log(kSpam, "build thread %d exiting\n", thread_state->m_ThreadIndex);
 }
-} // namespace t2
+

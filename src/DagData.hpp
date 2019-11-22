@@ -6,8 +6,7 @@
 #include "Hash.hpp"
 #include "PathUtil.hpp"
 
-namespace t2
-{
+
 
 namespace ScannerType
 {
@@ -164,6 +163,6 @@ struct DagData
     uint32_t m_MagicNumberEnd;
 };
 
-} // namespace t2
+
 
 #endif

@@ -4,8 +4,7 @@
 #include "Common.hpp"
 #include "Atomic.hpp"
 
-namespace t2
-{
+
 
 struct TundraStats
 {
@@ -73,6 +72,6 @@ struct TimingScope
 
 extern TundraStats g_Stats;
 
-} // namespace t2
+
 
 #endif

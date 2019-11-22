@@ -35,8 +35,7 @@
 #include <mach-o/dyld.h>
 #endif
 
-namespace t2
-{
+
 
 #if defined(TUNDRA_WIN32)
 static double s_PerfFrequency;
@@ -485,4 +484,4 @@ bool RenameFile(const char *oldf, const char *newf)
 #endif
 }
 
-} // namespace t2
+

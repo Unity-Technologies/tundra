@@ -4,8 +4,7 @@
 #include "Common.hpp"
 #include <cstring>
 
-namespace t2
-{
+
 
 struct MemAllocLinear;
 
@@ -206,6 +205,6 @@ void DigestToString(char (&buffer)[kDigestStringSize], const HashDigest &digest)
 // Quickie to generate a hash digest from a single string
 void HashSingleString(HashDigest *digest_out, const char *string);
 
-} // namespace t2
+
 
 #endif

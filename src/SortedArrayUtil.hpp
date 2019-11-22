@@ -6,8 +6,7 @@
 
 #include <algorithm>
 
-namespace t2
-{
+
 
 inline int CompareArrayKeys(const HashDigest *l, const HashDigest *r)
 {
@@ -96,6 +95,6 @@ const T *BinarySearch(const T *table, int count, const T &key)
     return nullptr;
 }
 
-} // namespace t2
+
 
 #endif

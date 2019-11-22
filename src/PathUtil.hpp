@@ -6,8 +6,7 @@
 
 #include <string.h>
 
-namespace t2
-{
+
 static const int kMaxPathLength = 512;
 static const int kMaxPathSegments = 64;
 
@@ -86,6 +85,6 @@ void PathConcat(PathBuffer *buffer, const PathBuffer *other);
 
 void PathFormat(char (&output)[kMaxPathLength], const PathBuffer *buffer);
 void PathFormatPartial(char (&output)[kMaxPathLength], const PathBuffer *buffer, int start_seg, int end_seg);
-} // namespace t2
+
 
 #endif

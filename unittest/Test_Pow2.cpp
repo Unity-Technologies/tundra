@@ -1,7 +1,7 @@
 #include "Common.hpp"
 #include "TestHarness.hpp"
 
-using namespace t2;
+
 
 TEST(Pow2, Basic)
 {

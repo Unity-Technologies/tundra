@@ -3,8 +3,7 @@
 
 #include "Common.hpp"
 
-namespace t2
-{
+
 
 struct MemoryMappedFile
 {
@@ -26,6 +25,6 @@ inline bool MmapFileValid(MemoryMappedFile *file)
     return file->m_Address != nullptr;
 }
 
-} // namespace t2
+
 
 #endif

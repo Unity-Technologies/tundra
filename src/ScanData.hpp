@@ -3,8 +3,7 @@
 
 #include "BinaryData.hpp"
 
-namespace t2
-{
+
 struct ScanCacheEntry
 {
     uint64_t m_FileTimestamp;
@@ -25,6 +24,6 @@ struct ScanData
     uint32_t m_MagicNumberEnd;
 };
 
-} // namespace t2
+
 
 #endif

@@ -9,8 +9,7 @@
 #define CHECK_THREAD_OWNERSHIP(alloc) \
     CHECK(0 == alloc->m_OwnerThread || ThreadCurrent() == alloc->m_OwnerThread)
 
-namespace t2
-{
+
 
 void LinearAllocInit(MemAllocLinear *self, MemAllocHeap *heap, size_t max_size, const char *debug_name)
 {
@@ -88,4 +87,4 @@ void LinearAllocReset(MemAllocLinear *allocator)
 #endif
 }
 
-} // namespace t2
+

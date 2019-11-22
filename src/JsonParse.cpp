@@ -11,8 +11,7 @@
 #define snprintf _snprintf
 #endif
 
-namespace t2
-{
+
 
 static JsonBooleanValue s_TrueValue;
 static JsonBooleanValue s_FalseValue;
@@ -695,4 +694,4 @@ const JsonValue *JsonParse(
     return root;
 }
 
-} // namespace t2
+

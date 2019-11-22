@@ -4,8 +4,7 @@
 #include "Common.hpp"
 #include "Hash.hpp"
 
-namespace t2
-{
+
 
 struct HashState;
 struct StatCache;
@@ -27,6 +26,6 @@ HashDigest CalculateGlobSignatureFor(const char *path, const char *filter, bool 
 
 bool ShouldUseSHA1SignatureFor(const char *filename, const uint32_t sha_extension_hashes[], int sha_extension_hash_count);
 
-} // namespace t2
+
 
 #endif

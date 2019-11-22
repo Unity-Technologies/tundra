@@ -9,8 +9,7 @@
 #include <windows.h>
 #endif
 
-namespace t2
-{
+
 struct Mutex
 {
 #if defined(TUNDRA_WIN32)
@@ -99,6 +98,6 @@ inline void MutexUnlock(Mutex *self)
 
 #endif
 
-} // namespace t2
+
 
 #endif

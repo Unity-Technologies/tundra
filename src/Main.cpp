@@ -43,54 +43,54 @@ static const struct OptionTemplate
     size_t m_Offset;
     const char *m_Help;
 } g_OptionTemplates[] = {
-    {'j', "threads", OptionType::kInt, offsetof(t2::DriverOptions, m_ThreadCount),
+    {'j', "threads", OptionType::kInt, offsetof(DriverOptions, m_ThreadCount),
      "Specify number of build threads"},
-    {'f', "force-dag-regen", OptionType::kBool, offsetof(t2::DriverOptions, m_ForceDagRegen),
+    {'f', "force-dag-regen", OptionType::kBool, offsetof(DriverOptions, m_ForceDagRegen),
      "Force regeneration of DAG data"},
-    {'G', "dag-regen-only", OptionType::kBool, offsetof(t2::DriverOptions, m_GenDagOnly),
+    {'G', "dag-regen-only", OptionType::kBool, offsetof(DriverOptions, m_GenDagOnly),
      "Quit after generating DAG (for debugging)"},
-    {'t', "show-targets", OptionType::kBool, offsetof(t2::DriverOptions, m_ShowTargets),
+    {'t', "show-targets", OptionType::kBool, offsetof(DriverOptions, m_ShowTargets),
      "Show available targets and exit"},
-    {'v', "verbose", OptionType::kBool, offsetof(t2::DriverOptions, m_Verbose),
+    {'v', "verbose", OptionType::kBool, offsetof(DriverOptions, m_Verbose),
      "Enable verbose build messages"},
-    {'q', "quiet", OptionType::kBool, offsetof(t2::DriverOptions, m_Quiet),
+    {'q', "quiet", OptionType::kBool, offsetof(DriverOptions, m_Quiet),
      "Be quiet"},
-    {'Q', "silence-if-possible", OptionType::kBool, offsetof(t2::DriverOptions, m_SilenceIfPossible),
+    {'Q', "silence-if-possible", OptionType::kBool, offsetof(DriverOptions, m_SilenceIfPossible),
      "If no actions taken, don't display a conclusion message"},
-    {'c', "clean", OptionType::kBool, offsetof(t2::DriverOptions, m_Clean),
+    {'c', "clean", OptionType::kBool, offsetof(DriverOptions, m_Clean),
      "Clean targets (remove output files)"},
-    {'l', "rebuild", OptionType::kBool, offsetof(t2::DriverOptions, m_Rebuild),
+    {'l', "rebuild", OptionType::kBool, offsetof(DriverOptions, m_Rebuild),
      "Rebuild targets (clean and build again)"},
-    {'w', "spammy-verbose", OptionType::kBool, offsetof(t2::DriverOptions, m_SpammyVerbose),
+    {'w', "spammy-verbose", OptionType::kBool, offsetof(DriverOptions, m_SpammyVerbose),
      "Enable spammy verbose build messages"},
-    {'D', "debug", OptionType::kBool, offsetof(t2::DriverOptions, m_DebugMessages),
+    {'D', "debug", OptionType::kBool, offsetof(DriverOptions, m_DebugMessages),
      "Enable debug messages"},
-    {'S', "debug-signing", OptionType::kBool, offsetof(t2::DriverOptions, m_DebugSigning),
+    {'S', "debug-signing", OptionType::kBool, offsetof(DriverOptions, m_DebugSigning),
      "Generate an extensive log of signature generation"},
-    {'r', "throttle", OptionType::kBool, offsetof(t2::DriverOptions, m_ThrottleOnHumanActivity),
+    {'r', "throttle", OptionType::kBool, offsetof(DriverOptions, m_ThrottleOnHumanActivity),
      "Throttles down amount of simultaneous jobs when mouse or keyboard activity has been detected."},
-    {'\0', "throttle-time", OptionType::kInt, offsetof(t2::DriverOptions, m_ThrottleInactivityPeriod),
+    {'\0', "throttle-time", OptionType::kInt, offsetof(DriverOptions, m_ThrottleInactivityPeriod),
      "Amount of inactive time after which we stop throttling. (if throttling behaviour is enabled)"},
-    {'\0', "throttle-threads-amount", OptionType::kInt, offsetof(t2::DriverOptions, m_ThrottledThreadsAmount),
+    {'\0', "throttle-threads-amount", OptionType::kInt, offsetof(DriverOptions, m_ThrottledThreadsAmount),
      "Amount of threads used in throttled mode"},
-    {'s', "stats", OptionType::kBool, offsetof(t2::DriverOptions, m_DisplayStats),
+    {'s', "stats", OptionType::kBool, offsetof(DriverOptions, m_DisplayStats),
      "Display stats"},
-    {'p', "profile", OptionType::kString, offsetof(t2::DriverOptions, m_ProfileOutput),
+    {'p', "profile", OptionType::kString, offsetof(DriverOptions, m_ProfileOutput),
      "Output build profile"},
-    {'C', "working-dir", OptionType::kString, offsetof(t2::DriverOptions, m_WorkingDir),
+    {'C', "working-dir", OptionType::kString, offsetof(DriverOptions, m_WorkingDir),
      "Set working directory before building"},
-    {'R', "dagfile", OptionType::kString, offsetof(t2::DriverOptions, m_DAGFileName),
+    {'R', "dagfile", OptionType::kString, offsetof(DriverOptions, m_DAGFileName),
      "filename of where tundra should store the mmapped dag file"},
-    {'I', "report-includes", OptionType::kString, offsetof(t2::DriverOptions, m_IncludesOutput),
+    {'I', "report-includes", OptionType::kString, offsetof(DriverOptions, m_IncludesOutput),
      "Output included files into a json file and exit"},
-    {'h', "help", OptionType::kBool, offsetof(t2::DriverOptions, m_ShowHelp),
+    {'h', "help", OptionType::kBool, offsetof(DriverOptions, m_ShowHelp),
      "Show help"},
-    {'k', "continue", OptionType::kBool, offsetof(t2::DriverOptions, m_ContinueOnError),
+    {'k', "continue", OptionType::kBool, offsetof(DriverOptions, m_ContinueOnError),
      "Continue building on error"},
 #if defined(TUNDRA_WIN32)
-    {'U', "unprotected", OptionType::kBool, offsetof(t2::DriverOptions, m_RunUnprotected), "Run unprotected (same process group - for debugging)"},
+    {'U', "unprotected", OptionType::kBool, offsetof(DriverOptions, m_RunUnprotected), "Run unprotected (same process group - for debugging)"},
 #endif
-    {'g', "ide-gen", OptionType::kBool, offsetof(t2::DriverOptions, m_IdeGen),
+    {'g', "ide-gen", OptionType::kBool, offsetof(DriverOptions, m_IdeGen),
      "Run IDE file generator and quit"}};
 
 static int AssignOptionValue(char *option_base, const OptionTemplate *templ, const char *value, bool is_short)
@@ -140,7 +140,7 @@ static int AssignOptionValue(char *option_base, const OptionTemplate *templ, con
     }
 }
 
-static bool InitOptions(t2::DriverOptions *options, int *argc, char ***argv)
+static bool InitOptions(DriverOptions *options, int *argc, char ***argv)
 {
     int opt = 1;
     char *option_base = (char *)options;
@@ -260,7 +260,7 @@ static void ShowHelp()
 
 int main(int argc, char *argv[])
 {
-    using namespace t2;
+
 
 #if TUNDRA_WIN32
     if (getenv("GIVE_DEBUGGER_CHANCE_TO_ATTACH") != nullptr)

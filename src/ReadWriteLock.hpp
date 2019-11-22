@@ -13,8 +13,7 @@
 #include <windows.h>
 #endif
 
-namespace t2
-{
+
 struct ReadWriteLock;
 
 void ReadWriteLockInit(ReadWriteLock *self);
@@ -122,6 +121,6 @@ inline void ReadWriteUnlockWrite(ReadWriteLock *self)
 
 #endif
 
-} // namespace t2
+
 
 #endif

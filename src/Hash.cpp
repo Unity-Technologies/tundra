@@ -4,8 +4,7 @@
 #include <cstring>
 #include <cstdio>
 
-namespace t2
-{
+
 
 void HashInitImpl(HashStateImpl *impl);
 void HashBlock(const uint8_t *data, HashStateImpl *state, void *debug_file);
@@ -170,4 +169,4 @@ void DigestToString(char (&buffer)[kDigestStringSize], const HashDigest &digest)
     buffer[kDigestStringSize - 1] = '\0';
 }
 
-} // namespace t2
+

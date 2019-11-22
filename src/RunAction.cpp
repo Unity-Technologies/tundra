@@ -27,8 +27,7 @@
 #include <algorithm>
 #include <stdio.h>
 
-namespace t2
-{
+
 
 struct SlowCallbackData
 {
@@ -278,4 +277,4 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, No
 
     return NodeBuildResult::kRanFailed;
 }
-} // namespace t2
+

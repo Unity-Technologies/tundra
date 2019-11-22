@@ -6,8 +6,7 @@
 #include "Atomic.hpp"
 #include "BuildQueue.hpp"
 
-namespace t2
-{
+
 static bool SharedResourceExecute(const SharedResourceData *sharedResource, const char *action, const char *formatString, MemAllocHeap *heap, int maxNodes)
 {
     const int fullAnnotationLength = strlen(sharedResource->m_Annotation) + 20;
@@ -63,4 +62,4 @@ void SharedResourceDestroy(BuildQueue *queue, MemAllocHeap *heap, uint32_t share
         SharedResourceExecute(sharedResource, sharedResource->m_DestroyAction, "Destroying %s", heap, queue->m_Config.m_MaxNodes);
     queue->m_SharedResourcesCreated[sharedResourceIndex] = 0;
 }
-} // namespace t2
+

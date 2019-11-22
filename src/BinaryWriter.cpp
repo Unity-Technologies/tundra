@@ -2,8 +2,7 @@
 
 #include <cstdio>
 
-namespace t2
-{
+
 
 struct BinarySegment
 {
@@ -181,4 +180,4 @@ BinarySegment *BinaryWriterAddSegment(BinaryWriter *self)
     return seg;
 }
 
-} // namespace t2
+

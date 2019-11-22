@@ -7,8 +7,7 @@
 
 #include <string.h>
 
-namespace t2
-{
+
 
 struct MemAllocHeap
 {
@@ -38,6 +37,6 @@ T *HeapAllocateArrayZeroed(MemAllocHeap *heap, size_t count)
     return result;
 }
 
-} // namespace t2
+
 
 #endif

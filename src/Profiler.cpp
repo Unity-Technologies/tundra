@@ -5,8 +5,7 @@
 
 #include <stdio.h>
 
-namespace t2
-{
+
 const size_t kProfilerThreadMaxEvents = 32 * 1024;                        // max this # of events per thread
 const size_t kProfilerThreadStringsSize = kProfilerThreadMaxEvents * 128; // that many bytes of name string storage per thread
 
@@ -211,4 +210,4 @@ void ProfilerEndImpl(int threadIndex)
     ProfilerEvent &evt = thread.m_Events[thread.m_EventCount - 1];
     evt.m_Duration = TimerGet() - evt.m_Time;
 }
-} // namespace t2
+

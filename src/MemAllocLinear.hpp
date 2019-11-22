@@ -9,8 +9,7 @@
 #include <valgrind/memcheck.h>
 #endif
 
-namespace t2
-{
+
 
 struct MemAllocHeap;
 
@@ -90,6 +89,6 @@ inline char *StrDup(MemAllocLinear *allocator, const char *str)
     return StrDupN(allocator, str, strlen(str));
 }
 
-} // namespace t2
+
 
 #endif

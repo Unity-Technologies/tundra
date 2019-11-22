@@ -13,8 +13,7 @@
 #include <windows.h>
 #endif
 
-namespace t2
-{
+
 
 static void Clear(MemoryMappedFile *file)
 {
@@ -156,4 +155,4 @@ void MmapFileUnmap(MemoryMappedFile *self)
 }
 #endif
 
-} // namespace t2
+

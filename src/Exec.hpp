@@ -4,8 +4,7 @@
 #include "stddef.h"
 #include <thread>
 
-namespace t2
-{
+
 struct NodeData;
 struct MemAllocHeap;
 struct BuildQueue;
@@ -50,6 +49,6 @@ ExecResult ExecuteProcess(
     void *callback_on_slow_userdata = nullptr,
     int time_until_first_callback = 1);
 
-} // namespace t2
+
 
 #endif

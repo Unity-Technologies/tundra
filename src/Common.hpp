@@ -30,7 +30,7 @@
     do                                                                               \
     {                                                                                \
         if (!(expr))                                                                 \
-            ::t2::CroakAbort("%s(%d): check failure %s", __FILE__, __LINE__, #expr); \
+            ::CroakAbort("%s(%d): check failure %s", __FILE__, __LINE__, #expr); \
     } while (0)
 #else
 #define CHECK(expr) \
@@ -41,8 +41,7 @@
 
 #define TD_ALIGN(v, alignment) (((v) + (alignment)-1) & ~((alignment)-1))
 
-namespace t2
-{
+
 
 void InitCommon(void);
 
@@ -210,6 +209,6 @@ struct FileAndHash
     uint32_t m_FilenameHash;
 };
 
-} // namespace t2
+
 
 #endif

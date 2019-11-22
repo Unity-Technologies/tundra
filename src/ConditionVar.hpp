@@ -10,8 +10,7 @@
 #include <windows.h>
 #endif
 
-namespace t2
-{
+
 struct Mutex;
 
 #if defined(TUNDRA_UNIX)
@@ -119,6 +118,6 @@ inline void CondBroadcast(ConditionVariable *var)
 #endif // ENABLED(TUNDRA_WIN32_VISTA_APIS)
 
 #endif // TUNDRA_WIN32
-} // namespace t2
+
 
 #endif

@@ -5,8 +5,7 @@
 #include "DagData.hpp"
 #include "Atomic.hpp"
 
-namespace t2
-{
+
 void InitOutputBuffer(OutputBufferData *data, MemAllocHeap *heap)
 {
     const int initial_buffer_size = 10 * 1024;
@@ -17,7 +16,7 @@ void InitOutputBuffer(OutputBufferData *data, MemAllocHeap *heap)
     data->heap = heap;
 }
 
-void DestroyOutputBuffer(t2::OutputBufferData *data)
+void DestroyOutputBuffer(OutputBufferData *data)
 {
     if (data->buffer == nullptr)
         return;
@@ -63,4 +62,4 @@ void EmitOutputBytesToDestination(ExecResult *execResult, const char *text, size
     data->cursor += count;
 }
 
-} // namespace t2
+

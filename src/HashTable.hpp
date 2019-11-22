@@ -6,8 +6,7 @@
 
 #include <algorithm>
 
-namespace t2
-{
+
 struct MemAllocHeap;
 
 enum HashTableFlags
@@ -343,6 +342,6 @@ void HashSetWalk(HashSet<kFlags> *self, Callback callback)
 
     CHECK(index == self->m_RecordCount);
 }
-} // namespace t2
+
 
 #endif

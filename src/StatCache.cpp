@@ -5,8 +5,7 @@
 
 #include <algorithm>
 
-namespace t2
-{
+
 
 void StatCacheInit(StatCache *self, MemAllocLinear *allocator, MemAllocHeap *heap)
 {
@@ -70,4 +69,4 @@ FileInfo StatCacheStat(StatCache *self, const char *path, uint32_t hash)
   return file_info;
 }
 
-} // namespace t2
+

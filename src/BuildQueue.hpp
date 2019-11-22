@@ -10,8 +10,7 @@
 #include "JsonWriter.hpp"
 #include "DagData.hpp"
 
-namespace t2
-{
+
 struct MemAllocHeap;
 struct NodeState;
 struct NodeData;
@@ -117,6 +116,6 @@ void BuildQueueDestroy(BuildQueue *queue);
 
 bool HasBuildStoppingFailures(const BuildQueue *queue);
 
-} // namespace t2
+
 
 #endif

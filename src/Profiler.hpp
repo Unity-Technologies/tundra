@@ -1,8 +1,7 @@
 #ifndef PROFILER_HPP
 #define PROFILER_HPP
 
-namespace t2
-{
+
 extern bool g_ProfilerEnabled;
 
 // Simple non-hierarchical profiler; that dumps output into Google Chrome Tracing
@@ -47,6 +46,6 @@ struct ProfilerScope
     }
 };
 
-} // namespace t2
+
 
 #endif

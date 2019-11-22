@@ -4,8 +4,7 @@
 #include "Common.hpp"
 #include <string.h>
 
-namespace t2
-{
+
 
 struct MemAllocLinear;
 
@@ -151,6 +150,6 @@ const JsonValue *JsonParse(
     MemAllocLinear *scratch,
     char (&error_message)[1024]);
 
-} // namespace t2
+
 
 #endif

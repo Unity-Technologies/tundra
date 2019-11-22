@@ -25,8 +25,7 @@
 #include <libgen.h>
 #include <errno.h>
 
-namespace t2
-{
+
 
 static void SetFdNonBlocking(int fd)
 {
@@ -276,5 +275,5 @@ ExecuteProcess(
     }
 }
 
-} // namespace t2
+
 #endif /* TUNDRA_UNIX */

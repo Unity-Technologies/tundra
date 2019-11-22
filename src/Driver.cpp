@@ -45,8 +45,7 @@
 #define strncasecmp _strnicmp
 #endif
 
-namespace t2
-{
+
 
 TundraStats g_Stats;
 
@@ -1410,4 +1409,4 @@ void DriverCleanOutputs(Driver *self)
     Log(kInfo, "Removed %d output files\n", count);
 }
 
-} // namespace t2
+

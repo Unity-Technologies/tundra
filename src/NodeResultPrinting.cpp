@@ -12,8 +12,7 @@
 #include <stdarg.h>
 #endif
 
-namespace t2
-{
+
 
 struct NodeResultPrintData
 {
@@ -508,4 +507,4 @@ int PrintNodeInProgress(const NodeData *node_data, uint64_t time_of_start, const
 
     return 1;
 }
-} // namespace t2
+

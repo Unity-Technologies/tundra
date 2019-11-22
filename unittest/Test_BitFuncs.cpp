@@ -1,7 +1,7 @@
 #include "TestHarness.hpp"
 #include "Common.hpp"
 
-using namespace t2;
+
 
 TEST(BitFuncs, PopLsb)
 {

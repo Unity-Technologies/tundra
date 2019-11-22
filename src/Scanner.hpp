@@ -5,8 +5,7 @@
 
 // High-level include scanner
 
-namespace t2
-{
+
 
 struct ScannerData;
 struct MemAllocLinear;
@@ -31,6 +30,6 @@ struct ScanOutput
 
 bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput *output);
 
-} // namespace t2
+
 
 #endif

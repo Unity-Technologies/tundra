@@ -22,8 +22,7 @@
 #include <stdarg.h>
 
 #include <stdio.h>
-namespace t2
-{
+
 static void CheckAndReportChangedInputFile(
     JsonWriter *msg,
     const char *filename,
@@ -612,4 +611,4 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
     // Everything is up to date
     return false;
 }
-} // namespace t2
+

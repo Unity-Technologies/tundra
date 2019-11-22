@@ -7,8 +7,7 @@
 #include <windows.h>
 #endif
 
-namespace t2
-{
+
 #if defined(TUNDRA_WIN32)
 inline uint32_t AtomicIncrement(uint32_t *value)
 {
@@ -57,6 +56,6 @@ inline uint64_t AtomicAdd(uint64_t *ptr, uint64_t value)
 }
 #endif // __GNUC__
 
-} // namespace t2
+
 
 #endif

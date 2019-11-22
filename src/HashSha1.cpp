@@ -1,7 +1,6 @@
 #include "Hash.hpp"
 
-namespace t2
-{
+
 
 #if ENABLED(USE_SHA1_HASH)
 
@@ -85,4 +84,4 @@ void HashFinalizeImpl(HashStateImpl *self, HashDigest *digest)
 
 #endif
 
-} // namespace t2
+

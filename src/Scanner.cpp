@@ -13,8 +13,7 @@
 
 #include <stdio.h>
 
-namespace t2
-{
+
 
 struct IncludeSet
 {
@@ -264,4 +263,4 @@ bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput 
     return true;
 }
 
-} // namespace t2
+

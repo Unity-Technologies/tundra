@@ -41,8 +41,7 @@
 #include <VersionHelpers.h>
 #include <thread>
 
-namespace t2
-{
+
 
 static char s_TemporaryDir[MAX_PATH];
 static DWORD s_TundraPid;
@@ -633,6 +632,6 @@ ExecResult ExecuteProcess(
     return result;
 }
 
-} // namespace t2
+
 
 #endif /* TUNDRA_WIN32 */

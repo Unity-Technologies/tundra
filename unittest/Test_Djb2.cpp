@@ -2,7 +2,7 @@
 #include "TestHarness.hpp"
 #include <cstring>
 
-using namespace t2;
+
 
 TEST(Djb2, Vanilla)
 {

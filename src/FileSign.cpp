@@ -6,8 +6,7 @@
 #include "Buffer.hpp"
 #include <stdio.h>
 
-namespace t2
-{
+
 
 static void ComputeFileSignatureSha1(HashState *state, StatCache *stat_cache, DigestCache *digest_cache, const char *filename, uint32_t fn_hash)
 {
@@ -95,7 +94,7 @@ void ComputeFileSignature(
         ComputeFileSignatureTimestamp(out, stat_cache, filename, fn_hash);
 }
 
-t2::HashDigest CalculateGlobSignatureFor(const char *path, const char *filter, bool recurse, t2::MemAllocHeap *heap, t2::MemAllocLinear *scratch)
+HashDigest CalculateGlobSignatureFor(const char *path, const char *filter, bool recurse, MemAllocHeap *heap, MemAllocLinear *scratch)
 {
     // Helper for directory iteration + memory allocation of strings.  We need to
     // buffer the filenames as we need them in sorted order to ensure the results
@@ -188,4 +187,4 @@ t2::HashDigest CalculateGlobSignatureFor(const char *path, const char *filter, b
     return digest;
 }
 
-} // namespace t2
+

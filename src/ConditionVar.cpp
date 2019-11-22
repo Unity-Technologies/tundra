@@ -6,7 +6,7 @@
 
 #include <windows.h>
 
-void t2::CondInit(t2::ConditionVariable *var)
+void CondInit(ConditionVariable *var)
 {
     var->waiters_count_ = 0;
     var->was_broadcast_ = 0;
@@ -22,14 +22,14 @@ void t2::CondInit(t2::ConditionVariable *var)
         CroakErrno("CreateEvent failed");
 }
 
-void t2::CondDestroy(t2::ConditionVariable *var)
+void CondDestroy(ConditionVariable *var)
 {
     DeleteCriticalSection(&var->waiters_count_lock_);
     CloseHandle(var->sema_);
     CloseHandle(var->waiters_done_);
 }
 
-void t2::CondWait(t2::ConditionVariable *var, t2::Mutex *mutex)
+void CondWait(ConditionVariable *var, Mutex *mutex)
 {
     HANDLE external_mutex = mutex->m_Impl;
 
@@ -73,7 +73,7 @@ void t2::CondWait(t2::ConditionVariable *var, t2::Mutex *mutex)
     }
 }
 
-void t2::CondSignal(t2::ConditionVariable *var)
+void CondSignal(ConditionVariable *var)
 {
     EnterCriticalSection(&var->waiters_count_lock_);
     int have_waiters = var->waiters_count_ > 0;
@@ -87,7 +87,7 @@ void t2::CondSignal(t2::ConditionVariable *var)
     }
 }
 
-void t2::CondBroadcast(t2::ConditionVariable *var)
+void CondBroadcast(ConditionVariable *var)
 {
     int have_waiters = 0;
 

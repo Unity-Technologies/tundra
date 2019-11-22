@@ -8,8 +8,7 @@
 #include "MemAllocLinear.hpp"
 #include "DagData.hpp"
 
-namespace t2
-{
+
 
 static IncludeData *
 ScanCppLine(const char *start, MemAllocLinear *allocator)
@@ -246,4 +245,4 @@ IncludeData *ScanIncludesGeneric(char *buffer, MemAllocLinear *allocator, const 
     return includes.m_Head;
 }
 
-} // namespace t2
+

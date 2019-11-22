@@ -20,8 +20,7 @@
 #define snprintf _snprintf
 #endif
 
-namespace t2
-{
+
 
 static void WriteStringPtr(BinarySegment *seg, BinarySegment *str_seg, const char *text)
 {
@@ -1150,4 +1149,4 @@ bool GenerateIdeIntegrationFiles(const char *build_file, int argc, const char **
     return result;
 }
 
-} // namespace t2
+

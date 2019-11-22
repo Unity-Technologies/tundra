@@ -4,8 +4,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-namespace t2
-{
+
 
 struct MemAllocLinear;
 struct JsonBlock;
@@ -37,6 +36,6 @@ void JsonWriteNewline(JsonWriter *writer);
 
 void JsonWriteToFile(JsonWriter *writer, FILE *fp);
 
-} // namespace t2
+
 
 #endif

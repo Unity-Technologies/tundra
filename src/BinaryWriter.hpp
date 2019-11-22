@@ -3,8 +3,7 @@
 
 #include "Buffer.hpp"
 
-namespace t2
-{
+
 
 struct MemAllocHeap;
 struct BinarySegment;
@@ -83,7 +82,5 @@ void BinaryWriterDestroy(BinaryWriter* w);
 BinarySegment* BinaryWriterAddSegment(BinaryWriter* w);
 
 bool BinaryWriterFlush(BinaryWriter* w, const char* out_fn);
-
-}
 
 #endif

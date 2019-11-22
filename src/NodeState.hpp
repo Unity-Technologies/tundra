@@ -4,8 +4,7 @@
 #include "Common.hpp"
 #include "Hash.hpp"
 
-namespace t2
-{
+
 
 namespace NodeBuildResult
 {
@@ -73,6 +72,6 @@ inline void NodeStateFlagInactive(NodeState *state)
     state->m_Flags &= ~NodeStateFlags::kActive;
 }
 
-} // namespace t2
+
 
 #endif

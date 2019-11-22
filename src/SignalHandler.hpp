@@ -3,8 +3,7 @@
 
 #include "Config.hpp"
 
-namespace t2
-{
+
 struct Mutex;
 struct ConditionVariable;
 
@@ -39,6 +38,6 @@ void SignalBlockThread(bool block);
 // handler thread for you.
 inline void SignalBlockThread(bool) {}
 #endif
-} // namespace t2
+
 
 #endif

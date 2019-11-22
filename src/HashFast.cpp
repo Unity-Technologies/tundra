@@ -8,8 +8,7 @@
 // The idea is to compute 4 parallel 32-bit xxhash values and stash them next to each other.
 // Because we're always hashing fixed sized blocks a lot of the inner loop complexity goes away.
 
-namespace t2
-{
+
 
 #if ENABLED(USE_FAST_HASH)
 static const uint32_t kPrime32_1 = 2654435761U;
@@ -124,4 +123,4 @@ void HashFinalizeImpl(HashStateImpl *state, HashDigest *digest)
 
 #endif
 
-} // namespace t2
+

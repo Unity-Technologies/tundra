@@ -3,7 +3,7 @@
 #if defined(TUNDRA_WIN32)
 #if DISABLED(TUNDRA_WIN32_VISTA_APIS)
 
-void t2::ReadWriteLockInit(t2::ReadWriteLock *self)
+void ReadWriteLockInit(ReadWriteLock *self)
 {
     self->m_ActiveReaders = 0;
     self->m_ActiveWriters = 0;
@@ -15,14 +15,14 @@ void t2::ReadWriteLockInit(t2::ReadWriteLock *self)
     CondInit(&self->m_Write);
 }
 
-void t2::ReadWriteLockDestroy(t2::ReadWriteLock *self)
+void ReadWriteLockDestroy(ReadWriteLock *self)
 {
     CondDestroy(&self->m_Write);
     CondDestroy(&self->m_Read);
     MutexDestroy(&self->m_Mutex);
 }
 
-void t2::ReadWriteLockRead(t2::ReadWriteLock *self)
+void ReadWriteLockRead(ReadWriteLock *self)
 {
     MutexLock(&self->m_Mutex);
 
@@ -43,7 +43,7 @@ void t2::ReadWriteLockRead(t2::ReadWriteLock *self)
     MutexUnlock(&self->m_Mutex);
 }
 
-void t2::ReadWriteUnlockRead(t2::ReadWriteLock *self)
+void ReadWriteUnlockRead(ReadWriteLock *self)
 {
     MutexLock(&self->m_Mutex);
 
@@ -57,7 +57,7 @@ void t2::ReadWriteUnlockRead(t2::ReadWriteLock *self)
     MutexUnlock(&self->m_Mutex);
 }
 
-void t2::ReadWriteLockWrite(t2::ReadWriteLock *self)
+void ReadWriteLockWrite(ReadWriteLock *self)
 {
     MutexLock(&self->m_Mutex);
 
@@ -78,7 +78,7 @@ void t2::ReadWriteLockWrite(t2::ReadWriteLock *self)
     MutexUnlock(&self->m_Mutex);
 }
 
-void t2::ReadWriteUnlockWrite(t2::ReadWriteLock *self)
+void ReadWriteUnlockWrite(ReadWriteLock *self)
 {
     MutexLock(&self->m_Mutex);
 

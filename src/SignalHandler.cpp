@@ -10,8 +10,7 @@
 #include <pthread.h>
 #endif
 
-namespace t2
-{
+
 
 #if defined(TUNDRA_WIN32)
 HANDLE s_SignalHandle;
@@ -183,4 +182,4 @@ void SignalBlockThread(bool block)
 }
 #endif
 
-} // namespace t2
+

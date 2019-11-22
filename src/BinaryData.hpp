@@ -4,8 +4,7 @@
 #include "Common.hpp"
 #include "Hash.hpp"
 
-namespace t2
-{
+
 
 template <typename EnumType, typename StorageType>
 class FrozenEnum
@@ -89,6 +88,6 @@ struct FrozenFileAndHash
     uint32_t m_FilenameHash;
 };
 
-} // namespace t2
+
 
 #endif

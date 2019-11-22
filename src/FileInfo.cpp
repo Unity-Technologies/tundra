@@ -30,8 +30,7 @@ extern "C"
 #include <shlwapi.h>
 #endif
 
-namespace t2
-{
+
 
 struct StatCache;
 
@@ -264,4 +263,4 @@ void ListDirectory(
 #endif
 }
 
-} // namespace t2
+

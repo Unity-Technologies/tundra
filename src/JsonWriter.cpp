@@ -2,8 +2,7 @@
 #include "MemAllocLinear.hpp"
 #include <stdio.h>
 
-namespace t2
-{
+
 
 struct JsonBlock
 {
@@ -174,4 +173,4 @@ void JsonWriteToFile(JsonWriter *writer, FILE *fp)
     }
 }
 
-} // namespace t2
+

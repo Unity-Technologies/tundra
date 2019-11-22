@@ -3,8 +3,7 @@
 #endif
 #include "Common.hpp"
 
-namespace t2
-{
+
 void HumanActivityDetectionInit()
 {
 }
@@ -58,4 +57,4 @@ double TimeSinceLastDetectedHumanActivityOnMachine()
 }
 #endif
 
-} // namespace t2
+

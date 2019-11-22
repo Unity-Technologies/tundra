@@ -1,8 +1,7 @@
 #include "StatCache.hpp"
 #include "PathUtil.hpp"
 
-namespace t2
-{
+
 bool MakeDirectoriesRecursive(StatCache *stat_cache, const PathBuffer &dir)
 {
     PathBuffer parent_dir = dir;
@@ -41,4 +40,4 @@ bool MakeDirectoriesForFile(StatCache *stat_cache, const PathBuffer &buffer)
     PathStripLast(&path);
     return MakeDirectoriesRecursive(stat_cache, path);
 }
-} // namespace t2
+

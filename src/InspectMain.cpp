@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <time.h>
 
-using namespace t2;
+
 
 static void DumpDag(const DagData *data)
 {

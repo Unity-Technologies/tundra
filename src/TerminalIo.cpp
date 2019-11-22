@@ -69,8 +69,7 @@
     } while (0)
 #endif
 
-namespace t2
-{
+
 
 /* Static limits for the line buffering. */
 enum
@@ -373,5 +372,5 @@ void TerminalIoPrintf(int job_id, int sort_key, const char *format, ...)
     va_end(a);
 }
 
-} // namespace t2
+
 #endif

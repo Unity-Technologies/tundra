@@ -3,8 +3,7 @@
 #include <string.h>
 #include <ctype.h>
 
-namespace t2
-{
+
 
 #if 0
 static const char ascii_letters[] =
@@ -343,4 +342,4 @@ void PathFormatPartial(char (&output)[kMaxPathLength], const PathBuffer *buffer,
     *cursor = 0;
 }
 
-} // namespace t2
+

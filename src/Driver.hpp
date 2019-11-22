@@ -11,8 +11,7 @@
 #include "StatCache.hpp"
 #include "DigestCache.hpp"
 
-namespace t2
-{
+
 
 struct DagData;
 struct ScanData;
@@ -113,6 +112,6 @@ bool DriverSaveDigestCache(Driver *self);
 
 void DriverInitializeTundraFilePaths(DriverOptions *driverOptions);
 
-} // namespace t2
+
 
 #endif

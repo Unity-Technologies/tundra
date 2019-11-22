@@ -3,8 +3,7 @@
 
 #include "Common.hpp"
 
-namespace t2
-{
+
 
 struct FileInfo
 {
@@ -40,6 +39,6 @@ void ListDirectory(
     void *user_data,
     void (*callback)(void *user_data, const FileInfo &info, const char *path));
 
-} // namespace t2
+
 
 #endif

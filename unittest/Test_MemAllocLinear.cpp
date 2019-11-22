@@ -2,7 +2,7 @@
 #include "MemAllocHeap.hpp"
 #include "TestHarness.hpp"
 
-using namespace t2;
+
 
 class MemAllocLinearTest : public ::testing::Test
 {

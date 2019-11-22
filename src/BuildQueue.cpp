@@ -12,8 +12,7 @@
 
 #include <stdio.h>
 
-namespace t2
-{
+
 namespace BuildResult
 {
 const char *Names[Enum::kCount] =
@@ -291,4 +290,4 @@ BuildResult::Enum BuildQueueBuildNodeRange(BuildQueue *queue, int start_index, i
         return BuildResult::kInterrupted;
     return queue->m_FinalBuildResult;
 }
-} // namespace t2
+

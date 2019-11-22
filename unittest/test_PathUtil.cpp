@@ -1,7 +1,7 @@
 #include "PathUtil.hpp"
 #include "TestHarness.hpp"
 
-using namespace t2;
+
 
 TEST(PathUtil, Init)
 {

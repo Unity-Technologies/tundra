@@ -9,8 +9,7 @@
 #include <process.h>
 #endif
 
-namespace t2
-{
+
 
 ThreadId ThreadCurrent()
 {
@@ -53,4 +52,4 @@ void ThreadJoin(ThreadId thread_id)
 #endif
 }
 
-} // namespace t2
+

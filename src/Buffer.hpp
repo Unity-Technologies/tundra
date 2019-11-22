@@ -7,8 +7,7 @@
 #include <cstring>
 #include <type_traits>
 
-namespace t2
-{
+
 template <typename T>
 struct Buffer
 {
@@ -128,6 +127,6 @@ T BufferPopOne(Buffer<T> *buffer)
     buffer->m_Size = size - 1;
     return buffer->m_Storage[size - 1];
 }
-} // namespace t2
+
 
 #endif

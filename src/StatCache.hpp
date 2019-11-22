@@ -8,8 +8,7 @@
 
 #include <string.h>
 
-namespace t2
-{
+
 
 struct MemAllocHeap;
 struct MemAllocLinear;
@@ -35,6 +34,6 @@ inline FileInfo StatCacheStat(StatCache *stat_cache, const char *path)
     return StatCacheStat(stat_cache, path, Djb2HashPath(path));
 }
 
-} // namespace t2
+
 
 #endif

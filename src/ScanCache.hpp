@@ -5,8 +5,7 @@
 #include "Hash.hpp"
 #include "ReadWriteLock.hpp"
 
-namespace t2
-{
+
 struct ScanData;
 struct MemAllocHeap;
 struct MemAllocLinear;
@@ -54,6 +53,6 @@ bool ScanCacheDirty(ScanCache *self);
 
 bool ScanCacheSave(ScanCache *self, const char *fn, MemAllocHeap *heap);
 
-} // namespace t2
+
 
 #endif

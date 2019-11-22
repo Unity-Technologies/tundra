@@ -4,8 +4,7 @@
 
 #include "OutputValidation.hpp"
 
-namespace t2
-{
+
 
 static bool HasAnyNonNewLine(const char *buffer)
 {
@@ -47,4 +46,4 @@ ValidationResult ValidateExecResultAgainstAllowedOutput(ExecResult *result, cons
     return allowOutput ? ValidationResult::Pass : ValidationResult::UnexpectedConsoleOutputFail;
 }
 
-} // namespace t2
+

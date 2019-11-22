@@ -1,8 +1,7 @@
 #include "MemAllocHeap.hpp"
 #include <stdlib.h>
 
-namespace t2
-{
+
 
 void HeapInit(MemAllocHeap *heap)
 {
@@ -35,4 +34,4 @@ void *HeapReallocate(MemAllocHeap *heap, void *ptr, size_t size)
     return new_ptr;
 }
 
-} // namespace t2
+

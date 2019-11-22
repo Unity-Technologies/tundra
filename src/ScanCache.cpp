@@ -14,8 +14,7 @@
 #include <algorithm>
 #include <time.h>
 
-namespace t2
-{
+
 
 struct ScanCache::Record
 {
@@ -514,4 +513,4 @@ bool ScanCacheSave(ScanCache *self, const char *fn, MemAllocHeap *heap)
     return result;
 }
 
-} // namespace t2
+
