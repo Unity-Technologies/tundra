@@ -723,7 +723,7 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
             if (const HashDigest *old_guid = BinarySearch(state_guids, state_guid_count, *src_guid))
             {
                 int state_index = int(old_guid - state_guids);
-                out_nodes[i].m_MmapState = frozen_states + state_index;
+                out_nodes[i].m_BuiltNode = frozen_states + state_index;
             }
         }
     }
@@ -1177,7 +1177,7 @@ bool DriverSaveBuildState(Driver *self)
         else
         {
             bool nodeWasBuiltSuccesfully = elem->m_BuildResult == NodeBuildResult::kRanSuccesfully || elem->m_BuildResult == NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun;
-            save_node_state(nodeWasBuiltSuccesfully, &elem->m_InputSignature, src_elem, elem->m_MmapState, guid);
+            save_node_state(nodeWasBuiltSuccesfully, &elem->m_InputSignature, src_elem, elem->m_BuiltNode, guid);
             ++entry_count;
             ++g_Stats.m_StateSaveNew;
         }

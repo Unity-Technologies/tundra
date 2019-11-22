@@ -37,7 +37,7 @@ struct RuntimeNode
     const char *m_DebugAnnotation;
 #endif
     const Frozen::DagNode *m_DagNode;
-    const Frozen::BuiltNode *m_MmapState;
+    const Frozen::BuiltNode *m_BuiltNode;
 
     NodeBuildResult::Enum m_BuildResult;
     bool m_Finished;

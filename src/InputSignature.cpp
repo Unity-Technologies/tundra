@@ -450,7 +450,7 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
     }
 
     // Figure out if we need to rebuild this node.
-    const Frozen::BuiltNode *prev_nodestatedata = node->m_MmapState;
+    const Frozen::BuiltNode *prev_nodestatedata = node->m_BuiltNode;
 
     if (!prev_nodestatedata)
     {
