@@ -12,7 +12,7 @@
 #include "ScanData.hpp"
 #include "Scanner.hpp"
 #include "SortedArrayUtil.hpp"
-#include "StateData.hpp"
+#include "AllBuiltNodes.hpp"
 #include "Stats.hpp"
 #include "HashTable.hpp"
 #include "Hash.hpp"
@@ -333,7 +333,7 @@ bool DriverInitData(Driver *self)
 
     DigestCacheInit(&self->m_DigestCache, MB(128), self->m_DagData->m_DigestCacheFileName);
 
-    LoadFrozenData<Frozen::StateData>(self->m_DagData->m_StateFileName, &self->m_StateFile, &self->m_StateData);
+    LoadFrozenData<Frozen::AllBuiltNodes>(self->m_DagData->m_StateFileName, &self->m_StateFile, &self->m_StateData);
 
     LoadFrozenData<Frozen::ScanData>(self->m_DagData->m_ScanCacheFileName, &self->m_ScanFile, &self->m_ScanData);
 
@@ -710,7 +710,7 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
     }
 
     // Find frozen node state from previous build, if present.
-    if (const Frozen::StateData *state_data = self->m_StateData)
+    if (const Frozen::AllBuiltNodes *state_data = self->m_StateData)
     {
         const Frozen::BuiltNode *frozen_states = state_data->m_NodeStates;
         const HashDigest *state_guids = state_data->m_NodeGuids;
@@ -1026,7 +1026,7 @@ bool DriverSaveBuildState(Driver *self)
     const Frozen::BuiltNode *old_state = nullptr;
     uint32_t old_count = 0;
 
-    if (const Frozen::StateData *state_data = self->m_StateData)
+    if (const Frozen::AllBuiltNodes *state_data = self->m_StateData)
     {
         old_guids = state_data->m_NodeGuids;
         old_state = state_data->m_NodeStates;
@@ -1217,11 +1217,11 @@ bool DriverSaveBuildState(Driver *self)
         old_count, save_old, key_old);
 
     // Complete main data structure.
-    BinarySegmentWriteUint32(main_seg, Frozen::StateData::MagicNumber);
+    BinarySegmentWriteUint32(main_seg, Frozen::AllBuiltNodes::MagicNumber);
     BinarySegmentWriteInt32(main_seg, entry_count);
     BinarySegmentWritePointer(main_seg, guid_ptr);
     BinarySegmentWritePointer(main_seg, state_ptr);
-    BinarySegmentWriteUint32(main_seg, Frozen::StateData::MagicNumber);
+    BinarySegmentWriteUint32(main_seg, Frozen::AllBuiltNodes::MagicNumber);
 
     // Unmap old state data.
     MmapFileUnmap(&self->m_StateFile);
@@ -1269,7 +1269,7 @@ void DriverRemoveStaleOutputs(Driver *self)
     ProfilerScope prof_scope("Tundra RemoveStaleOutputs", 0);
 
     const Frozen::Dag *dag = self->m_DagData;
-    const Frozen::StateData *state = self->m_StateData;
+    const Frozen::AllBuiltNodes *state = self->m_StateData;
     MemAllocLinear *scratch = &self->m_Allocator;
 
     MemAllocLinearScope scratch_scope(scratch);

@@ -1,6 +1,6 @@
 #include "Common.hpp"
 #include "DagData.hpp"
-#include "StateData.hpp"
+#include "AllBuiltNodes.hpp"
 #include "ScanData.hpp"
 #include "DigestCache.hpp"
 #include "MemoryMappedFile.hpp"
@@ -146,7 +146,7 @@ static void DumpDag(const DagData *data)
     printf("Magic number at end: 0x%08x\n", data->m_MagicNumberEnd);
 }
 
-static void DumpState(const StateData *data)
+static void DumpState(const AllBuiltNodes *data)
 {
     int node_count = data->m_NodeCount;
     printf("magic number: 0x%08x\n", data->m_MagicNumber);
@@ -246,8 +246,8 @@ int main(int argc, char *argv[])
         }
         else if (0 == strcmp(suffix, ".state"))
         {
-            const StateData *data = (const StateData *)f.m_Address;
-            if (data->m_MagicNumber == StateData::MagicNumber)
+            const AllBuiltNodes *data = (const AllBuiltNodes *)f.m_Address;
+            if (data->m_MagicNumber == AllBuiltNodes::MagicNumber)
             {
                 DumpState(data);
             }

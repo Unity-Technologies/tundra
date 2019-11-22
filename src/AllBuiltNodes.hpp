@@ -28,7 +28,7 @@ struct BuiltNode
     FrozenArray<uint32_t> m_DagsWeHaveSeenThisNodeInPreviously;
 };
 
-struct StateData
+struct AllBuiltNodes
 {
     static const uint32_t MagicNumber = 0x1489C105 ^ kTundraHashMagic;
 
