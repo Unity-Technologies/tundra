@@ -820,7 +820,7 @@ static bool CompileDag(const JsonObjectValue *root, BinaryWriter *writer, MemAll
     }
 
     // Write magic number
-    BinarySegmentWriteUint32(main_seg, Frozen::DagData::MagicNumber);
+    BinarySegmentWriteUint32(main_seg, Frozen::Dag::MagicNumber);
 
     BinarySegmentWriteUint32(main_seg, Djb2Hash(identifier));
 
@@ -935,7 +935,7 @@ static bool CompileDag(const JsonObjectValue *root, BinaryWriter *writer, MemAll
     HashTableDestroy(&shared_strings);
 
     //write magic number again at the end to pretect against writing too much / too little data and not noticing.
-    BinarySegmentWriteUint32(main_seg, Frozen::DagData::MagicNumber);
+    BinarySegmentWriteUint32(main_seg, Frozen::Dag::MagicNumber);
     return true;
 }
 

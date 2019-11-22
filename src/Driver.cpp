@@ -149,7 +149,7 @@ error:
 
 void DriverShowTargets(Driver *self)
 {
-    const Frozen::DagData *dag = self->m_DagData;
+    const Frozen::Dag *dag = self->m_DagData;
 
     printf("\nNamed nodes and aliases:\n");
     printf("----------------------------------------------------------------\n");
@@ -197,7 +197,7 @@ bool DriverReportIncludes(Driver *self)
 {
     MemAllocLinearScope allocScope(&self->m_Allocator);
 
-    const Frozen::DagData *dag = self->m_DagData;
+    const Frozen::Dag *dag = self->m_DagData;
     if (dag == nullptr)
     {
         Log(kError, "No build DAG data");
@@ -352,7 +352,7 @@ static bool DriverPrepareDag(Driver *self, const char *dag_fn)
     if (self->m_Options.m_ForceDagRegen)
         snprintf(out_of_date_reason, out_of_date_reason_length, "Build frontend of %s ran (ForceDagRegen option used)", dag_fn);
 
-    bool loadFrozenDataResult = LoadFrozenData<Frozen::DagData>(dag_fn, &self->m_DagFile, &self->m_DagData);
+    bool loadFrozenDataResult = LoadFrozenData<Frozen::Dag>(dag_fn, &self->m_DagFile, &self->m_DagData);
 
     if (!loadFrozenDataResult)
         snprintf(out_of_date_reason, out_of_date_reason_length, "Build frontend of %s ran (no suitable previous build dag file)", dag_fn);
@@ -403,7 +403,7 @@ static bool DriverPrepareDag(Driver *self, const char *dag_fn)
     PrintNonNodeActionResult(TimerDiffSeconds(time_exec_started, TimerGet()), 1, MessageStatusLevel::Success, out_of_date_reason);
 
     // The DAG had better map in now, or we can give up.
-    if (!LoadFrozenData<Frozen::DagData>(dag_fn, &self->m_DagFile, &self->m_DagData))
+    if (!LoadFrozenData<Frozen::Dag>(dag_fn, &self->m_DagFile, &self->m_DagData))
     {
         Log(kError, "panic: couldn't load in freshly generated DAG");
         return false;
@@ -422,7 +422,7 @@ static bool DriverPrepareDag(Driver *self, const char *dag_fn)
 
 static bool DriverCheckDagSignatures(Driver *self, char *out_of_date_reason, int out_of_date_reason_maxlength)
 {
-    const Frozen::DagData *dag_data = self->m_DagData;
+    const Frozen::Dag *dag_data = self->m_DagData;
 
 #if ENABLED(CHECKED_BUILD)
     // Paranoia - make sure the data is sorted.
@@ -514,7 +514,7 @@ static int LevenshteinDistanceNoCase(const char *s, const char *t)
 
 // Match their source files and output files against the names specified.
 static void FindNodesByName(
-    const Frozen::DagData *dag,
+    const Frozen::Dag *dag,
     Buffer<int32_t> *out_nodes,
     MemAllocHeap *heap,
     const char **names,
@@ -629,7 +629,7 @@ static void FindNodesByName(
     }
 }
 
-static void DriverSelectNodes(const Frozen::DagData *dag, const char **targets, int target_count, Buffer<int32_t> *out_nodes, MemAllocHeap *heap)
+static void DriverSelectNodes(const Frozen::Dag *dag, const char **targets, int target_count, Buffer<int32_t> *out_nodes, MemAllocHeap *heap)
 {
     if (target_count > 0)
     {
@@ -653,7 +653,7 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
 {
     ProfilerScope prof_scope("Tundra PrepareNodes", 0);
 
-    const Frozen::DagData *dag = self->m_DagData;
+    const Frozen::Dag *dag = self->m_DagData;
     const Frozen::Node *src_nodes = dag->m_NodeData;
     const HashDigest *src_guids = dag->m_NodeGuids;
     MemAllocHeap *heap = &self->m_Heap;
@@ -811,7 +811,7 @@ bool DriverAllocNodes(Driver *self);
 
 BuildResult::Enum DriverBuild(Driver *self)
 {
-    const Frozen::DagData *dag = self->m_DagData;
+    const Frozen::Dag *dag = self->m_DagData;
 
     // Initialize build queue
     Mutex debug_signing_mutex;
@@ -1268,7 +1268,7 @@ void DriverRemoveStaleOutputs(Driver *self)
     TimingScope timing_scope(nullptr, &g_Stats.m_StaleCheckTimeCycles);
     ProfilerScope prof_scope("Tundra RemoveStaleOutputs", 0);
 
-    const Frozen::DagData *dag = self->m_DagData;
+    const Frozen::Dag *dag = self->m_DagData;
     const Frozen::StateData *state = self->m_StateData;
     MemAllocLinear *scratch = &self->m_Allocator;
 

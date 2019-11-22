@@ -12,7 +12,7 @@
 
 
 namespace Frozen {
-    struct DagData;
+    struct Dag;
     struct ScanData;
     struct StateData;
 }
@@ -65,7 +65,7 @@ struct Driver
     MemoryMappedFile m_ScanFile;
 
     // Stores pointers to mmaped data.
-    const Frozen::DagData *m_DagData;
+    const Frozen::Dag *m_DagData;
     const Frozen::StateData *m_StateData;
     const Frozen::ScanData *m_ScanData;
 

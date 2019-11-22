@@ -125,7 +125,7 @@ struct SharedResourceData
     FrozenArray<EnvVarData> m_EnvVars;
 };
 
-struct DagData
+struct Dag
 {
     static const uint32_t MagicNumber = 0x2B29024f ^ kTundraHashMagic;
 
