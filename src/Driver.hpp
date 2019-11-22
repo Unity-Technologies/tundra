@@ -71,11 +71,11 @@ struct Driver
 
     DriverOptions m_Options;
 
-    // Remapping table from dag data node index => node state
-    Buffer<int32_t> m_NodeRemap;
+    // Remapping table from dag data node index => runtime node index
+    Buffer<int32_t> m_DagNodeIndexToRuntimeNodeIndex_Table;
 
     // Space for dynamic DAG node state
-    Buffer<RuntimeNode> m_Nodes;
+    Buffer<RuntimeNode> m_RuntimeNodes;
 
     MemAllocLinear m_ScanCacheAllocator;
     ScanCache m_ScanCache;

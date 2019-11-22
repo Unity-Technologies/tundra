@@ -697,7 +697,7 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
     node_visited_bits = nullptr;
 
     // Allocate space for nodes
-    RuntimeNode *out_nodes = BufferAllocZero(&self->m_Nodes, &self->m_Heap, node_count);
+    RuntimeNode *out_nodes = BufferAllocZero(&self->m_RuntimeNodes, &self->m_Heap, node_count);
 
     // Initialize node state
     for (int i = 0; i < node_count; ++i)
@@ -730,9 +730,9 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
 
     // initialize a remapping table from global (dag) index to local (state)
     // index. This is so we can map any DAG node reference onto any local state.
-    int32_t *node_remap = BufferAllocFill(&self->m_NodeRemap, heap, dag->m_NodeCount, -1);
+    int32_t *node_remap = BufferAllocFill(&self->m_DagNodeIndexToRuntimeNodeIndex_Table, heap, dag->m_NodeCount, -1);
 
-    CHECK(node_remap == self->m_NodeRemap.m_Storage);
+    CHECK(node_remap == self->m_DagNodeIndexToRuntimeNodeIndex_Table.m_Storage);
 
     for (int local_index = 0; local_index < node_count; ++local_index)
     {
@@ -769,8 +769,8 @@ bool DriverInit(Driver *self, const DriverOptions *options)
     self->m_StateData = nullptr;
     self->m_ScanData = nullptr;
 
-    BufferInit(&self->m_NodeRemap);
-    BufferInit(&self->m_Nodes);
+    BufferInit(&self->m_DagNodeIndexToRuntimeNodeIndex_Table);
+    BufferInit(&self->m_RuntimeNodes);
 
     self->m_Options = *options;
 
@@ -793,8 +793,8 @@ void DriverDestroy(Driver *self)
 
     ScanCacheDestroy(&self->m_ScanCache);
 
-    BufferDestroy(&self->m_Nodes, &self->m_Heap);
-    BufferDestroy(&self->m_NodeRemap, &self->m_Heap);
+    BufferDestroy(&self->m_RuntimeNodes, &self->m_Heap);
+    BufferDestroy(&self->m_DagNodeIndexToRuntimeNodeIndex_Table, &self->m_Heap);
 
     MmapFileDestroy(&self->m_ScanFile);
     MmapFileDestroy(&self->m_StateFile);
@@ -821,9 +821,9 @@ BuildResult::Enum DriverBuild(Driver *self)
     queue_config.m_Heap = &self->m_Heap;
     queue_config.m_ThreadCount = (int)self->m_Options.m_ThreadCount;
     queue_config.m_DagNodes = self->m_DagData->m_DagNodes;
-    queue_config.m_RuntimeNodes = self->m_Nodes.m_Storage;
-    queue_config.m_MaxNodes = (int)self->m_Nodes.m_Size;
-    queue_config.m_NodeRemappingTable = self->m_NodeRemap.m_Storage;
+    queue_config.m_RuntimeNodes = self->m_RuntimeNodes.m_Storage;
+    queue_config.m_MaxNodes = (int)self->m_RuntimeNodes.m_Size;
+    queue_config.m_DagNodeIndexToRuntimeNodeIndex_Table = self->m_DagNodeIndexToRuntimeNodeIndex_Table.m_Storage;
     queue_config.m_ScanCache = &self->m_ScanCache;
     queue_config.m_StatCache = &self->m_StatCache;
     queue_config.m_DigestCache = &self->m_DigestCache;
@@ -864,12 +864,12 @@ BuildResult::Enum DriverBuild(Driver *self)
     {
         ProfilerScope prof_scope("Tundra DebugCheckRemap", 0);
         // Paranoia - double check node remapping table
-        for (size_t i = 0, count = self->m_Nodes.m_Size; i < count; ++i)
+        for (size_t i = 0, count = self->m_RuntimeNodes.m_Size; i < count; ++i)
         {
-            const RuntimeNode *state = self->m_Nodes.m_Storage + i;
+            const RuntimeNode *state = self->m_RuntimeNodes.m_Storage + i;
             const Frozen::DagNode *src = state->m_DagNode;
             const int src_index = int(src - self->m_DagData->m_DagNodes);
-            int remapped_index = self->m_NodeRemap[src_index];
+            int remapped_index = self->m_DagNodeIndexToRuntimeNodeIndex_Table[src_index];
             CHECK(size_t(remapped_index) == i);
         }
     }
@@ -880,7 +880,7 @@ BuildResult::Enum DriverBuild(Driver *self)
 
     BuildResult::Enum build_result = BuildResult::kOk;
 
-    build_result = BuildQueueBuildNodeRange(&build_queue, 0, self->m_Nodes.m_Size);
+    build_result = BuildQueueBuildNodeRange(&build_queue, 0, self->m_RuntimeNodes.m_Size);
 
     if (self->m_Options.m_DebugSigning)
     {
@@ -1014,8 +1014,8 @@ bool DriverSaveBuildState(Driver *self)
     uint32_t src_count = self->m_DagData->m_NodeCount;
     const HashDigest *src_guids = self->m_DagData->m_NodeGuids;
     const Frozen::DagNode *src_data = self->m_DagData->m_DagNodes;
-    RuntimeNode *new_state = self->m_Nodes.m_Storage;
-    const size_t new_state_count = self->m_Nodes.m_Size;
+    RuntimeNode *new_state = self->m_RuntimeNodes.m_Storage;
+    const size_t new_state_count = self->m_RuntimeNodes.m_Size;
 
     std::sort(new_state, new_state + new_state_count, [=](const RuntimeNode &l, const RuntimeNode &r) {
         // We know guids are sorted, so all we need to do is compare pointers into that table.
@@ -1387,7 +1387,7 @@ void DriverRemoveStaleOutputs(Driver *self)
     {
         char buffer[2000];
         snprintf(buffer, sizeof(buffer), "Delete %d artifact files that are no longer in use. (like %s)", nuke_count, paths[0]);
-        PrintNonNodeActionResult(TimerDiffSeconds(time_exec_started, TimerGet()), (int)self->m_Nodes.m_Size, MessageStatusLevel::Success, buffer);
+        PrintNonNodeActionResult(TimerDiffSeconds(time_exec_started, TimerGet()), (int)self->m_RuntimeNodes.m_Size, MessageStatusLevel::Success, buffer);
     }
 
     HashSetDestroy(&nuke_table);
@@ -1398,7 +1398,7 @@ void DriverCleanOutputs(Driver *self)
 {
     ProfilerScope prof_scope("Tundra Clean", 0);
     int count = 0;
-    for (RuntimeNode &state : self->m_Nodes)
+    for (RuntimeNode &state : self->m_RuntimeNodes)
     {
         for (const FrozenFileAndHash &fh : state.m_DagNode->m_OutputFiles)
         {

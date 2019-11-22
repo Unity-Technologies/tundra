@@ -40,7 +40,7 @@ struct BuildQueueConfig
     const Frozen::DagNode *m_DagNodes;
     RuntimeNode *m_RuntimeNodes;
     int m_MaxNodes;
-    const int32_t *m_NodeRemappingTable;
+    const int32_t *m_DagNodeIndexToRuntimeNodeIndex_Table;
     ScanCache *m_ScanCache;
     StatCache *m_StatCache;
     DigestCache *m_DigestCache;

@@ -38,9 +38,9 @@ static int AvailableNodeCount(BuildQueue *queue)
     return (write_index - read_index) & queue_mask;
 }
 
-static RuntimeNode *GetStateForNode(BuildQueue *queue, int32_t src_index)
+static RuntimeNode *GetRuntimeNodeForDagNodeIndex(BuildQueue *queue, int32_t src_index)
 {
-    int32_t state_index = queue->m_Config.m_NodeRemappingTable[src_index];
+    int32_t state_index = queue->m_Config.m_DagNodeIndexToRuntimeNodeIndex_Table[src_index];
 
     if (state_index == -1)
         return nullptr;
@@ -88,7 +88,7 @@ static bool AllDependenciesAreFinished(BuildQueue *queue, RuntimeNode *state)
 {
     for (int32_t dep_index : state->m_DagNode->m_Dependencies)
     {
-        RuntimeNode *state = GetStateForNode(queue, dep_index);
+        RuntimeNode *state = GetRuntimeNodeForDagNodeIndex(queue, dep_index);
         if (!state->m_Finished)
             return false;
     }
@@ -99,7 +99,7 @@ static bool AllDependenciesAreSuccesful(BuildQueue *queue, RuntimeNode *state)
 {
     for (int32_t dep_index : state->m_DagNode->m_Dependencies)
     {
-        RuntimeNode *state = GetStateForNode(queue, dep_index);
+        RuntimeNode *state = GetRuntimeNodeForDagNodeIndex(queue, dep_index);
         CHECK(state->m_Finished);
 
         if (state->m_BuildResult != NodeBuildResult::kRanSuccesfully && state->m_BuildResult != NodeBuildResult::kUpToDate)
@@ -114,7 +114,7 @@ static void EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(BuildQueue *queue, R
 
     for (int32_t link : node->m_DagNode->m_BackLinks)
     {
-        if (RuntimeNode *waiter = GetStateForNode(queue, link))
+        if (RuntimeNode *waiter = GetRuntimeNodeForDagNodeIndex(queue, link))
         {
             // Did someone else get to the node first?
             if (RuntimeNodeIsQueued(waiter) || RuntimeNodeIsActive(waiter))
