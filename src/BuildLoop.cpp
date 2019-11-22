@@ -129,8 +129,10 @@ static void EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(BuildQueue *queue, R
         }
     }
 
-    if (enqueue_count > 0)
-        WakeWaiters(queue, enqueue_count);
+    //if we're enqueing only one thing, this thread will immediately pick that up in the next loop iteration.
+    //if we're enqueing more than one node, let's wake up enough threads so that they can be immediately picked up
+    if (enqueue_count > 1)
+        WakeWaiters(queue, enqueue_count-1);
 }
 
 static void SignalMainThreadToStartCleaningUp(BuildQueue *queue)
