@@ -1,7 +1,7 @@
 #pragma once
 
 struct ExecResult;
-namespace Frozen { struct NodeData; }
+namespace Frozen { struct Node; }
 
 enum ValidationResult
 {
@@ -11,4 +11,4 @@ enum ValidationResult
     UnwrittenOutputFileFail
 };
 
-ValidationResult ValidateExecResultAgainstAllowedOutput(ExecResult *result, const Frozen::NodeData *node_data);
+ValidationResult ValidateExecResultAgainstAllowedOutput(ExecResult *result, const Frozen::Node *node_data);

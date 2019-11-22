@@ -75,7 +75,7 @@ struct EnvVarData
     FrozenString m_Value;
 };
 
-struct NodeData
+struct Node
 {
     enum
     {
@@ -135,7 +135,7 @@ struct DagData
 
     int32_t m_NodeCount;
     FrozenPtr<HashDigest> m_NodeGuids;
-    FrozenPtr<NodeData> m_NodeData;
+    FrozenPtr<Node> m_NodeData;
 
     FrozenArray<NamedNodeData> m_NamedNodes;
     FrozenArray<int32_t> m_DefaultNodes;
