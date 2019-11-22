@@ -500,8 +500,8 @@ int main(int argc, char *argv[])
 
     build_result = DriverBuild(&driver);
 
-    if (!DriverSaveBuildState(&driver))
-        Log(kError, "Couldn't save build state");
+    if (!DriverSaveAllBuiltNodes(&driver))
+        Log(kError, "Couldn't save AllBuiltNodes");
 
     if (!DriverSaveScanCache(&driver))
         Log(kWarning, "Couldn't save header scanning cache");

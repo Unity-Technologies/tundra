@@ -986,10 +986,11 @@ static bool node_was_used_by_this_dag_previously(const Frozen::BuiltNode *previo
     return std::find(previous_dags.begin(), previous_dags.end(), current_dag_identifier) != previous_dags.end();
 }
 
-bool DriverSaveBuildState(Driver *self)
+
+bool DriverSaveAllBuiltNodes(Driver *self)
 {
     TimingScope timing_scope(nullptr, &g_Stats.m_StateSaveTimeCycles);
-    ProfilerScope prof_scope("Tundra SaveState", 0);
+    ProfilerScope prof_scope("Tundra Write AllBuiltNodes", 0);
 
     MemAllocLinearScope alloc_scope(&self->m_Allocator);
 
@@ -1002,6 +1003,9 @@ bool DriverSaveBuildState(Driver *self)
     BinarySegment *built_nodes_seg = BinaryWriterAddSegment(&writer);
     BinarySegment *array_seg = BinaryWriterAddSegment(&writer);
     BinarySegment *string_seg = BinaryWriterAddSegment(&writer);
+
+    HashTable<CommonStringRecord, kFlagCaseSensitive> shared_strings;
+    HashTableInit(&shared_strings, &self->m_Heap);
 
     segments.main = main_seg;
     segments.guid = guid_seg;
@@ -1037,7 +1041,7 @@ bool DriverSaveBuildState(Driver *self)
     int emitted_built_nodes_count = 0;
     uint32_t this_dag_hashed_identifier = self->m_DagData->m_HashedIdentifier;
 
-    auto EmitBuiltNodeFromRuntimeNode = [=, &emitted_built_nodes_count](const RuntimeNode* runtime_node, const HashDigest *guid) -> void {
+    auto EmitBuiltNodeFromRuntimeNode = [=, &emitted_built_nodes_count, &shared_strings](const RuntimeNode* runtime_node, const HashDigest *guid) -> void {
         emitted_built_nodes_count++;
         MemAllocLinear *scratch = &self->m_Allocator;
 
@@ -1062,8 +1066,7 @@ bool DriverSaveBuildState(Driver *self)
 
             BinarySegmentWriteUint64(array_seg, timestamp);
 
-            BinarySegmentWritePointer(array_seg, BinarySegmentPosition(string_seg));
-            BinarySegmentWriteStringData(string_seg, dag_node->m_InputFiles[i].m_Filename);
+            WriteCommonStringPtr(array_seg, string_seg, dag_node->m_InputFiles[i].m_Filename, &shared_strings, scratch);
 
             if (dag_node->m_Scanner)
             {
@@ -1097,7 +1100,7 @@ bool DriverSaveBuildState(Driver *self)
             BinarySegmentWriteInt32(built_nodes_seg, implicitDependencies.m_RecordCount);
             BinarySegmentWritePointer(built_nodes_seg, BinarySegmentPosition(array_seg));
 
-            HashSetWalk(&implicitDependencies, [=](uint32_t index, uint32_t hash, const char *filename) {
+            HashSetWalk(&implicitDependencies, [=, &shared_strings](uint32_t index, uint32_t hash, const char *filename) {
                 uint64_t timestamp = 0;
                 FileInfo fileInfo = StatCacheStat(&self->m_StatCache, filename, hash);
                 if (fileInfo.Exists())
@@ -1105,8 +1108,7 @@ bool DriverSaveBuildState(Driver *self)
 
                 BinarySegmentWriteUint64(array_seg, timestamp);
 
-                BinarySegmentWritePointer(array_seg, BinarySegmentPosition(string_seg));
-                BinarySegmentWriteStringData(string_seg, filename);
+                WriteCommonStringPtr(array_seg, string_seg, filename, &shared_strings, scratch);
             });
 
             HashSetDestroy(&implicitDependencies);
@@ -1132,7 +1134,7 @@ bool DriverSaveBuildState(Driver *self)
             BinarySegmentWriteUint32(array_seg, this_dag_hashed_identifier);
     };
 
-    auto EmitBuiltNodeFromPreviouslyBuiltNode = [=, &emitted_built_nodes_count](const Frozen::BuiltNode *built_node, const HashDigest *guid) -> void {
+    auto EmitBuiltNodeFromPreviouslyBuiltNode = [=, &emitted_built_nodes_count, &shared_strings](const Frozen::BuiltNode *built_node, const HashDigest *guid) -> void {
         save_node_sharedcode(built_node->m_WasBuiltSuccessfully, &built_node->m_InputSignature, built_node, guid, segments);
         emitted_built_nodes_count++;
 
@@ -1142,8 +1144,8 @@ bool DriverSaveBuildState(Driver *self)
         for (int32_t i = 0; i < file_count; ++i)
         {
             BinarySegmentWriteUint64(array_seg, built_node->m_InputFiles[i].m_Timestamp);
-            BinarySegmentWritePointer(array_seg, BinarySegmentPosition(string_seg));
-            BinarySegmentWriteStringData(string_seg, built_node->m_InputFiles[i].m_Filename);
+
+            WriteCommonStringPtr(array_seg, string_seg, built_node->m_InputFiles[i].m_Filename, &shared_strings, &self->m_Allocator);
         }
 
         file_count = built_node->m_ImplicitInputFiles.GetCount();
@@ -1152,8 +1154,8 @@ bool DriverSaveBuildState(Driver *self)
         for (int32_t i = 0; i < file_count; ++i)
         {
             BinarySegmentWriteUint64(array_seg, built_node->m_ImplicitInputFiles[i].m_Timestamp);
-            BinarySegmentWritePointer(array_seg, BinarySegmentPosition(string_seg));
-            BinarySegmentWriteStringData(string_seg, built_node->m_ImplicitInputFiles[i].m_Filename);
+
+            WriteCommonStringPtr(array_seg, string_seg, built_node->m_ImplicitInputFiles[i].m_Filename, &shared_strings, &self->m_Allocator);
         }
 
         int32_t dag_count = built_node->m_DagsWeHaveSeenThisNodeInPreviously.GetCount();
@@ -1294,6 +1296,8 @@ bool DriverSaveBuildState(Driver *self)
     {
         remove(self->m_DagData->m_StateFileNameTmp);
     }
+
+    HashTableDestroy(&shared_strings);
 
     BinaryWriterDestroy(&writer);
 

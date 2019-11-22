@@ -136,11 +136,6 @@ struct TempNodeGuid
     }
 };
 
-struct CommonStringRecord
-{
-    BinaryLocator m_Pointer;
-};
-
 void WriteCommonStringPtr(BinarySegment *segment, BinarySegment *str_seg, const char *ptr, HashTable<CommonStringRecord, 0> *table, MemAllocLinear *scratch)
 {
     uint32_t hash = Djb2Hash(ptr);
