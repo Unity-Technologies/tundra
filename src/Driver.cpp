@@ -822,7 +822,7 @@ BuildResult::Enum DriverBuild(Driver *self)
     queue_config.m_ThreadCount = (int)self->m_Options.m_ThreadCount;
     queue_config.m_DagNodes = self->m_DagData->m_DagNodes;
     queue_config.m_RuntimeNodes = self->m_RuntimeNodes.m_Storage;
-    queue_config.m_MaxNodes = (int)self->m_RuntimeNodes.m_Size;
+    queue_config.m_TotalRuntimeNodeCount = (int)self->m_RuntimeNodes.m_Size;
     queue_config.m_DagNodeIndexToRuntimeNodeIndex_Table = self->m_DagNodeIndexToRuntimeNodeIndex_Table.m_Storage;
     queue_config.m_ScanCache = &self->m_ScanCache;
     queue_config.m_StatCache = &self->m_StatCache;

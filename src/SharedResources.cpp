@@ -46,7 +46,7 @@ bool SharedResourceAcquire(BuildQueue *queue, MemAllocHeap *heap, uint32_t share
         // Check that another thread didn't start this resource while we were waiting for the lock
         if (refVar == 0)
         {
-            result = SharedResourceCreate(&queue->m_Config.m_SharedResources[sharedResourceIndex], heap, queue->m_Config.m_MaxNodes);
+            result = SharedResourceCreate(&queue->m_Config.m_SharedResources[sharedResourceIndex], heap, queue->m_Config.m_TotalRuntimeNodeCount);
             AtomicIncrement(&refVar);
         }
         MutexUnlock(&queue->m_SharedResourcesLock);
@@ -59,7 +59,7 @@ void SharedResourceDestroy(BuildQueue *queue, MemAllocHeap *heap, uint32_t share
 {
     const Frozen::SharedResourceData *sharedResource = &queue->m_Config.m_SharedResources[sharedResourceIndex];
     if (sharedResource->m_DestroyAction != nullptr)
-        SharedResourceExecute(sharedResource, sharedResource->m_DestroyAction, "Destroying %s", heap, queue->m_Config.m_MaxNodes);
+        SharedResourceExecute(sharedResource, sharedResource->m_DestroyAction, "Destroying %s", heap, queue->m_Config.m_TotalRuntimeNodeCount);
     queue->m_SharedResourcesCreated[sharedResourceIndex] = 0;
 }
 

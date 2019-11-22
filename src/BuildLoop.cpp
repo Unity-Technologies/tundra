@@ -187,7 +187,7 @@ static void AdvanceNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
     }
     node->m_Finished = true;
     queue->m_FinishedNodeCount++;
-    if (queue->m_FinishedNodeCount == queue->m_Config.m_MaxNodes)
+    if (queue->m_FinishedNodeCount == queue->m_Config.m_TotalRuntimeNodeCount)
         SignalMainThreadToStartCleaningUp(queue);
 
     EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(queue, node);

@@ -72,7 +72,7 @@ void BuildQueueInit(BuildQueue *queue, const BuildQueueConfig *config)
     // indices that's at least one larger than the max number of nodes. Because
     // the queue is treated as a ring buffer, we want W=R to mean an empty
     // buffer.
-    uint32_t capacity = NextPowerOfTwo(config->m_MaxNodes + 1);
+    uint32_t capacity = NextPowerOfTwo(config->m_TotalRuntimeNodeCount + 1);
 
     MemAllocHeap *heap = config->m_Heap;
 
@@ -181,7 +181,7 @@ static void SetNewDynamicMaxJobs(BuildQueue *queue, int maxJobs, const char *for
     vsnprintf(buffer, sizeof(buffer), formatString, args);
     va_end(args);
 
-    PrintNonNodeActionResult(0, queue->m_Config.m_MaxNodes, MessageStatusLevel::Warning, buffer);
+    PrintNonNodeActionResult(0, queue->m_Config.m_TotalRuntimeNodeCount, MessageStatusLevel::Warning, buffer);
 }
 
 static bool throttled = false;
@@ -233,7 +233,7 @@ BuildResult::Enum BuildQueueBuildNodeRange(BuildQueue *queue, int start_index, i
     // Make sure none of the build threads see in-progress state due to a spurious wakeup.
     MutexLock(&queue->m_Lock);
 
-    CHECK(start_index + count <= queue->m_Config.m_MaxNodes);
+    CHECK(start_index + count <= queue->m_Config.m_TotalRuntimeNodeCount);
 
     // Initialize build queue with index range to build
     int32_t *build_queue = queue->m_Queue;

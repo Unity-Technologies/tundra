@@ -263,7 +263,7 @@ void PrintNonNodeActionResult(double duration, int max_nodes, MessageStatusLevel
 
 static void PrintNodeResult(const NodeResultPrintData *data, BuildQueue *queue)
 {
-    PrintLineWithDurationAndAnnotation(data->duration, data->processed_node_count, queue->m_Config.m_MaxNodes, data->status_level, data->node_data->m_Annotation.Get());
+    PrintLineWithDurationAndAnnotation(data->duration, data->processed_node_count, queue->m_Config.m_TotalRuntimeNodeCount, data->status_level, data->node_data->m_Annotation.Get());
 
     if (data->verbose)
     {
@@ -493,7 +493,7 @@ int PrintNodeInProgress(const Frozen::DagNode *node_data, uint64_t time_of_start
 
     if (seconds_since_last_progress_message_of_any_job > acceptable_time_since_last_message && seconds_job_has_been_running_for > only_print_if_slower_than)
     {
-        int maxDigits = ceil(log10(queue->m_Config.m_MaxNodes + 1));
+        int maxDigits = ceil(log10(queue->m_Config.m_TotalRuntimeNodeCount + 1));
 
         EmitColor(YEL);
         printf("[BUSY %*ds] ", maxDigits * 2 - 1, seconds_job_has_been_running_for);
