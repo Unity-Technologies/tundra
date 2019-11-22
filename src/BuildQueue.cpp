@@ -228,27 +228,25 @@ static void ProcessThrottling(BuildQueue *queue)
     throttled = false;
 }
 
-BuildResult::Enum BuildQueueBuildNodeRange(BuildQueue *queue, int start_index, int count)
+BuildResult::Enum BuildQueueBuild(BuildQueue *queue)
 {
     // Make sure none of the build threads see in-progress state due to a spurious wakeup.
     MutexLock(&queue->m_Lock);
 
-    CHECK(start_index + count <= queue->m_Config.m_TotalRuntimeNodeCount);
-
     // Initialize build queue with index range to build
     int32_t *build_queue = queue->m_Queue;
-    RuntimeNode *node_states = queue->m_Config.m_RuntimeNodes;
+    RuntimeNode *runtime_nodes = queue->m_Config.m_RuntimeNodes;
 
     int amountQueued = 0;
-    for (int i = 0; i < count; ++i)
+    for (int i = 0; i < queue->m_Config.m_TotalRuntimeNodeCount; ++i)
     {
-        RuntimeNode *state = node_states + start_index + i;
+        RuntimeNode *runtime_node = runtime_nodes + i;
 
         //to start up, let's enqueue all nodes that have 0 dependencies.
-        if (state->m_DagNode->m_Dependencies.GetCount() == 0)
+        if (runtime_node->m_DagNode->m_Dependencies.GetCount() == 0)
         {
-            RuntimeNodeFlagQueued(state);
-            build_queue[amountQueued++] = start_index + i;
+            RuntimeNodeFlagQueued(runtime_node);
+            build_queue[amountQueued++] = i;
         }
     }
 

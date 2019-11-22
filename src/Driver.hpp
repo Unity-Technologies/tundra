@@ -66,7 +66,7 @@ struct Driver
 
     // Stores pointers to mmaped data.
     const Frozen::Dag *m_DagData;
-    const Frozen::AllBuiltNodes *m_StateData;
+    const Frozen::AllBuiltNodes *m_AllBuiltNodes;
     const Frozen::ScanData *m_ScanData;
 
     DriverOptions m_Options;

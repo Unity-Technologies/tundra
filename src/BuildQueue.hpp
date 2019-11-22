@@ -108,7 +108,7 @@ struct BuildQueue
 
 void BuildQueueInit(BuildQueue *queue, const BuildQueueConfig *config);
 
-BuildResult::Enum BuildQueueBuildNodeRange(BuildQueue *queue, int start_index, int count);
+BuildResult::Enum BuildQueueBuild(BuildQueue *queue);
 
 void BuildQueueDestroy(BuildQueue *queue);
 
