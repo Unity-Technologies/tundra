@@ -51,6 +51,10 @@ static void DumpDag(const DagData* data)
     for (const FrozenFileAndHash& f : node.m_OutputFiles)
       printf("    %s (0x%08x)\n", f.m_Filename.Get(), f.m_FilenameHash);
 
+    printf("  output directories:\n");
+    for (const FrozenFileAndHash& f : node.m_OutputDirectories)
+      printf("    %s (0x%08x)\n", f.m_Filename.Get(), f.m_FilenameHash);
+
     printf("  aux_outputs:\n");
     for (const FrozenFileAndHash& f : node.m_AuxOutputFiles)
       printf("    %s (0x%08x)\n", f.m_Filename.Get(), f.m_FilenameHash);

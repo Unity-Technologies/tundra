@@ -68,6 +68,21 @@ namespace t2
     BuildQueue*       m_Queue;
   };
 
+  namespace BuildResult
+  {
+    enum Enum
+    {
+      kOk          = 0, // All nodes built successfully
+      kInterrupted = 1, // User interrupted the build (e.g CTRL+C)
+      kBuildError  = 2, // At least one node failed to build
+      kSetupError  = 3, // We couldn't set up the build
+      kRequireFrontendRerun = 4, //Frontend needs to run again
+      kCount
+    };
+
+    extern const char* Names[Enum::kCount];
+  }
+
   struct BuildQueue
   {
     Mutex              m_Lock;
@@ -82,10 +97,10 @@ namespace t2
     uint32_t           m_QueueReadIndex;
     uint32_t           m_QueueWriteIndex;
     BuildQueueConfig   m_Config;
-    int32_t            m_PendingNodeCount;
-    int32_t            m_FailedNodeCount;
-    uint32_t            m_ProcessedNodeCount;
-    int32_t            m_CurrentPassIndex;
+
+    BuildResult::Enum  m_FinalBuildResult;
+    uint32_t            m_FinishedNodeCount;
+    
     ThreadId           m_Threads[kMaxBuildThreads];
     ThreadState        m_ThreadState[kMaxBuildThreads];
     uint32_t          *m_SharedResourcesCreated;
@@ -94,19 +109,7 @@ namespace t2
     uint32_t           m_DynamicMaxJobs;
   };
 
-  namespace BuildResult
-  {
-    enum Enum
-    {
-      kOk          = 0, // All nodes built successfully
-      kInterrupted = 1, // User interrupted the build (e.g CTRL+C)
-      kBuildError  = 2, // At least one node failed to build
-      kSetupError  = 3, // We couldn't set up the build
-      kCount
-    };
-
-    extern const char* Names[Enum::kCount];
-  }
+  
 
   void BuildQueueInit(BuildQueue* queue, const BuildQueueConfig* config);
 

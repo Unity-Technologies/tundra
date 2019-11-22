@@ -177,6 +177,81 @@ static uint32_t GetNodeFlag(const JsonObjectValue* node, const char* name, uint3
   return GetNodeFlagBool(node, name, defaultValue) ? value : 0;
 }
 
+
+static void EmitFileSignatures(const JsonObjectValue* json, BinarySegment* main_seg, BinarySegment* aux_seg, BinarySegment* str_seg) 
+{
+  if (const JsonArrayValue* file_sigs = FindArrayValue(json, "FileSignatures"))
+  {
+    size_t count = file_sigs->m_Count;
+    BinarySegmentWriteInt32(main_seg, (int) count);
+    BinarySegmentWritePointer(main_seg, BinarySegmentPosition(aux_seg));
+    for (size_t i = 0; i < count; ++i)
+    {
+      if (const JsonObjectValue* sig = file_sigs->m_Values[i]->AsObject())
+      {
+        const char* path = FindStringValue(sig, "File");
+        
+        if (!path)
+        {
+          Croak("bad FileSignatures data: could not get 'File' member for object at index %zu\n", i);              
+        }
+
+        int64_t timestamp = GetFileInfo(path).m_Timestamp;
+        WriteStringPtr(aux_seg, str_seg, path);
+        char padding[4] = { 0, 0, 0, 0 };
+        BinarySegmentWrite(aux_seg, padding, 4);
+        BinarySegmentWriteUint64(aux_seg, uint64_t(timestamp));
+      }
+      else
+      {
+        Croak("bad FileSignatures data: array entry at index %zu was not an Object\n", i);
+      }
+    }
+  }
+  else
+  {
+    BinarySegmentWriteInt32(main_seg, 0);
+    BinarySegmentWriteNullPointer(main_seg);
+  }
+};
+  
+static void EmitGlobSignatures(const JsonObjectValue* json, BinarySegment* main_seg, BinarySegment* aux_seg, BinarySegment* str_seg, MemAllocHeap* heap, MemAllocLinear* scratch) 
+{
+  if (const JsonArrayValue* glob_sigs = FindArrayValue(json, "GlobSignatures"))
+  {
+    size_t count = glob_sigs->m_Count;
+    BinarySegmentWriteInt32(main_seg, (int) count);
+    BinarySegmentWritePointer(main_seg, BinarySegmentPosition(aux_seg));
+    for (size_t i = 0; i < count; ++i)
+    {
+      if (const JsonObjectValue* sig = glob_sigs->m_Values[i]->AsObject())
+      {
+        const char* path = FindStringValue(sig, "Path");
+        if (!path)
+        {
+          Croak("bad GlobSignatures data\n");
+        }
+          
+        const char* filter = FindStringValue(sig, "Filter");
+        bool recurse = FindIntValue(sig, "Recurse", 0) == 1;
+
+        HashDigest digest = CalculateGlobSignatureFor(path, filter, recurse, heap, scratch);
+
+        WriteStringPtr(aux_seg, str_seg, path);
+        WriteStringPtr(aux_seg, str_seg, filter);
+        BinarySegmentWrite(aux_seg, (char*) &digest, sizeof digest);
+        BinarySegmentWriteInt32(aux_seg, recurse ? 1 : 0);
+      }
+    }
+  }
+  else
+  {
+    BinarySegmentWriteInt32(main_seg, 0);
+    BinarySegmentWriteNullPointer(main_seg);
+  }
+}
+
+
 static bool WriteNodes(
     const JsonArrayValue* nodes,
     BinarySegment* main_seg,
@@ -248,6 +323,7 @@ static bool WriteNodes(
     const JsonArrayValue *deps          = FindArrayValue(node, "Deps");
     const JsonArrayValue *inputs        = FindArrayValue(node, "Inputs");
     const JsonArrayValue *outputs       = FindArrayValue(node, "Outputs");
+    const JsonArrayValue *output_dirs       = FindArrayValue(node, "TargetDirectories");
     const JsonArrayValue *aux_outputs   = FindArrayValue(node, "AuxOutputs");
     const JsonArrayValue *env_vars      = FindArrayValue(node, "Env");
     const int             scanner_index = (int) FindIntValue(node, "ScannerIndex", -1);
@@ -306,6 +382,8 @@ static bool WriteNodes(
 
     WriteFileArray(node_data_seg, array2_seg, str_seg, inputs);
     WriteFileArray(node_data_seg, array2_seg, str_seg, outputs);
+    WriteFileArray(node_data_seg, array2_seg, str_seg, output_dirs);
+
     WriteFileArray(node_data_seg, array2_seg, str_seg, aux_outputs);
     WriteFileArray(node_data_seg, array2_seg, str_seg, frontend_rsps);
 
@@ -378,6 +456,9 @@ static bool WriteNodes(
       BinarySegmentWriteInt32(node_data_seg, 0);
       BinarySegmentWriteNullPointer(node_data_seg);
     }
+
+    EmitFileSignatures(node, node_data_seg, array2_seg, str_seg);
+    EmitGlobSignatures(node, node_data_seg, array2_seg, str_seg, heap, scratch);
 
     uint32_t flags = 0;
 
@@ -808,75 +889,8 @@ static bool CompileDag(const JsonObjectValue* root, BinaryWriter* writer, MemAll
   if (!WriteSharedResources(shared_resources, main_seg, aux_seg, aux2_seg, str_seg))
     return false;
 
-  if (const JsonArrayValue* file_sigs = FindArrayValue(root, "FileSignatures"))
-  {
-    size_t count = file_sigs->m_Count;
-    BinarySegmentWriteInt32(main_seg, (int) count);
-    BinarySegmentWritePointer(main_seg, BinarySegmentPosition(aux_seg));
-    for (size_t i = 0; i < count; ++i)
-    {
-      if (const JsonObjectValue* sig = file_sigs->m_Values[i]->AsObject())
-      {
-        const char* path = FindStringValue(sig, "File");
-        
-        if (!path)
-        {
-          fprintf(stderr, "bad FileSignatures data: could not get 'File' member for object at index %zu\n", i);
-          return false;
-        }
-
-        int64_t timestamp = GetFileInfo(path).m_Timestamp;
-        WriteStringPtr(aux_seg, str_seg, path);
-        char padding[4] = { 0, 0, 0, 0 };
-        BinarySegmentWrite(aux_seg, padding, 4);
-        BinarySegmentWriteUint64(aux_seg, uint64_t(timestamp));
-      }
-      else
-      {
-        fprintf(stderr, "bad FileSignatures data: array entry at index %zu was not an Object\n", i);
-        return false;
-      }
-    }
-  }
-  else
-  {
-    BinarySegmentWriteInt32(main_seg, 0);
-    BinarySegmentWriteNullPointer(main_seg);
-  }
-
-  if (const JsonArrayValue* glob_sigs = FindArrayValue(root, "GlobSignatures"))
-  {
-    size_t count = glob_sigs->m_Count;
-    BinarySegmentWriteInt32(main_seg, (int) count);
-    BinarySegmentWritePointer(main_seg, BinarySegmentPosition(aux_seg));
-    for (size_t i = 0; i < count; ++i)
-    {
-      if (const JsonObjectValue* sig = glob_sigs->m_Values[i]->AsObject())
-      {
-        const char* path = FindStringValue(sig, "Path");
-        if (!path)
-        {
-          fprintf(stderr, "bad GlobSignatures data\n");
-          return false;
-        }
-          
-        const char* filter = FindStringValue(sig, "Filter");
-        bool recurse = FindIntValue(sig, "Recurse", 0) == 1;
-
-        HashDigest digest = CalculateGlobSignatureFor(path, filter, recurse, heap, scratch);
-
-        WriteStringPtr(aux_seg, str_seg, path);
-        WriteStringPtr(aux_seg, str_seg, filter);
-        BinarySegmentWrite(aux_seg, (char*) &digest, sizeof digest);
-        BinarySegmentWriteInt32(aux_seg, recurse ? 1 : 0);
-      }
-    }
-  }
-  else
-  {
-    BinarySegmentWriteInt32(main_seg, 0);
-    BinarySegmentWriteNullPointer(main_seg);
-  }
+  EmitFileSignatures(root, main_seg, aux_seg, str_seg);
+  EmitGlobSignatures(root, main_seg, aux_seg, str_seg, heap, scratch);
 
   // Emit hashes of file extensions to sign using SHA-1 content digest instead of the normal timestamp signing.
   if (const JsonArrayValue* sha_exts = FindArrayValue(root, "ContentDigestExtensions"))
@@ -1017,6 +1031,9 @@ static bool RunExternalTool(const char* options, ...)
   env_var.m_Name = "TUNDRA_FRONTEND_OPTIONS";
   env_var.m_Value = option_str;
 
+
+  char cmdline[1024];
+
   if (const char* env_option = getenv("TUNDRA_DAGTOOL_FULLCOMMANDLINE"))
   {
     cmdline_to_use = env_option;
@@ -1027,7 +1044,6 @@ static bool RunExternalTool(const char* options, ...)
     if (strchr(dag_gen_path, ' '))
       quotes = "\"";
 
-    char cmdline[1024];
     snprintf(cmdline, sizeof cmdline, "%s%s%s %s", quotes, dag_gen_path, quotes, option_str);
     cmdline[sizeof(cmdline)-1] = '\0';
     

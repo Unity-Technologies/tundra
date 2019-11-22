@@ -20,7 +20,7 @@ static_assert(sizeof(NodeInputFileData) == 12, "struct layout");
 
 struct NodeStateData
 {
-  int32_t                        m_BuildResult;
+  uint32_t                       m_WasBuiltSuccessfully;
   HashDigest                     m_InputSignature;
   FrozenArray<FrozenString>      m_OutputFiles;
   FrozenArray<FrozenString>      m_AuxOutputFiles;
@@ -33,7 +33,7 @@ struct NodeStateData
 
 struct StateData
 {
-  static const uint32_t     MagicNumber = 0x1589A105 ^ kTundraHashMagic;
+  static const uint32_t     MagicNumber = 0x1489C105 ^ kTundraHashMagic;
 
   uint32_t                 m_MagicNumber;
 

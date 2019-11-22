@@ -9,6 +9,7 @@ namespace t2
 struct ExecResult;
 struct NodeData;
 struct BuildQueue;
+struct ThreadState;
 
 namespace MessageStatusLevel
 {
@@ -27,6 +28,7 @@ void PrintNodeResult(
   const NodeData* node_data,
   const char* cmd_line,
   BuildQueue* queue,
+  ThreadState* thread_state,
   bool always_verbose,
   uint64_t time_exec_started,
   ValidationResult validationResult,

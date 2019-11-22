@@ -7,18 +7,15 @@
 namespace t2
 {
 
-namespace BuildProgress
+namespace NodeBuildResult
 {
   enum Enum
   {
-    kInitial         = 0,
-    kBlocked         = 1,
-    kUnblocked       = 2,
-    kRunAction       = 3,
-    kSucceeded       = 100,
-    kUpToDate        = 101,
-    kFailed          = 102,
-    kCompleted       = 200 
+    kDidNotRun = 0,
+    kUpToDate,
+    kRanSuccesfully,
+    kRanFailed,
+    kRanSuccessButDependeesRequireFrontendRerun
   };
 }
 
@@ -34,25 +31,17 @@ struct NodeStateData;
 struct NodeState
 {
   uint16_t                  m_Flags;
-  uint16_t                  m_PassIndex;
-  BuildProgress::Enum       m_Progress;
 
+#if ENABLED(CHECKED_BUILD)
+  const char*               m_DebugAnnotation;
+#endif
   const NodeData*           m_MmapData;
   const NodeStateData*      m_MmapState;
 
-  int32_t                   m_FailedDependencyCount;
-  int32_t                   m_BuildResult;
-
-  int32_t                   m_ImplicitDepCount;
-  const char**              m_ImplicitDeps;
-
+  NodeBuildResult::Enum     m_BuildResult;
+  bool                      m_Finished;
   HashDigest                m_InputSignature;
 };
-
-inline bool NodeStateIsCompleted(const NodeState* state)
-{
-  return state->m_Progress == BuildProgress::kCompleted;
-}
 
 inline bool NodeStateIsQueued(const NodeState* state)
 {
@@ -82,12 +71,6 @@ inline void NodeStateFlagActive(NodeState* state)
 inline void NodeStateFlagInactive(NodeState* state)
 {
   state->m_Flags &= ~NodeStateFlags::kActive;
-}
-
-
-inline bool NodeStateIsBlocked(const NodeState* state)
-{
-  return BuildProgress::kBlocked == state->m_Progress;
 }
 
 }
