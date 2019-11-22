@@ -76,7 +76,6 @@ void DriverOptionsInit(DriverOptions *self)
     self->m_SilenceIfPossible = false;
     self->m_Clean = false;
     self->m_Rebuild = false;
-    self->m_IdeGen = false;
     self->m_DebugSigning = false;
     self->m_ContinueOnError = false;
     self->m_ThrottleOnHumanActivity = false;

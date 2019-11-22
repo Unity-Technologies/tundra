@@ -90,8 +90,7 @@ static const struct OptionTemplate
 #if defined(TUNDRA_WIN32)
     {'U', "unprotected", OptionType::kBool, offsetof(DriverOptions, m_RunUnprotected), "Run unprotected (same process group - for debugging)"},
 #endif
-    {'g', "ide-gen", OptionType::kBool, offsetof(DriverOptions, m_IdeGen),
-     "Run IDE file generator and quit"}};
+    };
 
 static int AssignOptionValue(char *option_base, const OptionTemplate *templ, const char *value, bool is_short)
 {
@@ -388,14 +387,6 @@ int main(int argc, char *argv[])
         log_flags |= kSpam | kInfo | kDebug;
 
     SetLogFlags(log_flags);
-
-    if (options.m_IdeGen)
-    {
-        // FIXME: How to detect build file for other type of generators?
-        // FIXME: Wire up remaining arguments on command line to go onto this command line
-        GenerateIdeIntegrationFiles("tundra.lua", argc, (const char **)argv);
-        return 0;
-    }
 
     // Protect against running two or more instances simultaneously in the same directory.
     // This can happen if Visual Studio is trying to launch more than one copy of tundra.
