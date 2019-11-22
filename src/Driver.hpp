@@ -1,5 +1,4 @@
-#ifndef DRIVER_HPP
-#define DRIVER_HPP
+#pragma once
 
 #include "MemAllocHeap.hpp"
 #include "MemAllocLinear.hpp"
@@ -111,7 +110,3 @@ bool DriverSaveBuildState(Driver *self);
 bool DriverSaveDigestCache(Driver *self);
 
 void DriverInitializeTundraFilePaths(DriverOptions *driverOptions);
-
-
-
-#endif

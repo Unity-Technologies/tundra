@@ -1,6 +1,4 @@
-#ifndef SIGNALHANDLER_HPP
-#define SIGNALHANDLER_HPP
-
+#pragma once
 #include "Config.hpp"
 
 
@@ -37,7 +35,4 @@ void SignalBlockThread(bool block);
 // Windows doesn't deliver signals to threads, it creates a new signal
 // handler thread for you.
 inline void SignalBlockThread(bool) {}
-#endif
-
-
 #endif

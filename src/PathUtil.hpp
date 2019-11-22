@@ -1,11 +1,9 @@
-#ifndef PATHUTIL_HPP
-#define PATHUTIL_HPP
+#pragma once
 
 #include "Common.hpp"
 #include "BinaryData.hpp"
 
 #include <string.h>
-
 
 static const int kMaxPathLength = 512;
 static const int kMaxPathSegments = 64;
@@ -85,6 +83,3 @@ void PathConcat(PathBuffer *buffer, const PathBuffer *other);
 
 void PathFormat(char (&output)[kMaxPathLength], const PathBuffer *buffer);
 void PathFormatPartial(char (&output)[kMaxPathLength], const PathBuffer *buffer, int start_seg, int end_seg);
-
-
-#endif

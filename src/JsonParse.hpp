@@ -1,5 +1,4 @@
-#ifndef JSONPARSE_HPP
-#define JSONPARSE_HPP
+#pragma once
 
 #include "Common.hpp"
 #include <string.h>
@@ -149,7 +148,3 @@ const JsonValue *JsonParse(
     MemAllocLinear *allocator,
     MemAllocLinear *scratch,
     char (&error_message)[1024]);
-
-
-
-#endif

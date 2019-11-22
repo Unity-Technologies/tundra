@@ -1,10 +1,7 @@
-#ifndef STATS_HPP
-#define STATS_HPP
+#pragma once
 
 #include "Common.hpp"
 #include "Atomic.hpp"
-
-
 
 struct TundraStats
 {
@@ -71,7 +68,3 @@ struct TimingScope
 };
 
 extern TundraStats g_Stats;
-
-
-
-#endif

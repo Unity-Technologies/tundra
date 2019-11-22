@@ -1,6 +1,4 @@
-#ifndef PROFILER_HPP
-#define PROFILER_HPP
-
+#pragma once
 
 extern bool g_ProfilerEnabled;
 
@@ -45,7 +43,3 @@ struct ProfilerScope
         ProfilerEnd(m_ThreadIndex);
     }
 };
-
-
-
-#endif

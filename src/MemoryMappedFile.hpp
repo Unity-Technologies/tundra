@@ -1,9 +1,6 @@
-#ifndef MEMORYMAPPEDFILE_HPP
-#define MEMORYMAPPEDFILE_HPP
+#pragma once
 
 #include "Common.hpp"
-
-
 
 struct MemoryMappedFile
 {
@@ -24,7 +21,3 @@ inline bool MmapFileValid(MemoryMappedFile *file)
 {
     return file->m_Address != nullptr;
 }
-
-
-
-#endif

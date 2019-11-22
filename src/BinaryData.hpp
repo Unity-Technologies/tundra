@@ -1,5 +1,4 @@
-#ifndef BINARYDATA_HPP
-#define BINARYDATA_HPP
+#pragma once
 
 #include "Common.hpp"
 #include "Hash.hpp"
@@ -87,7 +86,3 @@ struct FrozenFileAndHash
     FrozenString m_Filename;
     uint32_t m_FilenameHash;
 };
-
-
-
-#endif

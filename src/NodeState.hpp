@@ -1,5 +1,4 @@
-#ifndef NODESTATE_HPP
-#define NODESTATE_HPP
+#pragma once
 
 #include "Common.hpp"
 #include "Hash.hpp"
@@ -71,7 +70,3 @@ inline void NodeStateFlagInactive(NodeState *state)
 {
     state->m_Flags &= ~NodeStateFlags::kActive;
 }
-
-
-
-#endif

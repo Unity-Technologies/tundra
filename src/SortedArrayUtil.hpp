@@ -1,5 +1,4 @@
-#ifndef SORTEDARRAYUTIL_HPP
-#define SORTEDARRAYUTIL_HPP
+#pragma once
 
 #include "Common.hpp"
 #include "Hash.hpp"
@@ -94,7 +93,3 @@ const T *BinarySearch(const T *table, int count, const T &key)
     }
     return nullptr;
 }
-
-
-
-#endif

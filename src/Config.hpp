@@ -1,5 +1,4 @@
-#ifndef CONFIG_HPP
-#define CONFIG_HPP
+#pragma once
 
 // Preprocessor helpers to check for definedness giving compile errors if used
 // against features with missing #defines.
@@ -117,6 +116,4 @@
 #else
 #define USE_VALGRIND NO
 #endif
-#endif
-
 #endif

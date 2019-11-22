@@ -1,5 +1,4 @@
-#ifndef COMMON_HPP
-#define COMMON_HPP
+#pragma once
 
 #include "Config.hpp"
 
@@ -208,7 +207,3 @@ struct FileAndHash
     const char *m_Filename;
     uint32_t m_FilenameHash;
 };
-
-
-
-#endif

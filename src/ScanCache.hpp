@@ -1,6 +1,4 @@
-#ifndef SCANCACHE_HPP
-#define SCANCACHE_HPP
-
+#pragma once
 #include "Common.hpp"
 #include "Hash.hpp"
 #include "ReadWriteLock.hpp"
@@ -52,7 +50,3 @@ void ScanCacheInsert(ScanCache *self, const HashDigest &key, uint64_t timestamp,
 bool ScanCacheDirty(ScanCache *self);
 
 bool ScanCacheSave(ScanCache *self, const char *fn, MemAllocHeap *heap);
-
-
-
-#endif

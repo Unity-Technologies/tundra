@@ -1,5 +1,4 @@
-#ifndef MUTEX_HPP
-#define MUTEX_HPP
+#pragma once
 
 #include "Common.hpp"
 
@@ -95,9 +94,5 @@ inline void MutexUnlock(Mutex *self)
         CroakErrno("ReleaseMutex failed");
 #endif
 }
-
-#endif
-
-
 
 #endif

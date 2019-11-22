@@ -1,9 +1,6 @@
-#ifndef FILEINFO_HPP
-#define FILEINFO_HPP
+#pragma once
 
 #include "Common.hpp"
-
-
 
 struct FileInfo
 {
@@ -38,7 +35,3 @@ void ListDirectory(
     bool recurse,
     void *user_data,
     void (*callback)(void *user_data, const FileInfo &info, const char *path));
-
-
-
-#endif

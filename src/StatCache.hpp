@@ -1,14 +1,9 @@
-#ifndef STATCACHE_HPP
-#define STATCACHE_HPP
+#pragma once
 
 #include "Common.hpp"
 #include "FileInfo.hpp"
 #include "ReadWriteLock.hpp"
 #include "HashTable.hpp"
-
-#include <string.h>
-
-
 
 struct MemAllocHeap;
 struct MemAllocLinear;
@@ -33,7 +28,3 @@ inline FileInfo StatCacheStat(StatCache *stat_cache, const char *path)
 {
     return StatCacheStat(stat_cache, path, Djb2HashPath(path));
 }
-
-
-
-#endif

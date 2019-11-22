@@ -1,5 +1,4 @@
-#ifndef CONDITION_VAR_HPP
-#define CONDITION_VAR_HPP
+#pragma once
 
 #include "Common.hpp"
 #include "Mutex.hpp"
@@ -118,6 +117,3 @@ inline void CondBroadcast(ConditionVariable *var)
 #endif // ENABLED(TUNDRA_WIN32_VISTA_APIS)
 
 #endif // TUNDRA_WIN32
-
-
-#endif

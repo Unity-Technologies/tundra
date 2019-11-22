@@ -1,5 +1,5 @@
-#ifndef NODERESULTPRINTING_HPP
-#define NODERESULTPRINTING_HPP
+#pragma once
+
 #include <ctime>
 #include "OutputValidation.hpp"
 #include <stdint.h>
@@ -38,4 +38,3 @@ void PrintNonNodeActionResult(double duration, int max_nodes, MessageStatusLevel
 void PrintServiceMessage(MessageStatusLevel::Enum statusLevel, const char *formatString, ...);
 void StripAnsiColors(char *buffer);
 
-#endif

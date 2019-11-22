@@ -1,5 +1,4 @@
-#ifndef BUILDMANAGER_HPP
-#define BUILDMANAGER_HPP
+#pragma once
 
 #include "Common.hpp"
 #include "Mutex.hpp"
@@ -115,7 +114,3 @@ BuildResult::Enum BuildQueueBuildNodeRange(BuildQueue *queue, int start_index, i
 void BuildQueueDestroy(BuildQueue *queue);
 
 bool HasBuildStoppingFailures(const BuildQueue *queue);
-
-
-
-#endif

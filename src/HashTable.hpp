@@ -1,5 +1,4 @@
-#ifndef HASHTABLE_HPP
-#define HASHTABLE_HPP
+#pragma once
 
 #include "Common.hpp"
 #include "MemAllocHeap.hpp"
@@ -342,6 +341,3 @@ void HashSetWalk(HashSet<kFlags> *self, Callback callback)
 
     CHECK(index == self->m_RecordCount);
 }
-
-
-#endif

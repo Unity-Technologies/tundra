@@ -1,5 +1,4 @@
-#ifndef EXEC_HPP
-#define EXEC_HPP
+#pragma once
 
 #include "stddef.h"
 #include <thread>
@@ -48,7 +47,3 @@ ExecResult ExecuteProcess(
     int (*callback_on_slow)(void *user_data) = nullptr,
     void *callback_on_slow_userdata = nullptr,
     int time_until_first_callback = 1);
-
-
-
-#endif

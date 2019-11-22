@@ -1,5 +1,4 @@
-#ifndef DAGDATA_HPP
-#define DAGDATA_HPP
+#pragma once
 
 #include "Common.hpp"
 #include "BinaryData.hpp"
@@ -162,7 +161,3 @@ struct DagData
     uint32_t m_ForceDagRebuild;
     uint32_t m_MagicNumberEnd;
 };
-
-
-
-#endif

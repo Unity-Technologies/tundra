@@ -1,10 +1,7 @@
-#ifndef HASHER_HPP
-#define HASHER_HPP
+#pragma once
 
 #include "Common.hpp"
 #include <cstring>
-
-
 
 struct MemAllocLinear;
 
@@ -204,7 +201,3 @@ void DigestToString(char (&buffer)[kDigestStringSize], const HashDigest &digest)
 
 // Quickie to generate a hash digest from a single string
 void HashSingleString(HashDigest *digest_out, const char *string);
-
-
-
-#endif

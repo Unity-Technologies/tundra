@@ -1,5 +1,4 @@
-#ifndef READWRITELOCK_HPP
-#define READWRITELOCK_HPP
+#pragma once
 
 #include "Common.hpp"
 #include "ConditionVar.hpp"
@@ -118,9 +117,5 @@ inline void ReadWriteUnlockWrite(ReadWriteLock *self)
     ReleaseSRWLockExclusive(&self->m_Impl);
 }
 #endif
-
-#endif
-
-
 
 #endif

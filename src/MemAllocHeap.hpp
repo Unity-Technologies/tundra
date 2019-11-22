@@ -1,5 +1,4 @@
-#ifndef MEMALLOCHEAP_HPP
-#define MEMALLOCHEAP_HPP
+#pragma once
 
 #include "Common.hpp"
 #include "Thread.hpp"
@@ -36,7 +35,3 @@ T *HeapAllocateArrayZeroed(MemAllocHeap *heap, size_t count)
     memset(result, 0, sizeof(T) * count);
     return result;
 }
-
-
-
-#endif

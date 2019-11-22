@@ -1,9 +1,6 @@
-#ifndef THREAD_HPP
-#define THREAD_HPP
+#pragma once
 
 #include "Common.hpp"
-
-
 
 typedef uintptr_t ThreadId;
 
@@ -20,6 +17,3 @@ ThreadId ThreadStart(ThreadRoutine routine, void *param);
 void ThreadJoin(ThreadId thread_id);
 
 ThreadId ThreadCurrent();
-
-
-#endif

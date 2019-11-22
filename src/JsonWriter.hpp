@@ -1,10 +1,7 @@
-#ifndef JSONWRITER_HPP
-#define JSONWRITER_HPP
+#pragma once
 
 #include <stdint.h>
 #include <stdio.h>
-
-
 
 struct MemAllocLinear;
 struct JsonBlock;
@@ -35,7 +32,3 @@ void JsonWriteValueInteger(JsonWriter *writer, int64_t value);
 void JsonWriteNewline(JsonWriter *writer);
 
 void JsonWriteToFile(JsonWriter *writer, FILE *fp);
-
-
-
-#endif

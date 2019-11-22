@@ -1,5 +1,4 @@
-#ifndef SCANNER_HPP
-#define SCANNER_HPP
+#pragma once
 
 #include "Common.hpp"
 
@@ -29,7 +28,3 @@ struct ScanOutput
 };
 
 bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput *output);
-
-
-
-#endif

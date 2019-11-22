@@ -1,14 +1,10 @@
-#ifndef INCLUDESCANNER_HPP
-#define INCLUDESCANNER_HPP
+#pragma once
 
 #include "Common.hpp"
 
-// Low-level scanning functions to grab dependencies from a file buffer.
-
-
-
 struct GenericScannerData;
 struct MemAllocLinear;
+
 
 struct IncludeData
 {
@@ -29,6 +25,3 @@ ScanIncludesCpp(char *buffer, MemAllocLinear *allocator);
 IncludeData *
 ScanIncludesGeneric(char *buffer, MemAllocLinear *allocator, const GenericScannerData &config);
 
-
-
-#endif

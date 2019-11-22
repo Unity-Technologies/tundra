@@ -1,5 +1,4 @@
-#ifndef TUNDRA_DIGESTCACHE_HPP
-#define TUNDRA_DIGESTCACHE_HPP
+#pragma once
 
 #include "Common.hpp"
 #include "BinaryData.hpp"
@@ -68,6 +67,3 @@ bool DigestCacheGet(DigestCache *self, const char *filename, uint32_t hash, uint
 void DigestCacheSet(DigestCache *self, const char *filename, uint32_t hash, uint64_t timestamp, const HashDigest &digest);
 
 bool DigestCacheHasChanged(DigestCache *self, const char *filename, uint32_t hash);
-
-
-#endif

@@ -1,5 +1,4 @@
-#ifndef BUFFER_HPP
-#define BUFFER_HPP
+#pragma once
 
 #include "Common.hpp"
 #include "MemAllocHeap.hpp"
@@ -127,6 +126,3 @@ T BufferPopOne(Buffer<T> *buffer)
     buffer->m_Size = size - 1;
     return buffer->m_Storage[size - 1];
 }
-
-
-#endif

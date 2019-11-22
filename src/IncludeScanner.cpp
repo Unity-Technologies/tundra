@@ -8,8 +8,6 @@
 #include "MemAllocLinear.hpp"
 #include "DagData.hpp"
 
-
-
 static IncludeData *
 ScanCppLine(const char *start, MemAllocLinear *allocator)
 {
