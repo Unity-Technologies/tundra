@@ -1,6 +1,5 @@
-namespace t2
-{
-    struct ThreadState;
-    
-    void BuildLoop(ThreadState* thread_state);
-}
+#pragma once
+struct ThreadState;
+
+void BuildLoop(ThreadState *thread_state);
+

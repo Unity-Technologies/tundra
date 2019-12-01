@@ -2,10 +2,10 @@
 #include "DagData.hpp"
 #include "MemAllocHeap.hpp"
 #include "MemAllocLinear.hpp"
-#include "NodeState.hpp"
+#include "RuntimeNode.hpp"
 #include "Scanner.hpp"
 #include "FileInfo.hpp"
-#include "StateData.hpp"
+#include "AllBuiltNodes.hpp"
 #include "SignalHandler.hpp"
 #include "Exec.hpp"
 #include "Stats.hpp"
@@ -27,114 +27,116 @@
 #include <algorithm>
 #include <stdio.h>
 
-namespace t2{
 
-  static int AvailableNodeCount(BuildQueue* queue)
-  {
-    const uint32_t queue_mask  = queue->m_QueueCapacity - 1;
-    uint32_t       read_index  = queue->m_QueueReadIndex;
-    uint32_t       write_index = queue->m_QueueWriteIndex;
+
+static int AvailableNodeCount(BuildQueue *queue)
+{
+    const uint32_t queue_mask = queue->m_QueueCapacity - 1;
+    uint32_t read_index = queue->m_QueueReadIndex;
+    uint32_t write_index = queue->m_QueueWriteIndex;
 
     return (write_index - read_index) & queue_mask;
-  }
+}
 
-  static NodeState* GetStateForNode(BuildQueue* queue, int32_t src_index)
-  {
-    int32_t state_index = queue->m_Config.m_NodeRemappingTable[src_index];
+static RuntimeNode *GetRuntimeNodeForDagNodeIndex(BuildQueue *queue, int32_t src_index)
+{
+    int32_t state_index = queue->m_Config.m_DagNodeIndexToRuntimeNodeIndex_Table[src_index];
 
     if (state_index == -1)
-      return nullptr;
+        return nullptr;
 
-    NodeState* state = queue->m_Config.m_NodeState + state_index;
+    RuntimeNode *runtime_node = queue->m_Config.m_RuntimeNodes + state_index;
 
-    CHECK(int(state->m_MmapData - queue->m_Config.m_NodeData) == src_index);
+    CHECK(int(runtime_node->m_DagNode - queue->m_Config.m_DagNodes) == src_index);
 
-    return state;
-  }
+    return runtime_node;
+}
 
-  static void WakeWaiters(BuildQueue* queue, int count)
-  {
+static void WakeWaiters(BuildQueue *queue, int count)
+{
     if (count > 1)
-      CondBroadcast(&queue->m_WorkAvailable);
+        CondBroadcast(&queue->m_WorkAvailable);
     else
-      CondSignal(&queue->m_WorkAvailable);
-  }
+        CondSignal(&queue->m_WorkAvailable);
+}
 
-  static void Enqueue(BuildQueue* queue, NodeState* state)
-  {
-    uint32_t       write_index = queue->m_QueueWriteIndex;
-    const uint32_t queue_mask  = queue->m_QueueCapacity - 1;
-    int32_t*       build_queue = queue->m_Queue;
+static void Enqueue(BuildQueue *queue, RuntimeNode *runtime_node)
+{
+    uint32_t write_index = queue->m_QueueWriteIndex;
+    const uint32_t queue_mask = queue->m_QueueCapacity - 1;
+    int32_t *build_queue = queue->m_Queue;
 
-    CHECK(!NodeStateIsQueued(state));
-    CHECK(!NodeStateIsActive(state));
+    CHECK(!RuntimeNodeIsQueued(runtime_node));
+    CHECK(!RuntimeNodeIsActive(runtime_node));
 
 #if ENABLED(CHECKED_BUILD)
     const int avail_init = AvailableNodeCount(queue);
 #endif
 
-    int state_index = int(state - queue->m_Config.m_NodeState);
+    int runtime_node_index = int(runtime_node - queue->m_Config.m_RuntimeNodes);
 
-    build_queue[write_index] = state_index;
-    write_index              = (write_index + 1) & queue_mask;
+    build_queue[write_index] = runtime_node_index;
+    write_index = (write_index + 1) & queue_mask;
     queue->m_QueueWriteIndex = write_index;
 
-    NodeStateFlagQueued(state);
+    RuntimeNodeFlagQueued(runtime_node);
 
     CHECK(AvailableNodeCount(queue) == 1 + avail_init);
-  }
+}
 
-  static bool AllDependenciesAreFinished(BuildQueue* queue, NodeState* state) 
-  {
-    for (int32_t dep_index : state->m_MmapData->m_Dependencies)
+static bool AllDependenciesAreFinished(BuildQueue *queue, RuntimeNode *runtime_node)
+{
+    for (int32_t dep_index : runtime_node->m_DagNode->m_Dependencies)
     {
-      NodeState* state = GetStateForNode(queue, dep_index);
-      if (!state->m_Finished)
-        return false;
-     }
-     return true;
-  }
+        RuntimeNode *runtime_node = GetRuntimeNodeForDagNodeIndex(queue, dep_index);
+        if (!runtime_node->m_Finished)
+            return false;
+    }
+    return true;
+}
 
-  static bool AllDependenciesAreSuccesful(BuildQueue* queue, NodeState* state)
-  {
-    for (int32_t dep_index : state->m_MmapData->m_Dependencies)
+static bool AllDependenciesAreSuccesful(BuildQueue *queue, RuntimeNode *runtime_node)
+{
+    for (int32_t dep_index : runtime_node->m_DagNode->m_Dependencies)
     {
-      NodeState* state = GetStateForNode(queue, dep_index);
-      CHECK(state->m_Finished);
+        RuntimeNode *runtime_node = GetRuntimeNodeForDagNodeIndex(queue, dep_index);
+        CHECK(runtime_node->m_Finished);
 
-      if (state->m_BuildResult != NodeBuildResult::kRanSuccesfully && state->m_BuildResult != NodeBuildResult::kUpToDate)
-        return false;
-     }
-     return true;
-  }
+        if (runtime_node->m_BuildResult != NodeBuildResult::kRanSuccesfully && runtime_node->m_BuildResult != NodeBuildResult::kUpToDate)
+            return false;
+    }
+    return true;
+}
 
-  static void EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(BuildQueue* queue, NodeState* node)
-  {
-    int             enqueue_count  = 0;
+static void EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(BuildQueue *queue, RuntimeNode *node)
+{
+    int enqueue_count = 0;
 
-    for (int32_t link : node->m_MmapData->m_BackLinks)
+    for (int32_t link : node->m_DagNode->m_BackLinks)
     {
-      if (NodeState* waiter = GetStateForNode(queue, link))
-      {
-        // Did someone else get to the node first?
-        if (NodeStateIsQueued(waiter) || NodeStateIsActive(waiter))
-          continue;
+        if (RuntimeNode *waiter = GetRuntimeNodeForDagNodeIndex(queue, link))
+        {
+            // Did someone else get to the node first?
+            if (RuntimeNodeIsQueued(waiter) || RuntimeNodeIsActive(waiter))
+                continue;
 
-        // If the node isn't ready, skip it.
-        if (!AllDependenciesAreFinished(queue, waiter))
-          continue;
+            // If the node isn't ready, skip it.
+            if (!AllDependenciesAreFinished(queue, waiter))
+                continue;
 
-        Enqueue(queue, waiter);        
-        ++enqueue_count;
-      }
+            Enqueue(queue, waiter);
+            ++enqueue_count;
+        }
     }
 
-    if (enqueue_count > 0)
-      WakeWaiters(queue, enqueue_count);
-  }
+    //if we're enqueing only one thing, this thread will immediately pick that up in the next loop iteration.
+    //if we're enqueing more than one node, let's wake up enough threads so that they can be immediately picked up
+    if (enqueue_count > 1)
+        WakeWaiters(queue, enqueue_count-1);
+}
 
-  static void SignalMainThreadToStartCleaningUp(BuildQueue* queue)
-  {
+static void SignalMainThreadToStartCleaningUp(BuildQueue *queue)
+{
     //There are three ways for a build to end:
     //1) aborted by a signal.  The signal will end up CondSignal()-ing the m_BuildFinishedConditionalVariable that the mainthread is waiting on.  Mainthread will iniate teardown.
     //2) by a node failing to build. In this case we will ask the main thread to initiate teardown also by signaling m_BuildFinishedConditionalVariable
@@ -144,29 +146,29 @@ namespace t2{
     queue->m_BuildFinishedConditionalVariableSignaled = true;
     CondSignal(&queue->m_BuildFinishedConditionalVariable);
     MutexUnlock(&queue->m_BuildFinishedMutex);
-  }
+}
 
-  static void AdvanceNode(BuildQueue* queue, ThreadState* thread_state, NodeState* node, Mutex* queue_lock)
-  {
-    Log(kSpam, "T=%d, Advancing %s\n", thread_state->m_ThreadIndex, node->m_MmapData->m_Annotation.Get());
+static void AdvanceNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node, Mutex *queue_lock)
+{
+    Log(kSpam, "T=%d, Advancing %s\n", thread_state->m_ThreadIndex, node->m_DagNode->m_Annotation.Get());
 
     CHECK(!node->m_Finished);
-    CHECK(NodeStateIsActive(node));
-    CHECK(!NodeStateIsQueued(node));
-    CHECK(AllDependenciesAreFinished(queue,node));
+    CHECK(RuntimeNodeIsActive(node));
+    CHECK(!RuntimeNodeIsQueued(node));
+    CHECK(AllDependenciesAreFinished(queue, node));
 
     if (AllDependenciesAreSuccesful(queue, node))
     {
-      MutexUnlock(queue_lock);
-      bool haveToRunAction = CheckInputSignatureToSeeNodeNeedsExecuting(queue, thread_state, node);
-      if (haveToRunAction)
-      {
-        NodeBuildResult::Enum runActionResult = RunAction(queue, thread_state, node, queue_lock);
-        MutexLock(queue_lock);
-        node->m_BuildResult = runActionResult;
-        
-        switch(runActionResult)
+        MutexUnlock(queue_lock);
+        bool haveToRunAction = CheckInputSignatureToSeeNodeNeedsExecuting(queue, thread_state, node);
+        if (haveToRunAction)
         {
+            NodeBuildResult::Enum runActionResult = RunAction(queue, thread_state, node, queue_lock);
+            MutexLock(queue_lock);
+            node->m_BuildResult = runActionResult;
+
+            switch (runActionResult)
+            {
             case NodeBuildResult::kRanFailed:
                 queue->m_FinalBuildResult = BuildResult::kBuildError;
                 SignalMainThreadToStartCleaningUp(queue);
@@ -177,26 +179,29 @@ namespace t2{
                 break;
             default:
                 break;
+            }
         }
-      } else {
-        MutexLock(queue_lock);
-        node->m_BuildResult = NodeBuildResult::kUpToDate;
-      }
+        else
+        {
+            MutexLock(queue_lock);
+            node->m_BuildResult = NodeBuildResult::kUpToDate;
+        }
     }
     node->m_Finished = true;
     queue->m_FinishedNodeCount++;
-    if (queue->m_FinishedNodeCount == queue->m_Config.m_MaxNodes)
+    RuntimeNodeFlagInactive(node);
+    if (queue->m_FinishedNodeCount == queue->m_Config.m_TotalRuntimeNodeCount)
         SignalMainThreadToStartCleaningUp(queue);
 
     EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(queue, node);
-  }
+}
 
-  static NodeState* NextNode(BuildQueue* queue)
-  {
+static RuntimeNode *NextNode(BuildQueue *queue)
+{
     int avail_count = AvailableNodeCount(queue);
 
     if (0 == avail_count)
-      return nullptr;
+        return nullptr;
 
     uint32_t read_index = queue->m_QueueReadIndex;
 
@@ -205,41 +210,41 @@ namespace t2{
     // Update read index
     queue->m_QueueReadIndex = (read_index + 1) & (queue->m_QueueCapacity - 1);
 
-    NodeState* state = queue->m_Config.m_NodeState + node_index;
+    RuntimeNode *runtime_node = queue->m_Config.m_RuntimeNodes + node_index;
 
-    CHECK(NodeStateIsQueued(state));
-    CHECK(!NodeStateIsActive(state));
+    CHECK(RuntimeNodeIsQueued(runtime_node));
+    CHECK(!RuntimeNodeIsActive(runtime_node));
 
-    NodeStateFlagUnqueued(state);
-    NodeStateFlagActive(state);
+    RuntimeNodeFlagUnqueued(runtime_node);
+    RuntimeNodeFlagActive(runtime_node);
 
-    return state;
-  }
+    return runtime_node;
+}
 
-  static bool ShouldKeepBuilding(BuildQueue* queue)
-  {
+static bool ShouldKeepBuilding(BuildQueue *queue)
+{
     return !queue->m_MainThreadWantsToCleanUp;
-  }
-  
-  void BuildLoop(ThreadState* thread_state)
-  {
-    BuildQueue        *queue = thread_state->m_Queue;
-    ConditionVariable *cv    = &queue->m_WorkAvailable;
-    Mutex             *mutex = &queue->m_Lock;
+}
+
+void BuildLoop(ThreadState *thread_state)
+{
+    BuildQueue *queue = thread_state->m_Queue;
+    ConditionVariable *cv = &queue->m_WorkAvailable;
+    Mutex *mutex = &queue->m_Lock;
 
     MutexLock(mutex);
     bool waitingForWork = false;
 
     auto HibernateForThrottlingIfRequired = [=]() {
-      //check if dynamic max jobs amount has been reduced to a point where we need this thread to hibernate.
-      //Don't take a mutex lock for this check, as this if check will almost never hit and it's in a perf critical loop.
-      if (thread_state->m_ThreadIndex < (int)queue->m_DynamicMaxJobs)
-        return false;
-      
-      ProfilerScope profiler_scope("HibernateForThrottling", thread_state->m_ProfilerThreadId, nullptr, "thread_state_sleeping");
+        //check if dynamic max jobs amount has been reduced to a point where we need this thread to hibernate.
+        //Don't take a mutex lock for this check, as this if check will almost never hit and it's in a perf critical loop.
+        if (thread_state->m_ThreadIndex < (int)queue->m_DynamicMaxJobs)
+            return false;
 
-      CondWait(&thread_state->m_Queue->m_MaxJobsChangedConditionalVariable, mutex);
-      return true;
+        ProfilerScope profiler_scope("HibernateForThrottling", thread_state->m_ProfilerThreadId, nullptr, "thread_state_sleeping");
+
+        CondWait(&thread_state->m_Queue->m_MaxJobsChangedConditionalVariable, mutex);
+        return true;
     };
 
     //This is the main build loop that build threads go through. The mutex/threading policy is that only one buildthread at a time actually goes through this loop
@@ -251,46 +256,46 @@ namespace t2{
     //lock is taken here
     while (ShouldKeepBuilding(queue))
     {
-      //if this function decides to hibernate, it will release the lock, and re-aquire it before it returns
-      if (HibernateForThrottlingIfRequired())
-        continue;
+        //if this function decides to hibernate, it will release the lock, and re-aquire it before it returns
+        if (HibernateForThrottlingIfRequired())
+            continue;
 
-      if (NodeState * node = NextNode(queue))
-      {
-        if (waitingForWork)
+        if (RuntimeNode *node = NextNode(queue))
         {
-          ProfilerEnd(thread_state->m_ProfilerThreadId);
-          waitingForWork = false;
+            if (waitingForWork)
+            {
+                ProfilerEnd(thread_state->m_ProfilerThreadId);
+                waitingForWork = false;
+            }
+            AdvanceNode(queue, thread_state, node, mutex);
+            continue;
         }
-        AdvanceNode(queue, thread_state, node, mutex);
-        continue;
-      }
 
-      //ok, there is nothing to do at this very moment, let's go to sleep.
-      if (!waitingForWork)
-      {
-        ProfilerBegin("WaitingForWork", thread_state->m_ProfilerThreadId, nullptr, "thread_state_sleeping");
-        waitingForWork = true;
-      }
+        //ok, there is nothing to do at this very moment, let's go to sleep.
+        if (!waitingForWork)
+        {
+            ProfilerBegin("WaitingForWork", thread_state->m_ProfilerThreadId, nullptr, "thread_state_sleeping");
+            waitingForWork = true;
+        }
 
-      //This API call will release our lock. The api contract is that this function will sleep until CV is triggered from another thread
-      //and during that sleep the mutex will be released,  and before CondWait returns, the lock will be re-aquired
-      CondWait(cv, mutex);
+        //This API call will release our lock. The api contract is that this function will sleep until CV is triggered from another thread
+        //and during that sleep the mutex will be released,  and before CondWait returns, the lock will be re-aquired
+        CondWait(cv, mutex);
     }
 
     if (waitingForWork)
-      ProfilerEnd(thread_state->m_ProfilerThreadId);
+        ProfilerEnd(thread_state->m_ProfilerThreadId);
 
     MutexUnlock(mutex);
     {
-      ProfilerScope profiler_scope("Exiting BuildLoop", thread_state->m_ProfilerThreadId);
-      //add a tiny 10ms profiler entry at the end of a buildloop, to facilitate diagnosing when threads end in the json profiler.  This is not a per problem,
-      //as it happens in parallel with the mainthread doing DestroyBuildQueue() which is always slower than this.
+        ProfilerScope profiler_scope("Exiting BuildLoop", thread_state->m_ProfilerThreadId);
+        //add a tiny 10ms profiler entry at the end of a buildloop, to facilitate diagnosing when threads end in the json profiler.  This is not a per problem,
+        //as it happens in parallel with the mainthread doing DestroyBuildQueue() which is always slower than this.
 #if TUNDRA_WIN32
-      Sleep(10);
+        Sleep(10);
 #endif
     }
 
     Log(kSpam, "build thread %d exiting\n", thread_state->m_ThreadIndex);
-  }
 }
+

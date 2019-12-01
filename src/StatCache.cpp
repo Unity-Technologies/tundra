@@ -5,35 +5,34 @@
 
 #include <algorithm>
 
-namespace t2
-{
 
-void StatCacheInit(StatCache* self, MemAllocLinear* allocator, MemAllocHeap* heap)
+
+void StatCacheInit(StatCache *self, MemAllocLinear *allocator, MemAllocHeap *heap)
 {
-  self->m_Allocator      = allocator;
-  self->m_Heap           = heap;
+  self->m_Allocator = allocator;
+  self->m_Heap = heap;
   HashTableInit(&self->m_Files, heap);
   ReadWriteLockInit(&self->m_HashLock);
 }
 
-void StatCacheDestroy(StatCache* self)
+void StatCacheDestroy(StatCache *self)
 {
   HashTableDestroy(&self->m_Files);
   ReadWriteLockDestroy(&self->m_HashLock);
 }
 
-static void StatCacheInsert(StatCache* self, uint32_t hash, const char* path, const FileInfo& info)
+static void StatCacheInsert(StatCache *self, uint32_t hash, const char *path, const FileInfo &info)
 {
   ReadWriteLockWrite(&self->m_HashLock);
   HashTableInsert(&self->m_Files, hash, StrDup(self->m_Allocator, path), info);
   ReadWriteUnlockWrite(&self->m_HashLock);
 }
 
-void StatCacheMarkDirty(StatCache* self, const char* path, uint32_t hash)
+void StatCacheMarkDirty(StatCache *self, const char *path, uint32_t hash)
 {
   ReadWriteLockWrite(&self->m_HashLock);
 
-  if (FileInfo* fi = HashTableLookup(&self->m_Files, hash, path))
+  if (FileInfo *fi = HashTableLookup(&self->m_Files, hash, path))
   {
     fi->m_Flags = FileInfo::kFlagDirty;
   }
@@ -41,17 +40,19 @@ void StatCacheMarkDirty(StatCache* self, const char* path, uint32_t hash)
   ReadWriteUnlockWrite(&self->m_HashLock);
 }
 
-FileInfo StatCacheStat(StatCache* self, const char* path, uint32_t hash)
+FileInfo StatCacheStat(StatCache *self, const char *path, uint32_t hash)
 {
   ReadWriteLockRead(&self->m_HashLock);
 
-  const FileInfo* fi = HashTableLookup(&self->m_Files, hash, path);
+  const FileInfo *fi = HashTableLookup(&self->m_Files, hash, path);
 
   if (fi != nullptr && 0 == (fi->m_Flags & FileInfo::kFlagDirty))
   {
     FileInfo result = *fi;
     ReadWriteUnlockRead(&self->m_HashLock);
     AtomicIncrement(&g_Stats.m_StatCacheHits);
+    //if (g_Stats.m_StatCacheHits % 600 == 0)
+    //  printf("StatCacheStat %s\n", path);
     return result;
   }
 
@@ -68,4 +69,4 @@ FileInfo StatCacheStat(StatCache* self, const char* path, uint32_t hash)
   return file_info;
 }
 
-}
+

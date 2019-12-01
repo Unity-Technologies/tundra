@@ -1,17 +1,13 @@
-#ifndef DAGGENERATOR_HPP
-#define DAGGENERATOR_HPP
+#pragma once;
+#include "BinaryWriter.hpp"
+#include "HashTable.hpp"
 
-#include "MemAllocHeap.hpp"
-
-struct lua_State;
-
-namespace t2
+struct CommonStringRecord
 {
+    BinaryLocator m_Pointer;
+};
 
-bool GenerateDag(const char* build_file, const char* dag_fn);
+struct MemAllocLinear;
 
-bool GenerateIdeIntegrationFiles(const char* build_file, int argc, const char** argv);
-
-}
-
-#endif
+bool GenerateDag(const char *build_file, const char *dag_fn);
+void WriteCommonStringPtr(BinarySegment *segment, BinarySegment *str_seg, const char *ptr, HashTable<CommonStringRecord, 0> *table, MemAllocLinear *scratch);

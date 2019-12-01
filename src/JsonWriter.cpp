@@ -2,18 +2,20 @@
 #include "MemAllocLinear.hpp"
 #include <stdio.h>
 
-namespace t2
-{
+
 
 struct JsonBlock
 {
-  enum { kBlockSize = KB(1) - sizeof(JsonBlock*) };
+    enum
+    {
+        kBlockSize = KB(1) - sizeof(JsonBlock *)
+    };
 
-  uint8_t m_Data[kBlockSize];
-  JsonBlock* m_Next;
+    uint8_t m_Data[kBlockSize];
+    JsonBlock *m_Next;
 };
 
-void JsonWriteInit(JsonWriter* writer, MemAllocLinear* scratch)
+void JsonWriteInit(JsonWriter *writer, MemAllocLinear *scratch)
 {
     writer->m_Scratch = scratch;
     writer->m_Head = writer->m_Tail = LinearAllocate<JsonBlock>(scratch);
@@ -22,43 +24,42 @@ void JsonWriteInit(JsonWriter* writer, MemAllocLinear* scratch)
     writer->m_PrependComma = false;
 }
 
-static void JsonWrite(JsonWriter* writer, const char* ch, size_t count)
+static void JsonWrite(JsonWriter *writer, const char *ch, size_t count)
 {
-  while (count > 0)
-  {
-    size_t space = JsonBlock::kBlockSize - (writer->m_Write - writer->m_Tail->m_Data);
-
-    if (space == 0)
+    while (count > 0)
     {
-      writer->m_Tail->m_Next = LinearAllocate<JsonBlock>(writer->m_Scratch);
-      writer->m_Tail = writer->m_Tail->m_Next;
-      writer->m_Write = writer->m_Tail->m_Data;
-      space = JsonBlock::kBlockSize;
+        size_t space = JsonBlock::kBlockSize - (writer->m_Write - writer->m_Tail->m_Data);
+
+        if (space == 0)
+        {
+            writer->m_Tail->m_Next = LinearAllocate<JsonBlock>(writer->m_Scratch);
+            writer->m_Tail = writer->m_Tail->m_Next;
+            writer->m_Write = writer->m_Tail->m_Data;
+            space = JsonBlock::kBlockSize;
+        }
+
+        size_t writeSize = space < count ? space : count;
+
+        memcpy(writer->m_Write, ch, writeSize);
+
+        writer->m_Write += writeSize;
+        writer->m_TotalSize += writeSize;
+        ch += writeSize;
+        count -= writeSize;
     }
-
-    size_t writeSize = space < count ? space : count;
-
-    memcpy(writer->m_Write, ch, writeSize);
-
-    writer->m_Write += writeSize;
-    writer->m_TotalSize += writeSize;
-    ch += writeSize;
-    count -= writeSize;
-  }
 }
 
-static void JsonWriteChar(JsonWriter* writer, char ch)
+static void JsonWriteChar(JsonWriter *writer, char ch)
 {
-  JsonWrite(writer, &ch, 1);
+    JsonWrite(writer, &ch, 1);
 }
 
-void JsonWriteNewline(JsonWriter* writer)
+void JsonWriteNewline(JsonWriter *writer)
 {
-  JsonWrite(writer, "\n", 1);
+    JsonWrite(writer, "\n", 1);
 }
 
-
-void JsonWriteStartObject(JsonWriter* writer)
+void JsonWriteStartObject(JsonWriter *writer)
 {
     if (writer->m_PrependComma)
         JsonWriteChar(writer, ',');
@@ -67,38 +68,38 @@ void JsonWriteStartObject(JsonWriter* writer)
     writer->m_PrependComma = false;
 }
 
-void JsonWriteEndObject(JsonWriter* writer)
+void JsonWriteEndObject(JsonWriter *writer)
 {
-  JsonWriteChar(writer, '}');
-  writer->m_PrependComma = true;
+    JsonWriteChar(writer, '}');
+    writer->m_PrependComma = true;
 }
 
-void JsonWriteStartArray(JsonWriter* writer)
+void JsonWriteStartArray(JsonWriter *writer)
 {
     if (writer->m_PrependComma)
-      JsonWriteChar(writer, ',');
+        JsonWriteChar(writer, ',');
 
     JsonWriteChar(writer, '[');
     writer->m_PrependComma = false;
 }
 
-void JsonWriteEndArray(JsonWriter* writer)
+void JsonWriteEndArray(JsonWriter *writer)
 {
-  JsonWriteChar(writer, ']');
+    JsonWriteChar(writer, ']');
     writer->m_PrependComma = true;
 }
 
-void JsonWriteKeyName(JsonWriter* writer, const char* keyName)
+void JsonWriteKeyName(JsonWriter *writer, const char *keyName)
 {
     JsonWriteValueString(writer, keyName);
     JsonWriteChar(writer, ':');
     writer->m_PrependComma = false;
 }
 
-void JsonWriteValueString(JsonWriter* writer, const char* value, size_t maxLen)
+void JsonWriteValueString(JsonWriter *writer, const char *value, size_t maxLen)
 {
     if (writer->m_PrependComma)
-      JsonWriteChar(writer, ',');
+        JsonWriteChar(writer, ',');
 
     JsonWriteChar(writer, '"');
 
@@ -146,10 +147,10 @@ void JsonWriteValueString(JsonWriter* writer, const char* value, size_t maxLen)
     writer->m_PrependComma = true;
 }
 
-void JsonWriteValueInteger(JsonWriter* writer, int64_t value)
+void JsonWriteValueInteger(JsonWriter *writer, int64_t value)
 {
     if (writer->m_PrependComma)
-      JsonWriteChar(writer, ',');
+        JsonWriteChar(writer, ',');
 
     char buf[50];
     snprintf(buf, 50, "%lli", value);
@@ -159,17 +160,17 @@ void JsonWriteValueInteger(JsonWriter* writer, int64_t value)
     writer->m_PrependComma = true;
 }
 
-void JsonWriteToFile(JsonWriter* writer, FILE* fp)
+void JsonWriteToFile(JsonWriter *writer, FILE *fp)
 {
-  size_t remaining = writer->m_TotalSize;
-  JsonBlock* block = writer->m_Head;
-  while (remaining > 0)
-  {
-    size_t sizeThisBlock = (remaining < JsonBlock::kBlockSize) ? remaining : JsonBlock::kBlockSize;
-    fwrite(block->m_Data, 1, sizeThisBlock, fp);
-    remaining -= sizeThisBlock;
-    block = block->m_Next;
-  }
+    size_t remaining = writer->m_TotalSize;
+    JsonBlock *block = writer->m_Head;
+    while (remaining > 0)
+    {
+        size_t sizeThisBlock = (remaining < JsonBlock::kBlockSize) ? remaining : JsonBlock::kBlockSize;
+        fwrite(block->m_Data, 1, sizeThisBlock, fp);
+        remaining -= sizeThisBlock;
+        block = block->m_Next;
+    }
 }
 
-}
+

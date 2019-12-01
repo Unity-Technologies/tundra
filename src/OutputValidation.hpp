@@ -1,19 +1,14 @@
-#ifndef OUTPUT_VALIDATION_HPP
-#define OUTPUT_VALIDATION_HPP
+#pragma once
 
-namespace t2
+struct ExecResult;
+namespace Frozen { struct DagNode; }
+
+enum ValidationResult
 {
-    struct ExecResult;
-    struct NodeData;
+    Pass,
+    SwallowStdout,
+    UnexpectedConsoleOutputFail,
+    UnwrittenOutputFileFail
+};
 
-    enum ValidationResult
-    {
-        Pass,
-        SwallowStdout,
-        UnexpectedConsoleOutputFail,
-        UnwrittenOutputFileFail
-    };
-
-    ValidationResult ValidateExecResultAgainstAllowedOutput(ExecResult* result, const NodeData* node_data);
-}
-#endif
+ValidationResult ValidateExecResultAgainstAllowedOutput(ExecResult *result, const Frozen::DagNode *node_data);

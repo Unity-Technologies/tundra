@@ -2,7 +2,7 @@
 #include "TestHarness.hpp"
 #include <cstring>
 
-using namespace t2;
+
 
 #if ENABLED(USE_SHA1_HASH)
 

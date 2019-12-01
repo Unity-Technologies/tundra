@@ -1,60 +1,51 @@
-#ifndef SCANCACHE_HPP
-#define SCANCACHE_HPP
-
+#pragma once
 #include "Common.hpp"
 #include "Hash.hpp"
 #include "ReadWriteLock.hpp"
 
-namespace t2
+namespace Frozen { struct ScanData; }
+struct MemAllocHeap;
+struct MemAllocLinear;
+struct MemoryMappedFile;
+
+void ComputeScanCacheKey(
+    HashDigest *key_out,
+    const char *filename,
+    const HashDigest &scanner_hash);
+
+struct ScanCacheLookupResult
 {
-  struct ScanData;
-  struct MemAllocHeap;
-  struct MemAllocLinear;
-  struct MemoryMappedFile;
+    int m_IncludedFileCount;
+    FileAndHash *m_IncludedFiles;
+};
 
-  void ComputeScanCacheKey(
-      HashDigest*        key_out,
-      const char*        filename,
-      const HashDigest&  scanner_hash);
-
-  struct ScanCacheLookupResult
-  {
-    int           m_IncludedFileCount;
-    FileAndHash*  m_IncludedFiles;
-  };
-
-  struct ScanCache
-  {
+struct ScanCache
+{
     struct Record;
 
-    const ScanData* m_FrozenData;
+    const Frozen::ScanData *m_FrozenData;
 
-    ReadWriteLock   m_Lock;
-    MemAllocHeap*   m_Heap;
-    MemAllocLinear* m_Allocator;
-    uint32_t        m_RecordCount;
-    uint32_t        m_TableSize;
-    Record**        m_Table;
-    bool            m_Initialized;
+    ReadWriteLock m_Lock;
+    MemAllocHeap *m_Heap;
+    MemAllocLinear *m_Allocator;
+    uint32_t m_RecordCount;
+    uint32_t m_TableSize;
+    Record **m_Table;
+    bool m_Initialized;
     // Table of bits to track whether frozen records have been accessed.
-    uint8_t*        m_FrozenAccess;
-  };
-    
-  void ScanCacheInit(ScanCache* self, MemAllocHeap* heap, MemAllocLinear* allocator);
+    uint8_t *m_FrozenAccess;
+};
 
-  void ScanCacheSetCache(ScanCache* self, const ScanData* frozen_data);
+void ScanCacheInit(ScanCache *self, MemAllocHeap *heap, MemAllocLinear *allocator);
 
-  void ScanCacheDestroy(ScanCache* self);
+void ScanCacheSetCache(ScanCache *self, const Frozen::ScanData *frozen_data);
 
-  bool ScanCacheLookup(ScanCache* self, const HashDigest& key, uint64_t timestamp, ScanCacheLookupResult* result_out, MemAllocLinear* scratch);
+void ScanCacheDestroy(ScanCache *self);
 
-  void ScanCacheInsert(ScanCache* self, const HashDigest& key, uint64_t timestamp, const char** included_files, int count);
+bool ScanCacheLookup(ScanCache *self, const HashDigest &key, uint64_t timestamp, ScanCacheLookupResult *result_out, MemAllocLinear *scratch);
 
-  bool ScanCacheDirty(ScanCache* self);
+void ScanCacheInsert(ScanCache *self, const HashDigest &key, uint64_t timestamp, const char **included_files, int count);
 
-  bool ScanCacheSave(ScanCache* self, const char* fn, MemAllocHeap* heap);
+bool ScanCacheDirty(ScanCache *self);
 
-}
-
-
-#endif
+bool ScanCacheSave(ScanCache *self, const char *fn, MemAllocHeap *heap);

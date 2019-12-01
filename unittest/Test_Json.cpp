@@ -3,7 +3,7 @@
 #include "MemAllocLinear.hpp"
 #include "MemAllocHeap.hpp"
 
-using namespace t2;
+
 
 class JsonTest : public ::testing::Test
 {

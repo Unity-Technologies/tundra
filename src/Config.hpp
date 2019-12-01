@@ -1,12 +1,11 @@
-#ifndef CONFIG_HPP
-#define CONFIG_HPP
+#pragma once
 
 // Preprocessor helpers to check for definedness giving compile errors if used
 // against features with missing #defines.
-#define YES      -1
-#define NO       -2
-#define ENABLED(feature)  (1 == 2 feature)
-#define DISABLED(feature)  (0 == 2 feature)
+#define YES -1
+#define NO -2
+#define ENABLED(feature) (1 == 2 feature)
+#define DISABLED(feature) (0 == 2 feature)
 
 // Set up build features
 
@@ -52,7 +51,7 @@
 #define TUNDRA_CASE_INSENSITIVE_FILESYSTEM YES
 #define TUNDRA_EXE_SUFFIX ".exe"
 #if defined(__GNUC__)
-#  define TUNDRA_WIN32_MINGW 1
+#define TUNDRA_WIN32_MINGW 1
 #endif
 #if _WIN32_WINNT >= 0x600
 #define TUNDRA_WIN32_VISTA_APIS YES
@@ -104,10 +103,10 @@
 #endif
 
 #if defined(TUNDRA_WIN32)
-#define TD_PATHSEP     '\\'
+#define TD_PATHSEP '\\'
 #define TD_PATHSEP_STR "\\"
 #else
-#define TD_PATHSEP     '/'
+#define TD_PATHSEP '/'
 #define TD_PATHSEP_STR "/"
 #endif
 
@@ -117,6 +116,4 @@
 #else
 #define USE_VALGRIND NO
 #endif
-#endif
-
 #endif

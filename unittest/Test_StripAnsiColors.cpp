@@ -3,7 +3,7 @@
 #include <cstring>
 #include "NodeResultPrinting.hpp"
 
-using namespace t2;
+
 
 TEST(StripAnsi, CarrotAtVeryEnd)
 {

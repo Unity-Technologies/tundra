@@ -1,30 +1,26 @@
-#ifndef SCANDATA_HPP
-#define SCANDATA_HPP
+#pragma once
 
 #include "BinaryData.hpp"
 
-namespace t2
+namespace Frozen
 {
-  struct ScanCacheEntry
-  {
-    uint64_t                        m_FileTimestamp;
-    FrozenArray<FrozenFileAndHash>  m_IncludedFiles;
-  };
+struct ScanCacheEntry
+{
+    uint64_t m_FileTimestamp;
+    FrozenArray<FrozenFileAndHash> m_IncludedFiles;
+};
 
-  struct ScanData
-  {
+struct ScanData
+{
     static const uint32_t MagicNumber = 0x1517000f ^ kTundraHashMagic;
 
-    uint32_t                   m_MagicNumber;
+    uint32_t m_MagicNumber;
 
-    int32_t                    m_EntryCount;
+    int32_t m_EntryCount;
 
-    FrozenPtr<HashDigest>      m_Keys;
-    FrozenPtr<ScanCacheEntry>  m_Data;
-    FrozenPtr<uint64_t>        m_AccessTimes;
-    uint32_t                   m_MagicNumberEnd;
-  };
-
+    FrozenPtr<HashDigest> m_Keys;
+    FrozenPtr<ScanCacheEntry> m_Data;
+    FrozenPtr<uint64_t> m_AccessTimes;
+    uint32_t m_MagicNumberEnd;
+};
 }
-
-#endif

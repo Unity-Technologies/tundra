@@ -2,7 +2,7 @@
 #include "HashTable.hpp"
 #include "MemAllocLinear.hpp"
 
-using namespace t2;
+
 
 class HashTableTest : public ::testing::Test
 {

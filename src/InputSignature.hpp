@@ -1,8 +1,8 @@
-namespace t2
-{
+#pragma once
+
 struct ThreadState;
 struct BuildQueue;
-struct NodeState;
+struct RuntimeNode;
 
-bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue* queue, ThreadState* thread_state, NodeState* node);
-}
+bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node);
+

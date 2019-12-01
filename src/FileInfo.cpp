@@ -8,7 +8,8 @@
 
 #if defined(TUNDRA_WIN32_MINGW)
 // mingw's sys/stat.h is broken and doesn't wrap structs in the extern "C" block
-extern "C" {
+extern "C"
+{
 #endif
 
 #include <sys/stat.h>
@@ -29,169 +30,167 @@ extern "C" {
 #include <shlwapi.h>
 #endif
 
-namespace t2
-{
 
-  struct StatCache;
 
-FileInfo GetFileInfo(const char* path)
+struct StatCache;
+
+FileInfo GetFileInfo(const char *path)
 {
-  TimingScope timing_scope(&g_Stats.m_StatCount, &g_Stats.m_StatTimeCycles);
-  
-  FileInfo result;
+    TimingScope timing_scope(&g_Stats.m_StatCount, &g_Stats.m_StatTimeCycles);
+
+    FileInfo result;
 #if defined(TUNDRA_UNIX)
-  struct stat stbuf;
+    struct stat stbuf;
 #elif defined(TUNDRA_WIN32)
-  struct __stat64 stbuf;
+    struct __stat64 stbuf;
 #endif
 
-  uint32_t flags = 0;
+    uint32_t flags = 0;
 
 #if defined(TUNDRA_UNIX)
-  if (0 != lstat(path, &stbuf))
-    goto Failure;
+    if (0 != lstat(path, &stbuf))
+        goto Failure;
 
-  if ((stbuf.st_mode & S_IFMT) == S_IFLNK)
-  {
-    flags |= FileInfo::kFlagSymlink;
-    if (0 != stat(path, &stbuf))
-      goto Failure;
-  }
+    if ((stbuf.st_mode & S_IFMT) == S_IFLNK)
+    {
+        flags |= FileInfo::kFlagSymlink;
+        if (0 != stat(path, &stbuf))
+            goto Failure;
+    }
 #elif defined(TUNDRA_WIN32)
-# if defined(TUNDRA_WIN32_MINGW)
-  if (0 != _stat64(path, &stbuf))
+#if defined(TUNDRA_WIN32_MINGW)
+    if (0 != _stat64(path, &stbuf))
 #else
-  if (0 != __stat64(path, &stbuf))
+    if (0 != __stat64(path, &stbuf))
 #endif
-    goto Failure;
+        goto Failure;
 
-  DWORD attrs = GetFileAttributesA(path);
-  if (attrs == INVALID_FILE_ATTRIBUTES)
-    goto Failure;
+    DWORD attrs = GetFileAttributesA(path);
+    if (attrs == INVALID_FILE_ATTRIBUTES)
+        goto Failure;
 
-  if ((attrs & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
-    flags |= FileInfo::kFlagSymlink;
+    if ((attrs & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+        flags |= FileInfo::kFlagSymlink;
 #endif
 
-  flags |= FileInfo::kFlagExists;
+    flags |= FileInfo::kFlagExists;
 
-  if ((stbuf.st_mode & S_IFMT) == S_IFDIR)
-    flags |= FileInfo::kFlagDirectory;
-  else if ((stbuf.st_mode & S_IFMT) == S_IFREG)
-    flags |= FileInfo::kFlagFile;
+    if ((stbuf.st_mode & S_IFMT) == S_IFDIR)
+        flags |= FileInfo::kFlagDirectory;
+    else if ((stbuf.st_mode & S_IFMT) == S_IFREG)
+        flags |= FileInfo::kFlagFile;
 
-  result.m_Flags     = flags;
-  result.m_Timestamp = stbuf.st_mtime;
-  result.m_Size      = stbuf.st_size;
+    result.m_Flags = flags;
+    result.m_Timestamp = stbuf.st_mtime;
+    result.m_Size = stbuf.st_size;
 
-  return result;
+    return result;
 
 Failure:
-  result.m_Flags     = errno == ENOENT ? flags : FileInfo::kFlagError;
-  result.m_Timestamp = 0;
-  result.m_Size      = 0;
+    result.m_Flags = errno == ENOENT ? flags : FileInfo::kFlagError;
+    result.m_Timestamp = 0;
+    result.m_Size = 0;
 
-  return result;
+    return result;
 }
 
-bool ShouldFilter(const char* name)
+bool ShouldFilter(const char *name)
 {
-  return ShouldFilter(name, strlen(name));
+    return ShouldFilter(name, strlen(name));
 }
 
-bool ShouldFilter(const char* name, size_t len)
+bool ShouldFilter(const char *name, size_t len)
 {
-  // Filter out some common noise entries that only serve to cause DAG regeneration.
+    // Filter out some common noise entries that only serve to cause DAG regeneration.
 
-  if (1 == len && name[0] == '.')
-    return true;
+    if (1 == len && name[0] == '.')
+        return true;
 
-  if (2 == len && name[0] == '.' && name[1] == '.')
-    return true;
+    if (2 == len && name[0] == '.' && name[1] == '.')
+        return true;
 
-  // Vim .foo.swp files
-  if (len >= 4 && name[0] == '.' && 0 == memcmp(name + len - 4, ".swp", 4))
-    return true;
+    // Vim .foo.swp files
+    if (len >= 4 && name[0] == '.' && 0 == memcmp(name + len - 4, ".swp", 4))
+        return true;
 
-  // Weed out '.tundra2.*' files too, as the .json file gets removed in between
-  // regenerating, messing up glob signatures.
-  static const char t2_prefix[] = ".tundra2.";
-  if (len >= (sizeof t2_prefix) - 1 && 0 == memcmp(name, t2_prefix, (sizeof t2_prefix) - 1))
-    return true;
+    // Weed out '.tundra2.*' files too, as the .json file gets removed in between
+    // regenerating, messing up glob signatures.
+    static const char t2_prefix[] = ".tundra2.";
+    if (len >= (sizeof t2_prefix) - 1 && 0 == memcmp(name, t2_prefix, (sizeof t2_prefix) - 1))
+        return true;
 
-  // Emacs foo~ files
-  if (len > 1 && name[len-1] == '~')
-    return true;
+    // Emacs foo~ files
+    if (len > 1 && name[len - 1] == '~')
+        return true;
 
-  return false;
+    return false;
 }
-
-
 
 void ListDirectory(
-    const char* path,
-    const char* filter,
+    const char *path,
+    const char *filter,
     bool recurse,
-    void* user_data,
-    void (*callback)(void* user_data, const FileInfo& info, const char* path))
+    void *user_data,
+    void (*callback)(void *user_data, const FileInfo &info, const char *path))
 {
 #if defined(TUNDRA_UNIX)
-	char full_fn[512];
-	struct dirent entry;
-	struct dirent* result = NULL;
-	const size_t path_len = strlen(path);
+    char full_fn[512];
+    struct dirent entry;
+    struct dirent *result = NULL;
+    const size_t path_len = strlen(path);
 
-	if (path_len + 1 > sizeof(full_fn)) {
-    Log(kWarning, "path too long: %s", path);
-		return;
-  }
-
-	strcpy(full_fn, path);
-
-	DIR* dir = opendir(path);
-
-	if (!dir)
-  {
-    Log(kWarning, "opendir() failed: %s", path);
-		return;
-  }
-
-	while (0 == readdir_r(dir, &entry, &result) && result)
-	{
-    size_t len = strlen(entry.d_name);
-
-    if (ShouldFilter(entry.d_name, len))
-      continue;
-        
-    bool matchesFilter = !filter || fnmatch(filter, entry.d_name, 0) == 0;
-    
-    // If we are recursing, we need to continue to find out whether this is a directory
-    if (!matchesFilter && !recurse)
-        continue;
-
-	if (len + path_len + 2 >= sizeof(full_fn))
+    if (path_len + 1 > sizeof(full_fn))
     {
-			Log(kWarning, "%s: name too long\n", entry.d_name);
-      continue;
+        Log(kWarning, "path too long: %s", path);
+        return;
     }
 
-		full_fn[path_len] = '/';
-		strcpy(full_fn + path_len + 1, entry.d_name);
+    strcpy(full_fn, path);
 
-    FileInfo info = GetFileInfo(full_fn);
+    DIR *dir = opendir(path);
 
-    if (matchesFilter)
-        (*callback)(user_data, info, entry.d_name);
-        
-    if (recurse && info.m_Flags & FileInfo::kFlagDirectory)
-        ListDirectory(full_fn, filter, recurse, user_data, callback);
-	}
+    if (!dir)
+    {
+        Log(kWarning, "opendir() failed: %s", path);
+        return;
+    }
 
-	closedir(dir);
+    while (0 == readdir_r(dir, &entry, &result) && result)
+    {
+        size_t len = strlen(entry.d_name);
+
+        if (ShouldFilter(entry.d_name, len))
+            continue;
+
+        bool matchesFilter = !filter || fnmatch(filter, entry.d_name, 0) == 0;
+
+        // If we are recursing, we need to continue to find out whether this is a directory
+        if (!matchesFilter && !recurse)
+            continue;
+
+        if (len + path_len + 2 >= sizeof(full_fn))
+        {
+            Log(kWarning, "%s: name too long\n", entry.d_name);
+            continue;
+        }
+
+        full_fn[path_len] = '/';
+        strcpy(full_fn + path_len + 1, entry.d_name);
+
+        FileInfo info = GetFileInfo(full_fn);
+
+        if (matchesFilter)
+            (*callback)(user_data, info, entry.d_name);
+
+        if (recurse && info.m_Flags & FileInfo::kFlagDirectory)
+            ListDirectory(full_fn, filter, recurse, user_data, callback);
+    }
+
+    closedir(dir);
 
 #else
-	WIN32_FIND_DATAA find_data;
-	char             scan_path[MAX_PATH];
+    WIN32_FIND_DATAA find_data;
+    char scan_path[MAX_PATH];
 
     const size_t path_length = strlen(path);
     if (path_length >= sizeof(scan_path) + 3)
@@ -199,69 +198,69 @@ void ListDirectory(
         Log(kWarning, "Path too long: %s", path);
         return;
     }
-    
+
     memcpy(scan_path, path, path_length);
     strcpy(scan_path + path_length, "/*");
 
-	for (int i = 0; i < MAX_PATH; ++i)
-	{
-		char ch = scan_path[i];
-		if ('/' == ch)
-			scan_path[i] = '\\';
-		else if ('\0' == ch)
-			break;
-	}
-
-	HANDLE h = FindFirstFileA(scan_path, &find_data);
-
-	if (INVALID_HANDLE_VALUE == h)
-  {
-    Log(kWarning, "FindFirstFile() failed: %s", path);
-		return;
-  }
-
-	do
-	{
-    if (ShouldFilter(find_data.cFileName, strlen(find_data.cFileName)))
-      continue;
-    bool matchesFilter = !filter || PathMatchSpec(find_data.cFileName, filter);
-    if (!matchesFilter && !recurse)
-      continue;
-        
-    if (path_length + strlen(find_data.cFileName) + 2 > MAX_PATH)
+    for (int i = 0; i < MAX_PATH; ++i)
     {
-        Log(kWarning, "Path too long: %s/%s", path, find_data.cFileName);
-        continue;
+        char ch = scan_path[i];
+        if ('/' == ch)
+            scan_path[i] = '\\';
+        else if ('\0' == ch)
+            break;
     }
 
-    static const uint64_t kEpochDiff = 0x019DB1DED53E8000LL; // 116444736000000000 nsecs
-    static const uint64_t kRateDiff = 10000000; // 100 nsecs
+    HANDLE h = FindFirstFileA(scan_path, &find_data);
 
-    uint64_t ft = uint64_t(find_data.ftLastWriteTime.dwHighDateTime) << 32 | find_data.ftLastWriteTime.dwLowDateTime;
+    if (INVALID_HANDLE_VALUE == h)
+    {
+        Log(kWarning, "FindFirstFile() failed: %s", path);
+        return;
+    }
 
-    FileInfo info;
-    info.m_Flags     = FileInfo::kFlagExists;
-    info.m_Size      = uint64_t(find_data.nFileSizeHigh) << 32 | find_data.nFileSizeLow;
-    info.m_Timestamp = (ft - kEpochDiff) / kRateDiff;
+    do
+    {
+        if (ShouldFilter(find_data.cFileName, strlen(find_data.cFileName)))
+            continue;
+        bool matchesFilter = !filter || PathMatchSpec(find_data.cFileName, filter);
+        if (!matchesFilter && !recurse)
+            continue;
 
-    if (FILE_ATTRIBUTE_DIRECTORY & find_data.dwFileAttributes)
-      info.m_Flags |= FileInfo::kFlagDirectory;
-    else
-      info.m_Flags |= FileInfo::kFlagFile;
+        if (path_length + strlen(find_data.cFileName) + 2 > MAX_PATH)
+        {
+            Log(kWarning, "Path too long: %s/%s", path, find_data.cFileName);
+            continue;
+        }
 
-    strcpy(scan_path + path_length + 1, find_data.cFileName);
-        
-    if (matchesFilter)
-        (*callback)(user_data, info, scan_path);
+        static const uint64_t kEpochDiff = 0x019DB1DED53E8000LL; // 116444736000000000 nsecs
+        static const uint64_t kRateDiff = 10000000;              // 100 nsecs
 
-    if (recurse && info.m_Flags & FileInfo::kFlagDirectory)
-        ListDirectory(scan_path, filter, recurse, user_data, callback);
-        
-	} while (FindNextFileA(h, &find_data));
+        uint64_t ft = uint64_t(find_data.ftLastWriteTime.dwHighDateTime) << 32 | find_data.ftLastWriteTime.dwLowDateTime;
 
-	if (!FindClose(h))
-		CroakErrno("couldn't close FindFile handle");
+        FileInfo info;
+        info.m_Flags = FileInfo::kFlagExists;
+        info.m_Size = uint64_t(find_data.nFileSizeHigh) << 32 | find_data.nFileSizeLow;
+        info.m_Timestamp = (ft - kEpochDiff) / kRateDiff;
+
+        if (FILE_ATTRIBUTE_DIRECTORY & find_data.dwFileAttributes)
+            info.m_Flags |= FileInfo::kFlagDirectory;
+        else
+            info.m_Flags |= FileInfo::kFlagFile;
+
+        strcpy(scan_path + path_length + 1, find_data.cFileName);
+
+        if (matchesFilter)
+            (*callback)(user_data, info, scan_path);
+
+        if (recurse && info.m_Flags & FileInfo::kFlagDirectory)
+            ListDirectory(scan_path, filter, recurse, user_data, callback);
+
+    } while (FindNextFileA(h, &find_data));
+
+    if (!FindClose(h))
+        CroakErrno("couldn't close FindFile handle");
 #endif
 }
 
-}
+
