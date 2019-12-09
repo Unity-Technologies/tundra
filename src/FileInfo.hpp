@@ -35,3 +35,5 @@ void ListDirectory(
     bool recurse,
     void *user_data,
     void (*callback)(void *user_data, const FileInfo &info, const char *path));
+
+bool DeleteDirectory(const char* path);

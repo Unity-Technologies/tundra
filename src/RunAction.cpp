@@ -23,11 +23,10 @@
 #include "MakeDirectories.hpp"
 #include "BuildLoop.hpp"
 #include "RunAction.hpp"
+#include "FileInfo.hpp"
 #include <stdarg.h>
 #include <algorithm>
 #include <stdio.h>
-#include <filesystem>
-
 
 
 struct SlowCallbackData
@@ -154,14 +153,9 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
     for (const FrozenFileAndHash &outputDir : node_data->m_OutputDirectories)
     {
         Log(kDebug, "Removing output directory %s before running action", outputDir.m_Filename.Get());
-        std::filesystem::path filesystempath(outputDir.m_Filename.Get());
-        if (std::filesystem::is_directory(filesystempath))
-        {
-            std::error_code errorcode;
-            int removeCount = std::filesystem::remove_all(filesystempath, errorcode);
-            if (removeCount == -1)
-                return FailWithPreparationError("Failed to remove directory %s as part of preparing to actually running this node",outputDir.m_Filename.Get());
-        }
+
+        if (!DeleteDirectory(outputDir.m_Filename.Get()))
+            return FailWithPreparationError("Failed to remove directory %s as part of preparing to actually running this node",outputDir.m_Filename.Get());
     }
 
     auto EnsureParentDirExistsFor = [=](const FrozenFileAndHash &fileAndHash) -> bool {

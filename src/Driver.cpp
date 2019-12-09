@@ -24,7 +24,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <filesystem>
 #include <vector>
 #include <sstream>
 
@@ -1468,8 +1467,7 @@ void DriverRemoveStaleOutputs(Driver *self)
     //actually do the directory deletion
     const char* any_nuked_dir = nullptr;
     HashSetWalk(&outputdir_nuke_table, [&](uint32_t index, uint32_t hash, const char* path) {
-        std::filesystem::path filesystempath(path);
-        std::filesystem::remove_all(path);
+        DeleteDirectory(path);
         any_nuked_dir = path;
     });
 

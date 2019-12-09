@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+
 #if defined(TUNDRA_WIN32_MINGW)
 // mingw's sys/stat.h is broken and doesn't wrap structs in the extern "C" block
 extern "C"
@@ -28,9 +29,10 @@ extern "C"
 #elif defined(TUNDRA_WIN32)
 #include <windows.h>
 #include <shlwapi.h>
+#include <filesystem>
+#else
+#include <ftw.h>
 #endif
-
-
 
 struct StatCache;
 
@@ -263,4 +265,22 @@ void ListDirectory(
 #endif
 }
 
+bool DeleteDirectory(const char* path)
+{
+#if TUNDRA_WIN32
+    std::filesystem::path filesystempath(path);
+    if (!std::filesystem::is_directory(path))
+        return -1;
+    std::error_code error;
+    int result = std::filesystem::remove_all(path, error);
+    return result != -1;
+#else
+    auto unlink_cb = [] (const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf) -> int
+    {
+        int rv = remove(fpath);
+        return rv;
+    }
 
+    return nftw(path, unlink_cb, 64, FTW_DEPTH | FTW_PHYS);
+#endif
+}
