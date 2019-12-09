@@ -1,0 +1,14 @@
+{
+    "files.associations": {
+        "*.idl": "cpp",
+        "iosfwd": "cpp",
+        "array": "cpp",
+        "vector": "cpp",
+        "xstring": "cpp",
+        "xutility": "cpp",
+        "future": "cpp",
+        "system_error": "cpp",
+        "filesystem": "cpp",
+        "fstream": "cpp"
+    }
+}
