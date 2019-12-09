@@ -274,6 +274,12 @@ bool DeleteDirectory(const char* path)
     int result = std::filesystem::remove_all(path, error);
     return result != -1;
 #else
+
+#if TUNDRA_APPLE
+    #define FTW_STOP 1
+    #define FTW_CONTINUE 0
+#endif
+
     auto unlink_cb = [] (const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf) -> int
     {
         return remove(fpath) == -1 ? FTW_STOP : FTW_CONTINUE;
