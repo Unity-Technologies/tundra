@@ -280,6 +280,10 @@ bool DeleteDirectory(const char* path)
     #define FTW_CONTINUE 0
 #endif
 
+    FileInfo fileInfo = GetFileInfo(path);
+    if (!fileInfo.IsDirectory())
+        return false;
+
     auto unlink_cb = [] (const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf) -> int
     {
         return remove(fpath) == -1 ? FTW_STOP : FTW_CONTINUE;
