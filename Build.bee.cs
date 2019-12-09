@@ -162,7 +162,7 @@ class Build
 
         var configs = toolChains.SelectMany(toolchain => new[]
         {
-            new NativeProgramConfiguration(toolchain.Platform is LinuxPlatform ? CodeGen.Release : CodeGen.Master /* ubuntu 10.14 LTO linker crashes on todays tundra*/, toolchain, lump: false),
+            new NativeProgramConfiguration(CodeGen.Master, toolchain, lump: false),
             new NativeProgramConfiguration(CodeGen.Debug, toolchain, lump: false),
         });
 
