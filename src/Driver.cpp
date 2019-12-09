@@ -1413,7 +1413,7 @@ void DriverRemoveStaleOutputs(Driver *self)
     // Check all output files in the state if they're still around.
     // Otherwise schedule them (and all their parent dirs) for nuking.
     // We will rely on the fact that we can't rmdir() non-empty directories.
-    auto check_file = [&file_table, &nuke_table, scratch, add_parent_directories_to_nuke_table](const char *path) {
+    auto check_file = [&file_table, &nuke_table, add_parent_directories_to_nuke_table](const char *path) {
         uint32_t path_hash = Djb2HashPath(path);
 
         if (!HashSetLookup(&file_table, path_hash, path))
