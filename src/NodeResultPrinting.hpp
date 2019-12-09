@@ -31,7 +31,8 @@ void PrintNodeResult(
     bool always_verbose,
     uint64_t time_exec_started,
     ValidationResult validationResult,
-    const bool *untouched_outputs);
+    const bool *untouched_outputs,
+    bool was_preparation_error);
 int PrintNodeInProgress(const Frozen::DagNode *node_data, uint64_t time_of_start, const BuildQueue *queue);
 void PrintDeferredMessages(BuildQueue *queue);
 void PrintNonNodeActionResult(double duration, int max_nodes, MessageStatusLevel::Enum status_level, const char *annotation, ExecResult *result = nullptr);

@@ -169,6 +169,9 @@ static void DumpState(const Frozen::AllBuiltNodes *data)
         printf("  aux outputs:\n");
         for (const char *path : node.m_AuxOutputFiles)
             printf("    %s\n", path);
+        printf("  output directories:\n");
+        for (const char *path : node.m_OutputDirectories)
+            printf("    %s\n", path);
 
         printf("  input files:\n");
         for (int i=0; i!=node.m_InputFiles.GetCount(); i++)

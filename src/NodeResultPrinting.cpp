@@ -28,6 +28,7 @@ struct NodeResultPrintData
     int return_code;
     bool was_signalled;
     bool was_aborted;
+    bool was_preparation_error;
 };
 
 static bool EmitColors = false;
@@ -371,7 +372,8 @@ void PrintNodeResult(
     bool always_verbose,
     uint64_t time_exec_started,
     ValidationResult validationResult,
-    const bool *untouched_outputs)
+    const bool *untouched_outputs,
+    bool was_preparation_error)
 {
     int processedNodeCount = queue->m_FinishedNodeCount;
     bool failed = result->m_ReturnCode != 0 || result->m_WasSignalled || validationResult >= ValidationResult::UnexpectedConsoleOutputFail;
@@ -388,9 +390,11 @@ void PrintNodeResult(
     data.untouched_outputs = untouched_outputs;
     data.processed_node_count = processedNodeCount;
     data.status_level = failed ? MessageStatusLevel::Failure : MessageStatusLevel::Success;
-    data.return_code = result->m_ReturnCode;
-    data.was_signalled = result->m_WasSignalled;
-    data.was_aborted = result->m_WasAborted;
+
+    data.return_code = was_preparation_error ? 1 : result->m_ReturnCode;
+    data.was_signalled = was_preparation_error ? 0 : result->m_WasSignalled;
+    data.was_aborted = was_preparation_error ? 0 : result->m_WasAborted;
+    data.was_preparation_error = was_preparation_error;
 
     bool anyOutput = result->m_OutputBuffer.cursor > 0;
     if (anyOutput && verbose)
@@ -448,11 +452,14 @@ void PrintNodeResult(
             data.cmd_line = StrDup(queue->m_Config.m_Heap, data.cmd_line);
         if (data.output_buffer != nullptr)
             data.output_buffer = StrDup(queue->m_Config.m_Heap, data.output_buffer);
-        int n_outputs = node_data->m_OutputFiles.GetCount();
-        bool *untouched_outputs_copy = (bool *)HeapAllocate(queue->m_Config.m_Heap, n_outputs * sizeof(bool));
-        memcpy(untouched_outputs_copy, untouched_outputs, n_outputs * sizeof(bool));
-        data.untouched_outputs = untouched_outputs_copy;
 
+        if (untouched_outputs != nullptr)
+        {
+            int n_outputs = node_data->m_OutputFiles.GetCount();
+            bool* untouched_outputs_copy = (bool*)HeapAllocate(queue->m_Config.m_Heap, n_outputs * sizeof(bool));
+            memcpy(untouched_outputs_copy, untouched_outputs, n_outputs * sizeof(bool));
+            data.untouched_outputs = untouched_outputs_copy;
+        }
         // store data needed for deferred output
         deferred_messages[deferred_message_count] = data;
         deferred_message_count++;

@@ -21,6 +21,7 @@ struct BuiltNode
     HashDigest m_InputSignature;
     FrozenArray<FrozenString> m_OutputFiles;
     FrozenArray<FrozenString> m_AuxOutputFiles;
+    FrozenArray<FrozenString> m_OutputDirectories;
     FrozenString m_Action;
     FrozenArray<NodeInputFileData> m_InputFiles;
     FrozenArray<NodeInputFileData> m_ImplicitInputFiles;

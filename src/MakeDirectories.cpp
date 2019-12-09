@@ -19,10 +19,9 @@ bool MakeDirectoriesRecursive(StatCache *stat_cache, const PathBuffer &dir)
 
     FileInfo info = StatCacheStat(stat_cache, path);
 
-    if (info.Exists())
+
+    if (info.IsDirectory())
     {
-        // Just assume this is a directory. We could check it - but there's currently no way via _stat64() calls
-        // on Windows to check if a file is a symbolic link (to a directory).
         return true;
     }
     else

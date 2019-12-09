@@ -2,15 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
-using Bee;
 using Bee.BuildTools;
 using Bee.Core;
-using Bee.DotNet;
 using Bee.NativeProgramSupport.Building;
 using Bee.NativeProgramSupport.Building.FluentSyntaxHelpers;
 using Bee.ProjectGeneration.VisualStudio;
 using Bee.Toolchain.GNU;
-using Bee.Toolchain.Linux;
 using Bee.Toolchain.VisualStudio;
 using Bee.Tools;
 using Bee.VisualStudioSolution;
@@ -27,7 +24,8 @@ class Build
   {
     public TundraNativeProgram(string name) : base(name)
     {
-      this.CompilerSettings().Add(compiler => compiler.WithCppLanguageVersion(CppLanguageVersion.Cpp11));
+      this.CompilerSettings().Add(compiler => compiler.WithCppLanguageVersion(CppLanguageVersion.Cpp17));
+
       this.CompilerSettingsForGccLike().Add(compiler => compiler.WithVisibility(Visibility.Default));
 
       this.CompilerSettingsForClang().Add(c => c.WithWarningPolicies(new[]
@@ -129,6 +127,7 @@ class Build
 
     // tundra unit tests
     var tundraUnitTestProgram = new TundraNativeProgram("tundra2-unittest");
+    tundraUnitTestProgram.CompilerSettings().Add(compiler => compiler.WithCppLanguageVersion(CppLanguageVersion.Cpp11)); //<-- not Cpp17 yet due to some compile errors in google library
     tundraUnitTestProgram.Libraries.Add(tundraLibraryProgram);
     tundraUnitTestProgram.Sources.Add(UnitTestSourceFolder.Files());
     tundraUnitTestProgram.IncludeDirectories.Add($"{UnitTestSourceFolder}/googletest/googletest");
@@ -144,7 +143,7 @@ class Build
     var toolChains = new ToolChain[]
     {
       ToolChain.Store.Mac().Sdk_10_13().x64("10.12"),
-      ToolChain.Store.Windows().VS2017().Sdk_17134().x64(),
+      ToolChain.Store.Windows().VS2019().Sdk_10586().x64(),
       ToolChain.Store.Linux().Ubuntu_14_4().Gcc_4_8().x64(),
     }.Where(toolChain => toolChain.CanBuild).ToArray();
 
@@ -193,7 +192,7 @@ class Build
       }
     }
 
-    SetupVisualStudioSolution(projectFileBuilders, configs);
+   SetupVisualStudioSolution(projectFileBuilders, configs);
   }
 
   static void SetupVisualStudioSolution(Dictionary<NativeProgram, VisualStudioNativeProjectFileBuilder> projectFileBuilders, IEnumerable<NativeProgramConfiguration> configs)
