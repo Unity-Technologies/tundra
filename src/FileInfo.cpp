@@ -26,12 +26,11 @@ extern "C"
 #include <unistd.h>
 #include <dirent.h>
 #include <fnmatch.h>
+#include <ftw.h>
 #elif defined(TUNDRA_WIN32)
 #include <windows.h>
 #include <shlwapi.h>
 #include <filesystem>
-#else
-#include <ftw.h>
 #endif
 
 struct StatCache;
@@ -275,12 +274,20 @@ bool DeleteDirectory(const char* path)
     int result = std::filesystem::remove_all(path, error);
     return result != -1;
 #else
-    auto unlink_cb = [] (const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf) -> int
-    {
-        int rv = remove(fpath);
-        return rv;
-    }
 
-    return nftw(path, unlink_cb, 64, FTW_DEPTH | FTW_PHYS);
+
+        auto unlink_cb = [] (const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf) -> int
+    {
+        if (remove(fpath) == -1)
+        {
+            return FTW_STOP;
+        }
+
+        return FTW_CONTINUE;
+    };
+
+    if (FTW_STOP == nftw(path, unlink_cb, 64, FTW_DEPTH | FTW_PHYS))
+        return false;
+    return true;
 #endif
 }
