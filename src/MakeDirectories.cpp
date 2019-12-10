@@ -21,16 +21,15 @@ bool MakeDirectoriesRecursive(StatCache *stat_cache, const PathBuffer &dir)
 
 
     if (info.IsDirectory())
-    {
         return true;
-    }
-    else
-    {
-        Log(kSpam, "create dir \"%s\"", path);
-        bool success = MakeDirectory(path);
-        StatCacheMarkDirty(stat_cache, path, Djb2HashPath(path));
-        return success;
-    }
+
+    if (info.IsFile())
+        return false;
+
+    Log(kSpam, "create dir \"%s\"", path);
+    bool success = MakeDirectory(path);
+    StatCacheMarkDirty(stat_cache, path, Djb2HashPath(path));
+    return success;
 }
 
 bool MakeDirectoriesForFile(StatCache *stat_cache, const PathBuffer &buffer)
