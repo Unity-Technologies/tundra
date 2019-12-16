@@ -23,10 +23,10 @@
 #include "MakeDirectories.hpp"
 #include "BuildLoop.hpp"
 #include "RunAction.hpp"
+#include "FileInfo.hpp"
 #include <stdarg.h>
 #include <algorithm>
 #include <stdio.h>
-
 
 
 struct SlowCallbackData
@@ -104,13 +104,62 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
         env_vars[i].m_Value = node_data->m_EnvVars[i].m_Value;
     }
 
+    ExecResult result = {0, false};
+
+    auto FailWithPreparationError = [thread_state,node_data, queue_lock](const char* formatString, ...) -> NodeBuildResult::Enum
+    {
+        ExecResult result = {0, false};
+        char buffer[2000];
+        va_list args;
+        va_start(args, formatString);
+        vsnprintf(buffer, sizeof(buffer), formatString, args);
+        va_end(args);
+
+        result.m_ReturnCode = 1;
+
+        InitOutputBuffer(&result.m_OutputBuffer, &thread_state->m_LocalHeap);
+        result.m_FrozenNodeData = node_data;
+
+        EmitOutputBytesToDestination(&result, buffer, strlen(buffer));
+
+        MutexLock(queue_lock);
+        PrintNodeResult(&result, node_data, "", thread_state->m_Queue, thread_state, false, TimerGet(), ValidationResult::Pass, nullptr, true);
+        MutexUnlock(queue_lock);
+
+        ExecResultFreeMemory(&result);
+
+        return NodeBuildResult::kRanFailed;
+    };
+
     for (int i = 0; i < node_data->m_SharedResources.GetCount(); ++i)
     {
         if (!SharedResourceAcquire(queue, &thread_state->m_LocalHeap, node_data->m_SharedResources[i]))
         {
-            Log(kError, "failed to create shared resource %s", queue->m_Config.m_SharedResources[node_data->m_SharedResources[i]].m_Annotation.Get());
-            MutexLock(queue_lock);
-            return NodeBuildResult::kRanFailed;
+            return FailWithPreparationError("failed to create shared resource %s", queue->m_Config.m_SharedResources[node_data->m_SharedResources[i]].m_Annotation.Get());
+        }
+    }
+
+    // See if we need to remove the output files before running anything.
+    if (0 == (node_data->m_Flags & Frozen::DagNode::kFlagOverwriteOutputs))
+    {
+        for (const FrozenFileAndHash &output : node_data->m_OutputFiles)
+        {
+            Log(kDebug, "Removing output file %s before running action", output.m_Filename.Get());
+            remove(output.m_Filename);
+            StatCacheMarkDirty(stat_cache, output.m_Filename, output.m_FilenameHash);
+        }
+    }
+
+    for (const FrozenFileAndHash &outputDir : node_data->m_OutputDirectories)
+    {
+        Log(kDebug, "Removing output directory %s before running action", outputDir.m_Filename.Get());
+
+        FileInfo fileInfo = GetFileInfo(outputDir.m_Filename);
+        if (fileInfo.IsDirectory())
+        {
+            StatCacheMarkDirty(stat_cache, outputDir.m_Filename, outputDir.m_FilenameHash);
+            if (!DeleteDirectory(outputDir.m_Filename.Get()))
+                return FailWithPreparationError("Failed to remove directory %s as part of preparing to actually running this node",outputDir.m_Filename.Get());
         }
     }
 
@@ -120,7 +169,7 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
 
         if (!MakeDirectoriesForFile(stat_cache, output))
         {
-            Log(kError, "failed to create output directories for %s", fileAndHash.m_Filename.Get());
+            FailWithPreparationError("Failed to create output directory for targetfile %s as part of preparing to actually running this node",fileAndHash.m_Filename.Get());
             return false;
         }
         return true;
@@ -141,19 +190,6 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
     for (const FrozenFileAndHash &output_file : node_data->m_OutputFiles)
         if (!EnsureParentDirExistsFor(output_file))
             return NodeBuildResult::kRanFailed;
-
-    ExecResult result = {0, false};
-
-    // See if we need to remove the output files before running anything.
-    if (0 == (node_data->m_Flags & Frozen::DagNode::kFlagOverwriteOutputs))
-    {
-        for (const FrozenFileAndHash &output : node_data->m_OutputFiles)
-        {
-            Log(kDebug, "Removing output file %s before running action", output.m_Filename.Get());
-            remove(output.m_Filename);
-            StatCacheMarkDirty(stat_cache, output.m_Filename, output.m_FilenameHash);
-        }
-    }
 
     uint64_t time_of_start = TimerGet();
 
@@ -250,7 +286,7 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
 
     //maybe consider changing this to use a dedicated lock for printing, instead of using the queuelock.
     MutexLock(queue_lock);
-    PrintNodeResult(&result, node_data, last_cmd_line, thread_state->m_Queue, thread_state, echo_cmdline, time_of_start, passedOutputValidation, untouched_outputs);
+    PrintNodeResult(&result, node_data, last_cmd_line, thread_state->m_Queue, thread_state, echo_cmdline, time_of_start, passedOutputValidation, untouched_outputs, false);
     MutexUnlock(queue_lock);
 
     ExecResultFreeMemory(&result);

@@ -24,7 +24,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
 #include <vector>
 #include <sstream>
 
@@ -976,6 +975,15 @@ static void save_node_sharedcode(bool nodeWasBuiltSuccesfully, const HashDigest 
         BinarySegmentWriteStringData(segments.string, GetFileNameFrom(src_node->m_AuxOutputFiles[i]));
     }
 
+    int dir_count = src_node->m_OutputDirectories.GetCount();
+    BinarySegmentWriteInt32(segments.built_nodes, dir_count);
+    BinarySegmentWritePointer(segments.built_nodes, BinarySegmentPosition(segments.array));
+    for (int32_t i = 0; i < dir_count; ++i)
+    {
+        BinarySegmentWritePointer(segments.array, BinarySegmentPosition(segments.string));
+        BinarySegmentWriteStringData(segments.string, GetFileNameFrom(src_node->m_OutputDirectories[i]));
+    }
+
     BinarySegmentWritePointer(segments.built_nodes, BinarySegmentPosition(segments.string));
     BinarySegmentWriteStringData(segments.string, src_node->m_Action);
 }
@@ -1342,6 +1350,8 @@ void DriverRemoveStaleOutputs(Driver *self)
 
     HashSet<kFlagPathStrings> file_table;
     HashSetInit(&file_table, &self->m_Heap);
+    HashSet<kFlagPathStrings> directory_table;
+    HashSetInit(&directory_table, &self->m_Heap);
 
     // Insert all current regular and aux output files into the hash table.
     auto add_file = [&file_table](const FrozenFileAndHash &p) -> void {
@@ -1353,28 +1363,57 @@ void DriverRemoveStaleOutputs(Driver *self)
         }
     };
 
+    auto add_directory = [&directory_table](const FrozenFileAndHash &p) -> void {
+        const uint32_t hash = p.m_FilenameHash;
+
+        if (!HashSetLookup(&directory_table, hash, p.m_Filename))
+        {
+            HashSetInsert(&directory_table, hash, p.m_Filename);
+        }
+    };
+
     for (int i = 0, node_count = dag->m_NodeCount; i < node_count; ++i)
     {
         const Frozen::DagNode *node = dag->m_DagNodes + i;
 
         for (const FrozenFileAndHash &p : node->m_OutputFiles)
-        {
             add_file(p);
-        }
 
         for (const FrozenFileAndHash &p : node->m_AuxOutputFiles)
-        {
             add_file(p);
-        }
+
+        for (const FrozenFileAndHash &p : node->m_OutputDirectories)
+            add_directory(p);
     }
 
     HashSet<kFlagPathStrings> nuke_table;
     HashSetInit(&nuke_table, &self->m_Heap);
 
+    auto add_parent_directories_to_nuke_table = [&nuke_table, &scratch](const char* path)
+    {
+        PathBuffer buffer;
+        PathInit(&buffer, path);
+
+        while (PathStripLast(&buffer))
+        {
+            if (buffer.m_SegCount == 0)
+                break;
+
+            char dir[kMaxPathLength];
+            PathFormat(dir, &buffer);
+            uint32_t dir_hash = Djb2HashPath(dir);
+
+            if (!HashSetLookup(&nuke_table, dir_hash, dir))
+            {
+                HashSetInsert(&nuke_table, dir_hash, StrDup(scratch, dir));
+            }
+        }
+    };
+
     // Check all output files in the state if they're still around.
     // Otherwise schedule them (and all their parent dirs) for nuking.
     // We will rely on the fact that we can't rmdir() non-empty directories.
-    auto check_file = [&file_table, &nuke_table, scratch](const char *path) {
+    auto check_file = [&file_table, &nuke_table, add_parent_directories_to_nuke_table](const char *path) {
         uint32_t path_hash = Djb2HashPath(path);
 
         if (!HashSetLookup(&file_table, path_hash, path))
@@ -1384,23 +1423,21 @@ void DriverRemoveStaleOutputs(Driver *self)
                 HashSetInsert(&nuke_table, path_hash, path);
             }
 
-            PathBuffer buffer;
-            PathInit(&buffer, path);
+            add_parent_directories_to_nuke_table(path);
+        }
+    };
 
-            while (PathStripLast(&buffer))
-            {
-                if (buffer.m_SegCount == 0)
-                    break;
 
-                char dir[kMaxPathLength];
-                PathFormat(dir, &buffer);
-                uint32_t dir_hash = Djb2HashPath(dir);
+    HashSet<kFlagPathStrings> outputdir_nuke_table;
+    HashSetInit(&outputdir_nuke_table, &self->m_Heap);
 
-                if (!HashSetLookup(&nuke_table, dir_hash, dir))
-                {
-                    HashSetInsert(&nuke_table, dir_hash, StrDup(scratch, dir));
-                }
-            }
+    auto check_outputdirectory = [&directory_table, &outputdir_nuke_table, add_parent_directories_to_nuke_table](const char *path) {
+        uint32_t path_hash = Djb2HashPath(path);
+        if (!HashSetLookup(&directory_table, path_hash, path))
+        {
+            if (!HashSetLookup(&outputdir_nuke_table, path_hash, path))
+                HashSetInsert(&outputdir_nuke_table, path_hash, path);
+            add_parent_directories_to_nuke_table(path);
         }
     };
 
@@ -1420,7 +1457,19 @@ void DriverRemoveStaleOutputs(Driver *self)
         {
             check_file(path);
         }
+
+        for (const char* dir : built_node->m_OutputDirectories)
+        {
+            check_outputdirectory(dir);
+        }
     }
+
+    //actually do the directory deletion
+    const char* any_nuked_dir = nullptr;
+    HashSetWalk(&outputdir_nuke_table, [&](uint32_t index, uint32_t hash, const char* path) {
+        DeleteDirectory(path);
+        any_nuked_dir = path;
+    });
 
     // Create list of files and dirs, sort descending by path length. This sorts
     // files and subdirectories before their parent directories.
@@ -1433,9 +1482,9 @@ void DriverRemoveStaleOutputs(Driver *self)
         return strlen(r) < strlen(l);
     });
 
-    uint32_t nuke_count = nuke_table.m_RecordCount;
+    uint32_t file_nuke_count = nuke_table.m_RecordCount;
     uint64_t time_exec_started = TimerGet();
-    for (uint32_t i = 0; i < nuke_count; ++i)
+    for (uint32_t i = 0; i < file_nuke_count; ++i)
     {
         if (CleanupPath(paths[i]))
         {
@@ -1443,14 +1492,19 @@ void DriverRemoveStaleOutputs(Driver *self)
         }
     }
 
+
+    uint32_t nuke_count = file_nuke_count + outputdir_nuke_table.m_RecordCount;
+
     if (nuke_count > 0)
     {
         char buffer[2000];
-        snprintf(buffer, sizeof(buffer), "Delete %d artifact files that are no longer in use. (like %s)", nuke_count, paths[0]);
+        snprintf(buffer, sizeof(buffer), "Delete %d artifact files that are no longer in use. (like %s)", nuke_count, any_nuked_dir == nullptr ? paths[0] : any_nuked_dir);
         PrintNonNodeActionResult(TimerDiffSeconds(time_exec_started, TimerGet()), (int)self->m_RuntimeNodes.m_Size, MessageStatusLevel::Success, buffer);
     }
 
     HashSetDestroy(&nuke_table);
+    HashSetDestroy(&directory_table);
+    HashSetDestroy(&outputdir_nuke_table);
     HashSetDestroy(&file_table);
 }
 

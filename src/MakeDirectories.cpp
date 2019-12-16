@@ -19,19 +19,17 @@ bool MakeDirectoriesRecursive(StatCache *stat_cache, const PathBuffer &dir)
 
     FileInfo info = StatCacheStat(stat_cache, path);
 
-    if (info.Exists())
-    {
-        // Just assume this is a directory. We could check it - but there's currently no way via _stat64() calls
-        // on Windows to check if a file is a symbolic link (to a directory).
+
+    if (info.IsDirectory())
         return true;
-    }
-    else
-    {
-        Log(kSpam, "create dir \"%s\"", path);
-        bool success = MakeDirectory(path);
-        StatCacheMarkDirty(stat_cache, path, Djb2HashPath(path));
-        return success;
-    }
+
+    if (info.IsFile())
+        return false;
+
+    Log(kSpam, "create dir \"%s\"", path);
+    bool success = MakeDirectory(path);
+    StatCacheMarkDirty(stat_cache, path, Djb2HashPath(path));
+    return success;
 }
 
 bool MakeDirectoriesForFile(StatCache *stat_cache, const PathBuffer &buffer)

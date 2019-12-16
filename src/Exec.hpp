@@ -27,7 +27,7 @@ struct ExecResult
     bool m_WasSignalled;
     bool m_WasAborted;
     bool m_RequiresFrontendRerun;
-    Frozen::DagNode *m_FrozenNodeData;
+    const Frozen::DagNode *m_FrozenNodeData;
     OutputBufferData m_OutputBuffer;
 };
 

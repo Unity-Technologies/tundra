@@ -29,6 +29,7 @@
 #if defined(TUNDRA_WIN32)
 #include <windows.h>
 #include <ctype.h>
+#include <shlwapi.h>
 #endif
 
 #if defined(TUNDRA_APPLE)
@@ -412,7 +413,7 @@ bool MakeDirectory(const char *path)
         switch (GetLastError())
         {
         case ERROR_ALREADY_EXISTS:
-            return true;
+            return PathIsDirectoryA(path);
         default:
             return false;
         }

@@ -1,4 +1,4 @@
-#pragma once;
+#pragma once
 #include "BinaryWriter.hpp"
 #include "HashTable.hpp"
 
