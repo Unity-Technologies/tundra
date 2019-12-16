@@ -154,8 +154,13 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
     {
         Log(kDebug, "Removing output directory %s before running action", outputDir.m_Filename.Get());
 
-        if (!DeleteDirectory(outputDir.m_Filename.Get()))
-            return FailWithPreparationError("Failed to remove directory %s as part of preparing to actually running this node",outputDir.m_Filename.Get());
+        FileInfo fileInfo = GetFileInfo(outputDir.m_Filename);
+        if (fileInfo.IsDirectory())
+        {
+            StatCacheMarkDirty(stat_cache, outputDir.m_Filename, outputDir.m_FilenameHash);
+            if (!DeleteDirectory(outputDir.m_Filename.Get()))
+                return FailWithPreparationError("Failed to remove directory %s as part of preparing to actually running this node",outputDir.m_Filename.Get());
+        }
     }
 
     auto EnsureParentDirExistsFor = [=](const FrozenFileAndHash &fileAndHash) -> bool {

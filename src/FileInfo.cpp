@@ -269,7 +269,7 @@ bool DeleteDirectory(const char* path)
 #if TUNDRA_WIN32
     std::filesystem::path filesystempath(path);
     if (!std::filesystem::is_directory(path))
-        return -1;
+        return false;
     std::error_code error;
     int result = std::filesystem::remove_all(path, error);
     return result != -1;
