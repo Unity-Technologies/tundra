@@ -19,9 +19,8 @@ struct BuiltNode
 {
     uint32_t m_WasBuiltSuccessfully;
     HashDigest m_InputSignature;
-    FrozenArray<FrozenString> m_OutputFiles;
-    FrozenArray<FrozenString> m_AuxOutputFiles;
-    FrozenArray<FrozenString> m_OutputDirectories;
+    FrozenArray<FrozenFileAndHash> m_OutputFiles;
+    FrozenArray<FrozenFileAndHash> m_AuxOutputFiles;
     FrozenString m_Action;
     FrozenArray<NodeInputFileData> m_InputFiles;
     FrozenArray<NodeInputFileData> m_ImplicitInputFiles;
@@ -31,7 +30,7 @@ struct BuiltNode
 
 struct AllBuiltNodes
 {
-    static const uint32_t MagicNumber = 0x1489CFAF ^ kTundraHashMagic;
+    static const uint32_t MagicNumber = 0xefa24bc0 ^ kTundraHashMagic;
 
     uint32_t m_MagicNumber;
 

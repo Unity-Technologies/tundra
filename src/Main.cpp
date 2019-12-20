@@ -8,6 +8,7 @@
 #include "DagData.hpp"
 #include "NodeResultPrinting.hpp"
 #include "HumanActivityDetection.hpp"
+#include "DynamicOutputDirectories.hpp"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -448,6 +449,8 @@ int main(int argc, char *argv[])
     if (!DriverInitData(&driver))
         goto leave;
 
+    InitializeDynamicOutputDirectories(driver.m_Options.m_ThreadCount);
+
 #if TUNDRA_WIN32
     buildTitle = _strdup(driver.m_DagData->m_BuildTitle.Get());
 #else
@@ -512,6 +515,8 @@ int main(int argc, char *argv[])
 leave:
     if (options.m_ThrottleOnHumanActivity)
         HumanActivityDetectionDestroy();
+
+    DestroyDynamicOutputDirectories();
 
     DriverDestroy(&driver);
 

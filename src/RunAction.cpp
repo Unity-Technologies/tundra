@@ -21,6 +21,7 @@
 #include "HumanActivityDetection.hpp"
 #include "InputSignature.hpp"
 #include "MakeDirectories.hpp"
+#include "DynamicOutputDirectories.hpp"
 #include "BuildLoop.hpp"
 #include "RunAction.hpp"
 #include "FileInfo.hpp"
@@ -79,6 +80,8 @@ static ExecResult WriteTextFile(const char *payload, const char *target_file, Me
     result.m_ReturnCode = 1;
     return result;
 }
+
+
 
 NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node, Mutex *queue_lock)
 {
@@ -275,6 +278,15 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
             requireFrontendRerun = true;
         if (!VerifyFileSignatures())
             requireFrontendRerun = true;
+
+
+        if (node->m_DagNode->m_OutputDirectories.GetCount() > 0)
+            node->m_DynamicallyDiscoveredOutputFiles = AllocateEmptyPathList(thread_state->m_ThreadIndex);
+
+        for(const auto& d: node->m_DagNode->m_OutputDirectories)
+        {
+            AppendDirectoryListingToList(d.m_Filename.Get(), thread_state->m_ThreadIndex, *node->m_DynamicallyDiscoveredOutputFiles);
+        }
 
         Log(kSpam, "Process return code %d", result.m_ReturnCode);
     }
