@@ -290,22 +290,6 @@ static void ReportInputSignatureChanges(
     }
 }
 
-static bool OutputFilesDiffer(const Frozen::DagNode *dagnode, const Frozen::BuiltNode *previously_built_node)
-{
-    int file_count = dagnode->m_OutputFiles.GetCount();
-
-    if (file_count != previously_built_node->m_OutputFiles.GetCount())
-        return true;
-
-    for (int i = 0; i < file_count; ++i)
-    {
-        if (dagnode->m_OutputFiles[i].m_FilenameHash != previously_built_node->m_OutputFiles[i].m_FilenameHash)
-            return true;
-    }
-
-    return false;
-}
-
 static bool OutputFilesMissing(StatCache *stat_cache, RuntimeNode* node)
 {
     for (const FrozenFileAndHash &f : node->m_BuiltNode->m_OutputFiles)
