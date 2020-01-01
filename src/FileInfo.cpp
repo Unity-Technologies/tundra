@@ -35,6 +35,8 @@ extern "C"
 
 struct StatCache;
 
+const uint64_t kDirectoryTimestamp = 1;
+
 FileInfo GetFileInfo(const char *path)
 {
     TimingScope timing_scope(&g_Stats.m_StatCount, &g_Stats.m_StatTimeCycles);
@@ -82,7 +84,8 @@ FileInfo GetFileInfo(const char *path)
         flags |= FileInfo::kFlagFile;
 
     result.m_Flags = flags;
-    result.m_Timestamp = stbuf.st_mtime;
+    // Do not allow directories to expose real timestamps, as it's not reliable behaviour across platforms
+    result.m_Timestamp = (flags & FileInfo::kFlagDirectory) ? kDirectoryTimestamp : stbuf.st_mtime;
     result.m_Size = stbuf.st_size;
 
     return result;
@@ -245,7 +248,10 @@ void ListDirectory(
         info.m_Timestamp = (ft - kEpochDiff) / kRateDiff;
 
         if (FILE_ATTRIBUTE_DIRECTORY & find_data.dwFileAttributes)
+        {
             info.m_Flags |= FileInfo::kFlagDirectory;
+            info.m_Timestamp = kDirectoryTimestamp;
+        }
         else
             info.m_Flags |= FileInfo::kFlagFile;
 
