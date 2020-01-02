@@ -148,18 +148,18 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
             remove(output.m_Filename);
             StatCacheMarkDirty(stat_cache, output.m_Filename, output.m_FilenameHash);
         }
-    }
 
-    for (const FrozenFileAndHash &outputDir : node_data->m_OutputDirectories)
-    {
-        Log(kDebug, "Removing output directory %s before running action", outputDir.m_Filename.Get());
-
-        FileInfo fileInfo = GetFileInfo(outputDir.m_Filename);
-        if (fileInfo.IsDirectory())
+        for (const FrozenFileAndHash &outputDir : node_data->m_OutputDirectories)
         {
-            StatCacheMarkDirty(stat_cache, outputDir.m_Filename, outputDir.m_FilenameHash);
-            if (!DeleteDirectory(outputDir.m_Filename.Get()))
-                return FailWithPreparationError("Failed to remove directory %s as part of preparing to actually running this node",outputDir.m_Filename.Get());
+            Log(kDebug, "Removing output directory %s before running action", outputDir.m_Filename.Get());
+
+            FileInfo fileInfo = GetFileInfo(outputDir.m_Filename);
+            if (fileInfo.IsDirectory())
+            {
+                StatCacheMarkDirty(stat_cache, outputDir.m_Filename, outputDir.m_FilenameHash);
+                if (!DeleteDirectory(outputDir.m_Filename.Get()))
+                    return FailWithPreparationError("Failed to remove directory %s as part of preparing to actually running this node",outputDir.m_Filename.Get());
+            }
         }
     }
 
