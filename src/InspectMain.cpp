@@ -164,14 +164,11 @@ static void DumpState(const Frozen::AllBuiltNodes *data)
         DigestToString(digest_str, node.m_InputSignature);
         printf("  input_signature: %s\n", digest_str);
         printf("  outputs:\n");
-        for (const char *path : node.m_OutputFiles)
-            printf("    %s\n", path);
+        for (const FrozenFileAndHash& fileAndHash : node.m_OutputFiles)
+            printf("    (0x%08x) %s\n", fileAndHash.m_FilenameHash, fileAndHash.m_Filename.Get());
         printf("  aux outputs:\n");
-        for (const char *path : node.m_AuxOutputFiles)
-            printf("    %s\n", path);
-        printf("  output directories:\n");
-        for (const char *path : node.m_OutputDirectories)
-            printf("    %s\n", path);
+        for (const FrozenFileAndHash& fileAndHash : node.m_AuxOutputFiles)
+            printf("    (0x%08x) %s\n", fileAndHash.m_FilenameHash, fileAndHash.m_Filename.Get());
 
         printf("  input files:\n");
         for (int i=0; i!=node.m_InputFiles.GetCount(); i++)

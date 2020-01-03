@@ -27,6 +27,8 @@ namespace Frozen
     struct BuiltNode;
 }
 
+struct SinglyLinkedPathList;
+
 struct RuntimeNode
 {
     uint16_t m_Flags;
@@ -40,6 +42,8 @@ struct RuntimeNode
     NodeBuildResult::Enum m_BuildResult;
     bool m_Finished;
     HashDigest m_InputSignature;
+
+    SinglyLinkedPathList* m_DynamicallyDiscoveredOutputFiles;
 };
 
 inline bool RuntimeNodeIsQueued(const RuntimeNode *runtime_node)

@@ -19,6 +19,7 @@
 #include "Profiler.hpp"
 #include "NodeResultPrinting.hpp"
 #include "FileSign.hpp"
+#include "DynamicOutputDirectories.hpp"
 
 #include <time.h>
 #include <stdio.h>
@@ -936,18 +937,8 @@ struct StateSavingSegments
     BinarySegment *string;
 };
 
-static const char *GetFileNameFrom(const FrozenFileAndHash &container)
-{
-    return container.m_Filename;
-}
-
-static const char *GetFileNameFrom(const FrozenString &container)
-{
-    return container;
-}
-
 template <class TNodeType>
-static void save_node_sharedcode(bool nodeWasBuiltSuccesfully, const HashDigest *input_signature, const TNodeType *src_node, const HashDigest *guid, const StateSavingSegments &segments)
+static void save_node_sharedcode(bool nodeWasBuiltSuccesfully, const HashDigest *input_signature, const TNodeType *src_node, const HashDigest *guid, const StateSavingSegments &segments, const SinglyLinkedPathList* additionalDiscoveredOutputFiles)
 {
     //we're writing to two arrays in one go.  the FrozenArray<HashDigest> m_NodeGuids and the FrozenArray<BuiltNode> m_BuiltNodes
     //the hashdigest is quick
@@ -957,32 +948,35 @@ static void save_node_sharedcode(bool nodeWasBuiltSuccesfully, const HashDigest 
     BinarySegmentWriteInt32(segments.built_nodes, nodeWasBuiltSuccesfully ? 1 : 0);
     BinarySegmentWrite(segments.built_nodes, (const char *)input_signature, sizeof(HashDigest));
 
+    auto WriteFrozenFileAndHashIntoBuiltNodesStream = [segments](const FrozenFileAndHash& f) -> void {
+        BinarySegmentWritePointer(segments.array, BinarySegmentPosition(segments.string));
+        BinarySegmentWriteStringData(segments.string, f.m_Filename.Get());
+        BinarySegmentWriteInt32(segments.array, f.m_FilenameHash);
+    };
+
     int32_t file_count = src_node->m_OutputFiles.GetCount();
-    BinarySegmentWriteInt32(segments.built_nodes, file_count);
+    BinarySegmentWriteInt32(segments.built_nodes, file_count + (additionalDiscoveredOutputFiles == nullptr ? 0 : additionalDiscoveredOutputFiles->count));
     BinarySegmentWritePointer(segments.built_nodes, BinarySegmentPosition(segments.array));
     for (int32_t i = 0; i < file_count; ++i)
+        WriteFrozenFileAndHashIntoBuiltNodesStream(src_node->m_OutputFiles[i]);
+
+    if (additionalDiscoveredOutputFiles != nullptr)
     {
-        BinarySegmentWritePointer(segments.array, BinarySegmentPosition(segments.string));
-        BinarySegmentWriteStringData(segments.string, GetFileNameFrom(src_node->m_OutputFiles[i]));
+        auto iterator = additionalDiscoveredOutputFiles->head;
+        while(iterator)
+        {
+            BinarySegmentWritePointer(segments.array, BinarySegmentPosition(segments.string));
+            BinarySegmentWriteStringData(segments.string, iterator->path);
+            BinarySegmentWriteInt32(segments.array, Djb2Hash(iterator->path));
+            iterator = iterator->next;
+        }
     }
 
     file_count = src_node->m_AuxOutputFiles.GetCount();
     BinarySegmentWriteInt32(segments.built_nodes, file_count);
     BinarySegmentWritePointer(segments.built_nodes, BinarySegmentPosition(segments.array));
     for (int32_t i = 0; i < file_count; ++i)
-    {
-        BinarySegmentWritePointer(segments.array, BinarySegmentPosition(segments.string));
-        BinarySegmentWriteStringData(segments.string, GetFileNameFrom(src_node->m_AuxOutputFiles[i]));
-    }
-
-    int dir_count = src_node->m_OutputDirectories.GetCount();
-    BinarySegmentWriteInt32(segments.built_nodes, dir_count);
-    BinarySegmentWritePointer(segments.built_nodes, BinarySegmentPosition(segments.array));
-    for (int32_t i = 0; i < dir_count; ++i)
-    {
-        BinarySegmentWritePointer(segments.array, BinarySegmentPosition(segments.string));
-        BinarySegmentWriteStringData(segments.string, GetFileNameFrom(src_node->m_OutputDirectories[i]));
-    }
+        WriteFrozenFileAndHashIntoBuiltNodesStream(src_node->m_AuxOutputFiles[i]);
 
     BinarySegmentWritePointer(segments.built_nodes, BinarySegmentPosition(segments.string));
     BinarySegmentWriteStringData(segments.string, src_node->m_Action);
@@ -1056,7 +1050,8 @@ bool DriverSaveAllBuiltNodes(Driver *self)
         const Frozen::DagNode* dag_node = runtime_node->m_DagNode;
 
         bool nodeWasBuiltSuccessfully = runtime_node->m_BuildResult == NodeBuildResult::kRanSuccesfully || runtime_node->m_BuildResult == NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun;
-        save_node_sharedcode(nodeWasBuiltSuccessfully, &runtime_node->m_InputSignature, runtime_node->m_DagNode, guid, segments);
+
+        save_node_sharedcode(nodeWasBuiltSuccessfully, &runtime_node->m_InputSignature, runtime_node->m_DagNode, guid, segments, runtime_node->m_DynamicallyDiscoveredOutputFiles);
 
         HashSet<kFlagPathStrings> implicitDependencies;
         if (dag_node->m_Scanner)
@@ -1143,7 +1138,8 @@ bool DriverSaveAllBuiltNodes(Driver *self)
     };
 
     auto EmitBuiltNodeFromPreviouslyBuiltNode = [=, &emitted_built_nodes_count, &shared_strings](const Frozen::BuiltNode *built_node, const HashDigest *guid) -> void {
-        save_node_sharedcode(built_node->m_WasBuiltSuccessfully, &built_node->m_InputSignature, built_node, guid, segments);
+
+        save_node_sharedcode(built_node->m_WasBuiltSuccessfully, &built_node->m_InputSignature, built_node, guid, segments, nullptr);
         emitted_built_nodes_count++;
 
         int32_t file_count = built_node->m_InputFiles.GetCount();
@@ -1410,36 +1406,40 @@ void DriverRemoveStaleOutputs(Driver *self)
         }
     };
 
+    auto startsWith = [](const char *pre, const char *str) -> bool
+    {
+        return strncmp(pre, str, strlen(pre)) == 0;
+    };
+
     // Check all output files in the state if they're still around.
     // Otherwise schedule them (and all their parent dirs) for nuking.
     // We will rely on the fact that we can't rmdir() non-empty directories.
-    auto check_file = [&file_table, &nuke_table, add_parent_directories_to_nuke_table](const char *path) {
-        uint32_t path_hash = Djb2HashPath(path);
+    auto check_file = [&file_table, &nuke_table, add_parent_directories_to_nuke_table, &directory_table, startsWith](const FrozenFileAndHash& fileAndHash) {
+        uint32_t path_hash = fileAndHash.m_FilenameHash;
+        const char* path = fileAndHash.m_Filename.Get();
 
-        if (!HashSetLookup(&file_table, path_hash, path))
+        if (HashSetLookup(&file_table, path_hash, path))
+            return;
+
+        bool wasChild = false;
+        HashSetWalk(&directory_table, [&](uint32_t index, uint32_t hash, const char* dir) {
+            if (startsWith(dir,path))
+                wasChild = true;
+            });
+        if (wasChild)
+            return;
+
+        if (!HashSetLookup(&nuke_table, path_hash, path))
         {
-            if (!HashSetLookup(&nuke_table, path_hash, path))
-            {
-                HashSetInsert(&nuke_table, path_hash, path);
-            }
-
-            add_parent_directories_to_nuke_table(path);
+            HashSetInsert(&nuke_table, path_hash, path);
         }
+
+        add_parent_directories_to_nuke_table(path);
     };
 
 
     HashSet<kFlagPathStrings> outputdir_nuke_table;
     HashSetInit(&outputdir_nuke_table, &self->m_Heap);
-
-    auto check_outputdirectory = [&directory_table, &outputdir_nuke_table, add_parent_directories_to_nuke_table](const char *path) {
-        uint32_t path_hash = Djb2HashPath(path);
-        if (!HashSetLookup(&directory_table, path_hash, path))
-        {
-            if (!HashSetLookup(&outputdir_nuke_table, path_hash, path))
-                HashSetInsert(&outputdir_nuke_table, path_hash, path);
-            add_parent_directories_to_nuke_table(path);
-        }
-    };
 
     for (int i = 0, state_count = all_built_nodes->m_NodeCount; i < state_count; ++i)
     {
@@ -1448,19 +1448,14 @@ void DriverRemoveStaleOutputs(Driver *self)
         if (!node_was_used_by_this_dag_previously(built_node, dag->m_HashedIdentifier))
             continue;
 
-        for (const char *path : built_node->m_OutputFiles)
+        for (const FrozenFileAndHash& fileAndHash : built_node->m_OutputFiles)
         {
-            check_file(path);
+            check_file(fileAndHash);
         }
 
-        for (const char *path : built_node->m_AuxOutputFiles)
+        for (const FrozenFileAndHash& fileAndHash : built_node->m_AuxOutputFiles)
         {
-            check_file(path);
-        }
-
-        for (const char* dir : built_node->m_OutputDirectories)
-        {
-            check_outputdirectory(dir);
+            check_file(fileAndHash);
         }
     }
 

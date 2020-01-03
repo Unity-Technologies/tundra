@@ -290,37 +290,13 @@ static void ReportInputSignatureChanges(
     }
 }
 
-static bool OutputFilesDiffer(const Frozen::DagNode *dagnode, const Frozen::BuiltNode *previously_built_node)
+static bool OutputFilesMissing(StatCache *stat_cache, RuntimeNode* node)
 {
-    int file_count = dagnode->m_OutputFiles.GetCount();
-
-    if (file_count != previously_built_node->m_OutputFiles.GetCount())
-        return true;
-
-    for (int i = 0; i < file_count; ++i)
-    {
-        if (0 != strcmp(dagnode->m_OutputFiles[i].m_Filename, previously_built_node->m_OutputFiles[i]))
-            return true;
-    }
-
-    return false;
-}
-
-static bool OutputFilesMissing(StatCache *stat_cache, const Frozen::DagNode *node)
-{
-    for (const FrozenFileAndHash &f : node->m_OutputFiles)
+    for (const FrozenFileAndHash &f : node->m_BuiltNode->m_OutputFiles)
     {
         FileInfo i = StatCacheStat(stat_cache, f.m_Filename, f.m_FilenameHash);
 
         if (!i.Exists())
-            return true;
-    }
-
-    for (const FrozenFileAndHash &f : node->m_OutputDirectories)
-    {
-        FileInfo i = StatCacheStat(stat_cache, f.m_Filename, f.m_FilenameHash);
-
-        if (!i.IsDirectory())
             return true;
     }
 
@@ -552,14 +528,7 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
         return true;
     }
 
-    if (OutputFilesDiffer(dagnode, prev_builtnode))
-    {
-        // The output files are different - need to rebuild.
-        Log(kSpam, "T=%d: building %s - output files have changed", thread_state->m_ThreadIndex, dagnode->m_Annotation.Get());
-        return true;
-    }
-
-    if (OutputFilesMissing(stat_cache, dagnode))
+    if (OutputFilesMissing(stat_cache, node))
     {
         // One or more output files are missing - need to rebuild.
         Log(kSpam, "T=%d: building %s - output files are missing", thread_state->m_ThreadIndex, dagnode->m_Annotation.Get());
