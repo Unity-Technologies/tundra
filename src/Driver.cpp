@@ -1274,7 +1274,9 @@ bool DriverSaveAllBuiltNodes(Driver *self)
         {
             const Frozen::BuiltNode* previously_built_node = &old_state[previously_built_nodes_iterator];
             const HashDigest * previously_built_guid = BuiltNodeGuidForBuiltNodeIndex(previously_built_nodes_iterator);
-            EmitBuiltNodeFromPreviouslyBuiltNode(previously_built_node,previously_built_guid);
+
+            if (IsPreviouslyBuiltNodeValidForWritingToBuiltNodes(previously_built_node, previously_built_guid))
+                EmitBuiltNodeFromPreviouslyBuiltNode(previously_built_node,previously_built_guid);
         }
     }
 
