@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Text.RegularExpressions;
 using Bee.BuildTools;
 using Bee.Core;
@@ -11,8 +12,11 @@ using Bee.Toolchain.GNU;
 using Bee.Toolchain.VisualStudio;
 using Bee.Tools;
 using Bee.VisualStudioSolution;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using NiceIO;
 using Unity.BuildSystem.NativeProgramSupport;
+using Unity.BuildTools;
 using static Unity.BuildSystem.NativeProgramSupport.NativeProgramConfiguration;
 
 class Build
@@ -205,6 +209,20 @@ class Build
                 {
                     SetupStevedoreArtifact(config, "tundra-*-debug.7z",
                         new NPath[] {"COPYING"}.Concat(tundra.Paths.Skip(1)));
+                }
+            }
+
+            var configFile = new NPath("bee_config.json").MakeAbsolute();
+            if (config.CodeGen == CodeGen.Debug && HostPlatform.IsWindows && configFile.FileExists())
+            {
+                JObject configObject = JObject.Parse(configFile.ReadAllText());
+                var unityCheckout = (string)configObject["unityCheckout"];
+                if (unityCheckout != null)
+                {
+                    var deployDir = new NPath(unityCheckout).Combine(@"External\tundra\builds\build\windows-x86_64\master\");
+                    var alias = "debug-deploy";
+                    Console.WriteLine($"Setting up {alias} alias to {deployDir}");
+                    Backend.Current.AddAliasDependency(alias, tundra.DeployTo(deployDir).Path);
                 }
             }
         }
