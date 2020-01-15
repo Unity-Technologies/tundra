@@ -1489,7 +1489,6 @@ void DriverRemoveStaleOutputs(Driver *self)
         }
     }
 
-
     uint32_t nuke_count = file_nuke_count + outputdir_nuke_table.m_RecordCount;
 
     if (nuke_count > 0)

@@ -12,8 +12,10 @@ typedef void *ThreadRoutineReturnType;
 
 typedef ThreadRoutineReturnType(TUNDRA_STDCALL *ThreadRoutine)(void *);
 
-ThreadId ThreadStart(ThreadRoutine routine, void *param);
+ThreadId ThreadStart(ThreadRoutine routine, void *param, const char* name);
 
 void ThreadJoin(ThreadId thread_id);
+
+void ThreadSetName(ThreadId, const char* name);
 
 ThreadId ThreadCurrent();

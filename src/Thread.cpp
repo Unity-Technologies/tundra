@@ -21,7 +21,20 @@ ThreadId ThreadCurrent()
 #endif
 }
 
-ThreadId ThreadStart(ThreadRoutine routine, void *param)
+void ThreadSetName(ThreadId threadId, const char* name)
+{
+#if TUNDRA_WIN32
+    int wchars_num = MultiByteToWideChar( CP_UTF8 , 0 , name , -1, NULL , 0 );
+    wchar_t* wstr = new wchar_t[wchars_num];
+    MultiByteToWideChar( CP_UTF8 , 0 , name , -1, wstr , wchars_num );
+
+    SetThreadDescription((HANDLE)threadId, wstr);
+
+    delete[] wstr;
+#endif
+}
+
+ThreadId ThreadStart(ThreadRoutine routine, void *param, const char* name)
 {
 #if defined(TUNDRA_UNIX)
     pthread_t thread;
@@ -32,6 +45,10 @@ ThreadId ThreadStart(ThreadRoutine routine, void *param)
     uintptr_t handle = _beginthreadex(NULL, 0, routine, param, 0, NULL);
     if (!handle)
         CroakErrno("_beginthreadex() failed");
+
+
+    ThreadSetName(handle, name);
+
     return handle;
 #endif
 }

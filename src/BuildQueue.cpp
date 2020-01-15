@@ -115,7 +115,7 @@ void BuildQueueInit(BuildQueue *queue, const BuildQueueConfig *config)
         ThreadStateInit(thread_state, queue, MB(32), i, i + 1);
 
         Log(kDebug, "starting build thread %d", i);
-        queue->m_Threads[i] = ThreadStart(BuildThreadRoutine, thread_state);
+        queue->m_Threads[i] = ThreadStart(BuildThreadRoutine, thread_state, "Build Thread");
     }
 }
 
