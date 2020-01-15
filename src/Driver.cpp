@@ -87,7 +87,7 @@ void DriverOptionsInit(DriverOptions *self)
     self->m_ProfileOutput = nullptr;
     self->m_IncludesOutput = nullptr;
 #if defined(TUNDRA_WIN32)
-    self->m_RunUnprotected = false;
+    self->m_RunUnprotected = true;
 #endif
 }
 
