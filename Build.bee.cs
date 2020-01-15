@@ -156,11 +156,13 @@ class Build
             Sources = {SourceFolder.Combine("InspectMain.cpp")}
         };
 
+
+
         // setup build targets
         var toolChains = new ToolChain[]
         {
             ToolChain.Store.Mac().Sdk_10_13().x64("10.12"),
-            ToolChain.Store.Windows().VS2019().Sdk_10586().x64(),
+            ToolChain.Store.Windows().VS2019(new Version(16,4)).Sdk_17134().x64(),
             ToolChain.Store.Linux().Ubuntu_14_4().Gcc_4_8().x64(),
         }.Where(toolChain => toolChain.CanBuild).ToArray();
 

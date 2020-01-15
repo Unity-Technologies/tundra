@@ -3,6 +3,7 @@
 #include "FileInfo.hpp"
 #include "Mutex.hpp"
 #include "JsonWriter.hpp"
+#include "Thread.hpp"
 
 #include <cstdio>
 #include <cstdarg>
@@ -76,6 +77,8 @@ void PrintErrno()
 void InitCommon(void)
 {
 #if defined(TUNDRA_WIN32)
+    ThreadSetName((ThreadId)GetCurrentThread(), "Tundra Main Thread");
+
     static LARGE_INTEGER freq;
     if (!QueryPerformanceFrequency(&freq))
         CroakErrno("QueryPerformanceFrequency failed");
