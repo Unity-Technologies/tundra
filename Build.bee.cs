@@ -85,13 +85,13 @@ class Build
         Backend.Current.AddAliasDependency($"{name}", file);
     }
 
+    static string DirNameForConfig(NativeProgramConfiguration config) => $"{config.Platform.Name}-{config.ToolChain.Architecture.Name}";
+
     static BuiltNativeProgram SetupSpecificConfiguration(NativeProgram program, NativeProgramConfiguration config,
         NativeProgramFormat format)
     {
         var builtProgram = program.SetupSpecificConfiguration(config, format);
-        var deployedProgram =
-            builtProgram.DeployTo($"build/{config.Platform.Name}-{config.ToolChain.Architecture.Name}/{config.CodeGen}"
-                .ToLower());
+        var deployedProgram = builtProgram.DeployTo($"build/{DirNameForConfig(config)}/{config.CodeGen}".ToLower());
         RegisterAlias($"{program.Name}", config, deployedProgram.Path);
         return deployedProgram;
     }
@@ -215,13 +215,13 @@ class Build
             }
 
             var configFile = new NPath("bee_config.json").MakeAbsolute();
-            if (config.CodeGen == CodeGen.Debug && HostPlatform.IsWindows && configFile.FileExists())
+            if (config.CodeGen == CodeGen.Debug && config.Platform == Platform.HostPlatform && configFile.FileExists())
             {
                 JObject configObject = JObject.Parse(configFile.ReadAllText());
                 var unityCheckout = (string)configObject["unityCheckout"];
                 if (unityCheckout != null)
                 {
-                    var deployDir = new NPath(unityCheckout).Combine(@"External\tundra\builds\build\windows-x86_64\master\");
+                    var deployDir = new NPath(unityCheckout).Combine($"External/tundra/builds/build/{DirNameForConfig(config).ToLower()}/master/");
                     var alias = "debug-deploy";
                     Console.WriteLine($"Setting up {alias} alias to {deployDir}");
                     Backend.Current.AddAliasDependency(alias, tundra.DeployTo(deployDir).Path);
