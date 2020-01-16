@@ -6,10 +6,15 @@
       {
         "label": "bee debug-deploy",
         "type": "shell",
-        "command": "bee.exe debug-deploy",
         "group": {
           "kind": "build",
           "isDefault": true
+        },
+        "windows":{
+          "command": "bee.exe debug-deploy"
+        },
+        "osx":{
+          "command": "mono bee.exe debug-deploy"
         }
       }
     ]
