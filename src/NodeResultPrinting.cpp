@@ -7,10 +7,12 @@
 #include <sstream>
 #include <ctime>
 #include <math.h>
+#include "Driver.hpp"
 #if TUNDRA_UNIX
 #include <unistd.h>
 #include <stdarg.h>
 #endif
+
 
 
 
@@ -91,7 +93,10 @@ void StripAnsiColors(char *buffer)
     *writeCursor++ = 0;
 }
 
-void InitNodeResultPrinting()
+int s_IdentificationColor;
+int m_VisualMaxNodes;
+
+void InitNodeResultPrinting(const DriverOptions* driverOptions)
 {
     last_progress_message_of_any_job = TimerGet() - 10000;
 
@@ -117,6 +122,9 @@ void InitNodeResultPrinting()
         EmitColors = true;
     if (*value == '0')
         EmitColors = false;
+
+    s_IdentificationColor = driverOptions->m_IdentificationColor;
+    m_VisualMaxNodes = driverOptions->m_VisualMaxNodes;
 }
 
 static void EnsureConsoleCanHandleColors()
@@ -156,6 +164,7 @@ static void EmitColor(const char *colorsequence)
 #define WHT "\x1B[37m"
 #define RESET "\x1B[0m"
 
+
 static void PrintDiagnosticPrefix(const char *title, const char *color = YEL)
 {
     EmitColor(color);
@@ -184,7 +193,12 @@ static void PrintDiagnostic(const char *title, int content)
     PrintDiagnosticFormat(title, "%d", content);
 }
 
-static void EmitColorForLevel(MessageStatusLevel::Enum status_level)
+void EmitColorReset()
+{
+    EmitColor(RESET);
+}
+
+void EmitColorForLevel(MessageStatusLevel::Enum status_level)
 {
     if (status_level == MessageStatusLevel::Info)
         EmitColor(WHT);
@@ -201,11 +215,12 @@ void PrintServiceMessage(MessageStatusLevel::Enum status_level, const char *form
     EmitColorForLevel(status_level);
     va_list args;
     va_start(args, formatString);
-    vfprintf(stdout, formatString, args);
+    vprintf(formatString, args);
     va_end(args);
     EmitColor(RESET);
     printf("\n");
 }
+
 
 static void TrimOutputBuffer(OutputBufferData *buffer)
 {
@@ -222,39 +237,77 @@ static void TrimOutputBuffer(OutputBufferData *buffer)
     }
 }
 
-static void PrintLineWithDurationAndAnnotation(double duration, const char *progressStr, MessageStatusLevel::Enum status_level, const char *annotation)
+static void EmitBracketColor(MessageStatusLevel::Enum status_level)
 {
+    if (s_IdentificationColor == 1)
+        EmitColor(MAG);
+    else if (s_IdentificationColor == 2)
+        EmitColor(BLU);
+    else
+        EmitColorForLevel(status_level);
+}
+
+static void PrintMessageMaster(MessageStatusLevel::Enum status_level, int dividend, int divisor, int duration, const char* message, va_list args)
+{
+    EmitBracketColor(status_level);
+    printf("[");
     EmitColorForLevel(status_level);
 
-    printf("[");
-    if (status_level == MessageStatusLevel::Failure && !EmitColors)
-        printf("!FAILED! ");
-    printf("%s ", progressStr);
-    printf("%2ds] ", (int)duration);
-    // for failures, color the whole line red and only reset at the end
-    if (status_level != MessageStatusLevel::Failure)
-        EmitColor(RESET);
-    printf("%s\n", annotation);
-    if (status_level == MessageStatusLevel::Failure)
-        EmitColor(RESET);
+    int maxDigits = ceil(log10(divisor + 1));
+    int visualMaxNodeDigits = ceil(log10(m_VisualMaxNodes + 1));
+    int shouldPrint = 2*visualMaxNodeDigits + 2;
+
+    int printed = 0;
+    if (dividend >= 0)
+    {
+        printed += printf("%*d/%d ", maxDigits, dividend, divisor);
+    }
+    for (int i=printed; i<shouldPrint;i++)
+        printf(" ");
+
+    if (duration >= 0)
+        printf("%2ds", duration);
+    else
+        printf("   ");
+
+
+    EmitBracketColor(status_level);
+    printf("] ");
+    EmitColor(RESET);
+    vprintf(message, args);
+    printf("\n");
 }
 
-static void PrintLineWithDurationAndAnnotation(double duration, int nodeCount, int max_nodes, MessageStatusLevel::Enum status_level, const char *annotation)
+
+void PrintMessage(MessageStatusLevel::Enum status_level, int duration, const char* message, ...)
 {
-    int maxDigits = ceil(log10(max_nodes + 1));
-    char *progressStr = (char *)alloca(maxDigits * 2 + 2);
-    snprintf(progressStr, maxDigits * 2 + 2, "%*d/%d", maxDigits, nodeCount, max_nodes);
-    PrintLineWithDurationAndAnnotation(duration, progressStr, status_level, annotation);
+    va_list args;
+    va_start(args,message);
+    PrintMessageMaster(status_level, -1, -1, duration, message, args);
+    va_end(args);
+}
+void PrintMessage(MessageStatusLevel::Enum status_level, const char* message, ...)
+{
+    va_list args;
+    va_start(args,message);
+    PrintMessageMaster(status_level, -1, -1, -1, message, args);
+    va_end(args);
+}
+void PrintMessage(MessageStatusLevel::Enum status_level, int dividend, int divisor, int duration, const char* message, ...)
+{
+    va_list args;
+    va_start(args,message);
+    PrintMessageMaster(status_level, dividend, divisor, duration, message, args);
+    va_end(args);
 }
 
-void PrintNonNodeActionResult(double duration, int max_nodes, MessageStatusLevel::Enum status_level, const char *annotation, ExecResult *result)
+void PrintMessage(MessageStatusLevel::Enum status_level, int duration, ExecResult *result, const char *message, ...)
 {
-    int maxDigits = ceil(log10(max_nodes + 1));
-    char *progressStr = (char *)alloca(maxDigits * 2 + 2);
-    memset(progressStr, ' ', maxDigits * 2 + 1);
-    progressStr[maxDigits * 2 + 1] = 0;
+    va_list args;
+    va_start(args, message);
+    PrintMessage(status_level, (int)duration, message, args);
+    va_end(args);
 
-    PrintLineWithDurationAndAnnotation(duration, progressStr, status_level, annotation);
     if (result != nullptr && result->m_ReturnCode != 0)
     {
         TrimOutputBuffer(&result->m_OutputBuffer);
@@ -264,7 +317,7 @@ void PrintNonNodeActionResult(double duration, int max_nodes, MessageStatusLevel
 
 static void PrintNodeResult(const NodeResultPrintData *data, BuildQueue *queue)
 {
-    PrintLineWithDurationAndAnnotation(data->duration, data->processed_node_count, queue->m_Config.m_TotalRuntimeNodeCount, data->status_level, data->node_data->m_Annotation.Get());
+    PrintMessage(data->status_level, data->processed_node_count, queue->m_Config.m_TotalRuntimeNodeCount, data->duration, data->node_data->m_Annotation.Get());
 
     if (data->verbose)
     {
@@ -500,7 +553,7 @@ int PrintNodeInProgress(const Frozen::DagNode *node_data, uint64_t time_of_start
 
     if (seconds_since_last_progress_message_of_any_job > acceptable_time_since_last_message && seconds_job_has_been_running_for > only_print_if_slower_than)
     {
-        int maxDigits = ceil(log10(queue->m_Config.m_TotalRuntimeNodeCount + 1));
+        int maxDigits = ceil(log10(m_VisualMaxNodes + 1));
 
         EmitColor(YEL);
         printf("[BUSY %*ds] ", maxDigits * 2 - 1, seconds_job_has_been_running_for);

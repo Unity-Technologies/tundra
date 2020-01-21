@@ -10,6 +10,7 @@
 #include "DagData.hpp"
 #include "HashTable.hpp"
 #include "FileSign.hpp"
+#include "BuildQueue.hpp"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -925,8 +926,6 @@ static bool CompileDag(const JsonObjectValue *root, BinaryWriter *writer, MemAll
     WriteStringPtr(main_seg, str_seg, FindStringValue(root, "BuildTitle", "Tundra"));
     WriteStringPtr(main_seg, str_seg, FindStringValue(root, "StructuredLogFileName"));
 
-    BinarySegmentWriteInt32(main_seg, (int)FindIntValue(root, "ForceDagRebuild", 0));
-
     HashTableDestroy(&shared_strings);
 
     //write magic number again at the end to pretect against writing too much / too little data and not noticing.
@@ -987,87 +986,8 @@ static bool CreateDagFromJsonData(char *json_memory, const char *dag_fn)
     return result;
 }
 
-static bool RunExternalTool(const char *options, ...)
+bool FreezeDagJson(const char* json_filename, const char* dag_fn)
 {
-    char dag_gen_path[kMaxPathLength];
-
-    if (const char *env_option = getenv("TUNDRA_DAGTOOL"))
-    {
-        strncpy(dag_gen_path, env_option, sizeof dag_gen_path);
-        dag_gen_path[sizeof(dag_gen_path) - 1] = '\0';
-    }
-    else
-    {
-        // Figure out the path to the default t2-lua DAG generator.
-        PathBuffer pbuf;
-        PathInit(&pbuf, GetExePath());
-        PathStripLast(&pbuf);
-        PathConcat(&pbuf, "t2-lua" TUNDRA_EXE_SUFFIX);
-        PathFormat(dag_gen_path, &pbuf);
-    }
-
-    const char *cmdline_to_use;
-
-    char option_str[1024];
-    va_list args;
-    va_start(args, options);
-    vsnprintf(option_str, sizeof option_str, options, args);
-    va_end(args);
-    option_str[sizeof(option_str) - 1] = '\0';
-
-    EnvVariable env_var;
-    env_var.m_Name = "TUNDRA_FRONTEND_OPTIONS";
-    env_var.m_Value = option_str;
-
-    char cmdline[1024];
-
-    if (const char *env_option = getenv("TUNDRA_DAGTOOL_FULLCOMMANDLINE"))
-    {
-        cmdline_to_use = env_option;
-    }
-    else
-    {
-        const char *quotes = "";
-        if (strchr(dag_gen_path, ' '))
-            quotes = "\"";
-
-        snprintf(cmdline, sizeof cmdline, "%s%s%s %s", quotes, dag_gen_path, quotes, option_str);
-        cmdline[sizeof(cmdline) - 1] = '\0';
-
-        cmdline_to_use = cmdline;
-    }
-
-    const bool echo = (GetLogFlags() & kDebug) ? true : false;
-
-    if (echo)
-        printf("Invoking frontend with cmdline: %s\n", cmdline_to_use);
-    ExecResult result = ExecuteProcess(cmdline_to_use, 1, &env_var, nullptr, 0, true, nullptr);
-    ExecResultFreeMemory(&result);
-
-    if (0 != result.m_ReturnCode)
-    {
-        Log(kError, "DAG generator driver failed: %s", cmdline_to_use);
-        return false;
-    }
-
-    return true;
-}
-
-bool GenerateDag(const char *script_fn, const char *dag_fn)
-{
-    Log(kDebug, "regenerating DAG data");
-
-    char json_filename[kMaxPathLength];
-    snprintf(json_filename, sizeof json_filename, "%s.json", dag_fn);
-    json_filename[sizeof(json_filename) - 1] = '\0';
-
-    // Nuke any old JSON data.
-    remove(json_filename);
-
-    // Run DAG generator.
-    if (!RunExternalTool("generate-dag %s %s", script_fn, json_filename))
-        return false;
-
     FileInfo json_info = GetFileInfo(json_filename);
     if (!json_info.Exists())
     {
@@ -1107,4 +1027,3 @@ bool GenerateDag(const char *script_fn, const char *dag_fn)
 
     return success;
 }
-

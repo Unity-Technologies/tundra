@@ -304,10 +304,8 @@ static bool OutputFilesMissing(StatCache *stat_cache, RuntimeNode* node)
     return false;
 }
 
-bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node)
+static HashDigest CalculateInputSignature(BuildQueue* queue, ThreadState* thread_state, const Frozen::DagNode* dagnode)
 {
-    const Frozen::DagNode *dagnode = node->m_DagNode;
-
     ProfilerScope prof_scope("CheckInputSignature", thread_state->m_ProfilerThreadId, dagnode->m_Annotation);
 
     const BuildQueueConfig &config = queue->m_Config;
@@ -315,18 +313,7 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
     DigestCache *digest_cache = config.m_DigestCache;
 
     HashState sighash;
-    FILE *debug_log = (FILE *)queue->m_Config.m_FileSigningLog;
-
-    if (debug_log)
-    {
-        MutexLock(queue->m_Config.m_FileSigningLogMutex);
-        fprintf(debug_log, "input_sig(\"%s\"):\n", dagnode->m_Annotation.Get());
-        HashInitDebug(&sighash, debug_log);
-    }
-    else
-    {
-        HashInit(&sighash);
-    }
+    HashInit(&sighash);
 
     // Start with command line action. If that changes, we'll definitely have to rebuild.
     HashAddString(&sighash, dagnode->m_Action);
@@ -417,15 +404,16 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
     HashAddInteger(&sighash, (dagnode->m_Flags & Frozen::DagNode::kFlagAllowUnexpectedOutput) ? 1 : 0);
     HashAddInteger(&sighash, (dagnode->m_Flags & Frozen::DagNode::kFlagAllowUnwrittenOutputFiles) ? 1 : 0);
 
-    HashFinalize(&sighash, &node->m_InputSignature);
+    HashDigest result;
+    HashFinalize(&sighash, &result);
+    return result;
+}
 
-    if (debug_log)
-    {
-        char sig[kDigestStringSize];
-        DigestToString(sig, node->m_InputSignature);
-        fprintf(debug_log, "  => %s\n", sig);
-        MutexUnlock(queue->m_Config.m_FileSigningLogMutex);
-    }
+bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node)
+{
+    const Frozen::DagNode *dagnode = node->m_DagNode;
+
+    node->m_InputSignature = CalculateInputSignature(queue, thread_state, dagnode);
 
     // Figure out if we need to rebuild this node.
     const Frozen::BuiltNode *prev_builtnode = node->m_BuiltNode;
@@ -483,6 +471,10 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
         }
         return true;
     }
+
+    BuildQueueConfig config = queue->m_Config;
+    StatCache *stat_cache = config.m_StatCache;
+    DigestCache *digest_cache = config.m_DigestCache;
 
     if (prev_builtnode->m_InputSignature != node->m_InputSignature)
     {

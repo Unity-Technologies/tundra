@@ -309,39 +309,6 @@ bool SetCwd(const char *dir)
 #endif
 }
 
-static char s_ExePath[kMaxPathLength];
-
-const char *GetExePath()
-{
-    if (s_ExePath[0] == '\0')
-    {
-#if defined(TUNDRA_WIN32)
-        if (!GetModuleFileNameA(NULL, s_ExePath, (DWORD)sizeof s_ExePath))
-            CroakErrno("couldn't get module filename");
-#elif defined(TUNDRA_APPLE)
-        uint32_t size = sizeof s_ExePath;
-        if (0 != _NSGetExecutablePath(s_ExePath, &size))
-            Croak("_NSGetExecutablePath failed");
-#elif defined(TUNDRA_LINUX)
-        if (-1 == readlink("/proc/self/exe", s_ExePath, (sizeof s_ExePath) - 1))
-            CroakErrno("couldn't read /proc/self/exe to get exe path");
-#elif defined(TUNDRA_FREEBSD)
-        size_t cb = sizeof s_ExePath;
-        int mib[4];
-        mib[0] = CTL_KERN;
-        mib[1] = KERN_PROC;
-        mib[2] = KERN_PROC_PATHNAME;
-        mib[3] = -1;
-        if (0 != sysctl(mib, 4, s_ExePath, &cb, NULL, 0))
-            CroakErrno("KERN_PROC_PATHNAME syscall failed");
-#else
-#error "unsupported platform"
-#endif
-    }
-
-    return s_ExePath;
-}
-
 uint32_t NextPowerOfTwo(uint32_t val)
 {
     uint32_t mask = val - 1;

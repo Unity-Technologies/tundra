@@ -20,6 +20,7 @@
 #include "NodeResultPrinting.hpp"
 #include "FileSign.hpp"
 #include "DynamicOutputDirectories.hpp"
+#include "PathUtil.hpp"
 
 #include <time.h>
 #include <stdio.h>
@@ -27,6 +28,7 @@
 #include <string.h>
 #include <vector>
 #include <sstream>
+#include "stdarg.h"
 
 #if ENABLED(TUNDRA_CASE_INSENSITIVE_FILESYSTEM)
 #if defined(_MSC_VER) || defined(TUNDRA_WIN32_MINGW)
@@ -65,24 +67,24 @@ void DriverInitializeTundraFilePaths(DriverOptions *driverOptions)
 void DriverOptionsInit(DriverOptions *self)
 {
     self->m_ShowHelp = false;
-    self->m_ForceDagRegen = false;
     self->m_ShowTargets = false;
     self->m_DebugMessages = false;
     self->m_Verbose = false;
     self->m_SpammyVerbose = false;
     self->m_DisplayStats = false;
-    self->m_GenDagOnly = false;
     self->m_SilenceIfPossible = false;
     self->m_DontReusePreviousResults = false;
     self->m_DebugSigning = false;
     self->m_ThrottleOnHumanActivity = false;
     self->m_ThrottleInactivityPeriod = 30;
     self->m_ThrottledThreadsAmount = 0;
+    self->m_IdentificationColor = 0;
     self->m_ThreadCount = GetCpuCount();
     self->m_WorkingDir = nullptr;
     self->m_DAGFileName = ".tundra2.dag";
     self->m_ProfileOutput = nullptr;
     self->m_IncludesOutput = nullptr;
+    self->m_VisualMaxNodes = 1000;
 #if defined(TUNDRA_WIN32)
     self->m_RunUnprotected = true;
 #endif
@@ -338,82 +340,95 @@ bool DriverInitData(Driver *self)
     return true;
 }
 
+
+static bool ExitRequestingFrontendRun(const char *reason_fmt, ...)
+{
+    char buffer[1024];
+
+    va_list args;
+    va_start(args, reason_fmt);
+    int written =vsnprintf(buffer,1024,reason_fmt, args);
+    va_end(args);
+    buffer[written] = 0;
+
+
+    PrintMessage(MessageStatusLevel::Success, "Require frontend run.  %s", buffer);
+
+    exit(BuildResult::kRequireFrontendRerun);
+    return false;
+}
+
+
 static bool DriverPrepareDag(Driver *self, const char *dag_fn)
 {
     const int out_of_date_reason_length = 500;
     char out_of_date_reason[out_of_date_reason_length + 1];
 
-    snprintf(out_of_date_reason, out_of_date_reason_length, "Build frontend of %s ran (unknown reason)", dag_fn);
+    snprintf(out_of_date_reason, out_of_date_reason_length, "(unknown reason)");
 
-    if (self->m_Options.m_ForceDagRegen)
-        snprintf(out_of_date_reason, out_of_date_reason_length, "Build frontend of %s ran (ForceDagRegen option used)", dag_fn);
 
-    bool loadFrozenDataResult = LoadFrozenData<Frozen::Dag>(dag_fn, &self->m_DagFile, &self->m_DagData);
+    char json_filename[kMaxPathLength];
+    snprintf(json_filename, sizeof json_filename, "%s.json", dag_fn);
+    json_filename[sizeof(json_filename) - 1] = '\0';
 
-    if (!loadFrozenDataResult)
-        snprintf(out_of_date_reason, out_of_date_reason_length, "Build frontend of %s ran (no suitable previous build dag file)", dag_fn);
+    FileInfo dag_info = GetFileInfo(dag_fn);
+    FileInfo json_info = GetFileInfo(json_filename);
 
-    if (loadFrozenDataResult)
+    if (!dag_info.Exists() && !json_info.Exists())
+        return ExitRequestingFrontendRun("%s does not exist yet", json_filename);
+
+    if (json_info.Exists())
     {
-        if (self->m_DagData->m_ForceDagRebuild == 1)
-            snprintf(out_of_date_reason, out_of_date_reason_length, "Build frontend of %s ran (previous dag file indicated it should not be reused)", dag_fn);
+        bool dagExists = dag_info.Exists();
+        if (!dagExists || json_info.m_Timestamp > dag_info.m_Timestamp)
+        {
+            const char* reason = dagExists ? "Timestamp of .json > .dag" : ".dag file didn't exist";
+
+            uint64_t time_exec_started = TimerGet();
+            if (!FreezeDagJson(json_filename, dag_fn))
+                return ExitRequestingFrontendRun("%s failed to freeze", json_filename);
+            uint64_t now = TimerGet();
+            double duration = TimerDiffSeconds(time_exec_started, now);
+            PrintMessage(MessageStatusLevel::Success, duration, "Freezing %s into .dag (%s)", FindFileNameInside(json_filename), reason);
+        }
     }
 
-    if (loadFrozenDataResult && self->m_Options.m_IncludesOutput != nullptr)
+    if (!LoadFrozenData<Frozen::Dag>(dag_fn, &self->m_DagFile, &self->m_DagData))
+    {
+        remove(dag_fn);
+        return ExitRequestingFrontendRun("%s couldn't be loaded", dag_fn);
+    }
+
+    uint64_t time_exec_started = TimerGet();
+    bool dagIsValid;
+    {
+        ProfilerScope prof_scope("DriverCheckDagSignatures", 0);
+        dagIsValid = DriverCheckDagSignatures(self, out_of_date_reason, out_of_date_reason_length);
+    }
+
+    uint64_t now = TimerGet();
+    double duration = TimerDiffSeconds(time_exec_started, now);
+    if (duration > 1)
+        PrintMessage(MessageStatusLevel::Warning, (int) duration, "Calculating file and glob signatures. (unusually slow)");
+
+    if (dagIsValid)
+        return true;
+
+    if (self->m_Options.m_IncludesOutput != nullptr)
     {
         Log(kDebug, "Only showing includes; using existing DAG without out-of-date checks");
         return true;
     }
 
-    // Try to use an existing DAG
-    if (!self->m_Options.m_ForceDagRegen && loadFrozenDataResult && self->m_DagData->m_ForceDagRebuild == 0)
-    {
-        uint64_t time_exec_started = TimerGet();
-        bool checkResult;
-        {
-            ProfilerScope prof_scope("DriverCheckDagSignatures", 0);
-            checkResult = DriverCheckDagSignatures(self, out_of_date_reason, out_of_date_reason_length);
-        }
-        uint64_t now = TimerGet();
-        double duration = TimerDiffSeconds(time_exec_started, now);
-        if (duration > 1)
-            PrintNonNodeActionResult(duration, self->m_DagData->m_NodeCount, MessageStatusLevel::Warning, "Calculating file and glob signatures. (unusually slow)");
+    MmapFileUnmap(&self->m_DagFile);
+    self->m_DagData = nullptr;
 
-        if (checkResult)
-        {
-            Log(kDebug, "DAG signatures match - using existing data w/o build frontend invocation");
-            return true;
-        }
-    }
+    if (remove(dag_fn))
+        Croak("Failed to remove out of date dag at %s", dag_fn);
 
-    if (loadFrozenDataResult)
-        MmapFileUnmap(&self->m_DagFile);
+    ExitRequestingFrontendRun("%s no longer valid. %s", FindFileNameInside(dag_fn), out_of_date_reason);
 
-    uint64_t time_exec_started = TimerGet();
-    // We need to generate the DAG data
-    {
-        ProfilerScope prof_scope("RunFrontend", 0);
-        if (!GenerateDag(s_BuildFile, dag_fn))
-            return false;
-    }
-    PrintNonNodeActionResult(TimerDiffSeconds(time_exec_started, TimerGet()), 1, MessageStatusLevel::Success, out_of_date_reason);
-
-    // The DAG had better map in now, or we can give up.
-    if (!LoadFrozenData<Frozen::Dag>(dag_fn, &self->m_DagFile, &self->m_DagData))
-    {
-        Log(kError, "panic: couldn't load in freshly generated DAG");
-        return false;
-    }
-
-    // In checked builds, make sure signatures are valid.
-    // For Unity, our frontend is so slow, that we'll happily take a tiny extra hit to ensure our signatures are correct.
-    if (!DriverCheckDagSignatures(self, out_of_date_reason, out_of_date_reason_length))
-    {
-        printf("Abort: rerunning DriverCheckDagSignatures() in PrepareDag() caused it to fail because: %s", out_of_date_reason);
-        exit(1);
-    }
-
-    return true;
+    return false;
 }
 
 static bool DriverCheckDagSignatures(Driver *self, char *out_of_date_reason, int out_of_date_reason_maxlength)
@@ -441,8 +456,7 @@ static bool DriverCheckDagSignatures(Driver *self, char *out_of_date_reason, int
 
         if (info.m_Timestamp != timestamp)
         {
-            snprintf(out_of_date_reason, out_of_date_reason_maxlength, "Build frontend of %s ran (build file timestamp changed: %s)", s_DagFileName, sig.m_Path.Get());
-            Log(kInfo, "DAG out of date: timestamp change for %s. was: %lu now: %lu", path, timestamp, info.m_Timestamp);
+            snprintf(out_of_date_reason, out_of_date_reason_maxlength, "FileSignature timestamp changed: %s", sig.m_Path.Get());
             return false;
         }
     }
@@ -460,7 +474,7 @@ static bool DriverCheckDagSignatures(Driver *self, char *out_of_date_reason, int
             char stored[kDigestStringSize], actual[kDigestStringSize];
             DigestToString(stored, sig.m_Digest);
             DigestToString(actual, digest);
-            snprintf(out_of_date_reason, out_of_date_reason_maxlength, "Build frontend of %s ran (folder contents changed: %s)", s_DagFileName, sig.m_Path.Get());
+            snprintf(out_of_date_reason, out_of_date_reason_maxlength, "directory contents changed: %s", sig.m_Path.Get());
             Log(kInfo, "DAG out of date: file glob change for %s (%s => %s)", sig.m_Path.Get(), stored, actual);
             return false;
         }
@@ -755,11 +769,12 @@ bool DriverInit(Driver *self, const DriverOptions *options)
 
     LinearAllocSetOwner(&self->m_Allocator, ThreadCurrent());
 
-    InitNodeResultPrinting();
+    InitNodeResultPrinting(options);
 
     MmapFileInit(&self->m_DagFile);
     MmapFileInit(&self->m_StateFile);
     MmapFileInit(&self->m_ScanFile);
+
 
     self->m_DagData = nullptr;
     self->m_AllBuiltNodes = nullptr;
@@ -805,7 +820,7 @@ void DriverDestroy(Driver *self)
 bool DriverPrepareDag(Driver *self, const char *dag_fn);
 bool DriverAllocNodes(Driver *self);
 
-BuildResult::Enum DriverBuild(Driver *self)
+BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count)
 {
     const Frozen::Dag *dag = self->m_DagData;
 
@@ -872,6 +887,8 @@ BuildResult::Enum DriverBuild(Driver *self)
         fclose((FILE *)queue_config.m_FileSigningLog);
         MutexDestroy(&debug_signing_mutex);
     }
+
+    *out_finished_node_count = build_queue.m_FinishedNodeCount;
 
     // Shut down build queue
     BuildQueueDestroy(&build_queue);
@@ -1481,7 +1498,7 @@ void DriverRemoveStaleOutputs(Driver *self)
     {
         char buffer[2000];
         snprintf(buffer, sizeof(buffer), "Delete %d artifact files that are no longer in use. (like %s)", nuke_count, any_nuked_dir == nullptr ? paths[0] : any_nuked_dir);
-        PrintNonNodeActionResult(TimerDiffSeconds(time_exec_started, TimerGet()), (int)self->m_RuntimeNodes.m_Size, MessageStatusLevel::Success, buffer);
+        PrintMessage(MessageStatusLevel::Success, (int)TimerDiffSeconds(time_exec_started, TimerGet()),buffer);
     }
 
     HashSetDestroy(&nuke_table);

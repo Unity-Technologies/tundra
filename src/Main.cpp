@@ -45,11 +45,11 @@ static const struct OptionTemplate
     const char *m_Help;
 } g_OptionTemplates[] = {
     {'j', "threads", OptionType::kInt, offsetof(DriverOptions, m_ThreadCount), "Specify number of build threads"},
-    {'f', "force-dag-regen", OptionType::kBool, offsetof(DriverOptions, m_ForceDagRegen), "Force regeneration of DAG data"},
-    {'G', "dag-regen-only", OptionType::kBool, offsetof(DriverOptions, m_GenDagOnly), "Quit after generating DAG (for debugging)"},
     {'t', "show-targets", OptionType::kBool, offsetof(DriverOptions, m_ShowTargets), "Show available targets and exit"},
     {'v', "verbose", OptionType::kBool, offsetof(DriverOptions, m_Verbose), "Enable verbose build messages"},
     {'Q', "silence-if-possible", OptionType::kBool, offsetof(DriverOptions, m_SilenceIfPossible), "If no actions taken, don't display a conclusion message"},
+    {'C', "identifactioncolor", OptionType::kInt, offsetof(DriverOptions, m_IdentificationColor), "Color used to identify progress messages" },
+    {'m', "visualmaxnodes", OptionType::kInt, offsetof(DriverOptions, m_VisualMaxNodes), "How much nodes to keep space for in the progress notification message" },
     {'l', "don't use previous results.", OptionType::kBool, offsetof(DriverOptions, m_DontReusePreviousResults), "Builds the requested target from scratch"},
     {'w', "spammy-verbose", OptionType::kBool, offsetof(DriverOptions, m_SpammyVerbose), "Enable spammy verbose build messages"},
     {'D', "debug", OptionType::kBool, offsetof(DriverOptions, m_DebugMessages), "Enable debug messages"},
@@ -426,6 +426,7 @@ int main(int argc, char *argv[])
         ProfilerInit(driver.m_Options.m_ProfileOutput, driver.m_Options.m_ThreadCount + 1);
 
     BuildResult::Enum build_result = BuildResult::kSetupError;
+    int finished_node_count = 0;
 
     if (!DriverInitData(&driver))
         goto leave;
@@ -437,13 +438,6 @@ int main(int argc, char *argv[])
 #else
     buildTitle = strdup(driver.m_DagData->m_BuildTitle.Get());
 #endif
-
-    if (driver.m_Options.m_GenDagOnly)
-    {
-        Log(kDebug, "Only generating DAG - quitting");
-        build_result = BuildResult::kOk;
-        goto leave;
-    }
 
     if (driver.m_Options.m_ShowTargets)
     {
@@ -471,7 +465,7 @@ int main(int argc, char *argv[])
 
     DriverRemoveStaleOutputs(&driver);
 
-    build_result = DriverBuild(&driver);
+    build_result = DriverBuild(&driver, &finished_node_count);
 
     if (!DriverSaveAllBuiltNodes(&driver))
         Log(kError, "Couldn't save AllBuiltNodes");
@@ -534,11 +528,11 @@ leave:
 
     double total_time = TimerDiffSeconds(start_time, TimerGet());
     bool haveTitle = strlen(buildTitle) > 0;
-    if (haveTitle && (build_result != 0 || g_Stats.m_ExecCount > 0 || !options.m_SilenceIfPossible))
+    if (haveTitle && (build_result != 0 || !options.m_SilenceIfPossible))
     {
         if (total_time < 60.0)
         {
-            PrintServiceMessage(build_result == 0 ? MessageStatusLevel::Success : MessageStatusLevel::Failure, "*** %s %s (%.2f seconds), %d items updated", buildTitle, BuildResult::Names[build_result], total_time, g_Stats.m_ExecCount);
+            PrintServiceMessage(build_result == 0 ? MessageStatusLevel::Success : MessageStatusLevel::Failure, "*** %s %s (%.2f seconds), %d items updated, %d evaluated", buildTitle, BuildResult::Names[build_result], total_time, g_Stats.m_ExecCount, finished_node_count);
         }
         else
         {
@@ -548,7 +542,7 @@ leave:
             int m = t / 60;
             t -= m * 60;
             int s = t;
-            PrintServiceMessage(build_result == 0 ? MessageStatusLevel::Success : MessageStatusLevel::Failure, "*** %s %s (%.2f seconds - %d:%02d:%02d), %d items updated", buildTitle, BuildResult::Names[build_result], total_time, h, m, s, g_Stats.m_ExecCount);
+            PrintServiceMessage(build_result == 0 ? MessageStatusLevel::Success : MessageStatusLevel::Failure, "*** %s %s (%.2f seconds - %d:%02d:%02d), %d items updated, %d evaluated", buildTitle, BuildResult::Names[build_result], total_time, h, m, s, g_Stats.m_ExecCount, finished_node_count);
         }
     }
 

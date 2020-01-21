@@ -21,19 +21,19 @@ namespace Frozen {
 struct DriverOptions
 {
     bool m_ShowHelp;
-    bool m_ForceDagRegen;
     bool m_ShowTargets;
     bool m_DebugMessages;
     bool m_Verbose;
     bool m_SpammyVerbose;
     bool m_DisplayStats;
-    bool m_GenDagOnly;
     bool m_SilenceIfPossible;
     bool m_DontReusePreviousResults;
     bool m_DebugSigning;
     bool m_ThrottleOnHumanActivity;
     int m_ThrottleInactivityPeriod;
     int m_ThrottledThreadsAmount;
+    int m_IdentificationColor;
+    int m_VisualMaxNodes;
 #if defined(TUNDRA_WIN32)
     bool m_RunUnprotected;
 #endif
@@ -99,7 +99,7 @@ void DriverRemoveStaleOutputs(Driver *self);
 
 void DriverCleanOutputs(Driver *self);
 
-BuildResult::Enum DriverBuild(Driver *self);
+BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count);
 
 bool DriverInitData(Driver *self);
 

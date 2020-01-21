@@ -170,13 +170,10 @@ static void SetNewDynamicMaxJobs(BuildQueue *queue, int maxJobs, const char *for
     queue->m_DynamicMaxJobs = maxJobs;
     CondBroadcast(&queue->m_MaxJobsChangedConditionalVariable);
 
-    char buffer[2000];
     va_list args;
     va_start(args, formatString);
-    vsnprintf(buffer, sizeof(buffer), formatString, args);
+    PrintMessage(MessageStatusLevel::Warning, 0, formatString, args);
     va_end(args);
-
-    PrintNonNodeActionResult(0, queue->m_Config.m_TotalRuntimeNodeCount, MessageStatusLevel::Warning, buffer);
 }
 
 static bool throttled = false;

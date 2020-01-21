@@ -83,3 +83,4 @@ void PathConcat(PathBuffer *buffer, const PathBuffer *other);
 
 void PathFormat(char (&output)[kMaxPathLength], const PathBuffer *buffer);
 void PathFormatPartial(char (&output)[kMaxPathLength], const PathBuffer *buffer, int start_seg, int end_seg);
+const char* FindFileNameInside(const char* path);

@@ -7,7 +7,7 @@
 #include "BuildQueue.hpp"
 
 
-static bool SharedResourceExecute(const Frozen::SharedResourceData *sharedResource, const char *action, const char *formatString, MemAllocHeap *heap, int maxNodes)
+static bool SharedResourceExecute(const Frozen::SharedResourceData *sharedResource, const char *action, const char *formatString, MemAllocHeap *heap)
 {
     const int fullAnnotationLength = strlen(sharedResource->m_Annotation) + 20;
     char *fullAnnotation = (char *)alloca(fullAnnotationLength);
@@ -23,15 +23,15 @@ static bool SharedResourceExecute(const Frozen::SharedResourceData *sharedResour
 
     uint64_t time_exec_started = TimerGet();
     ExecResult result = ExecuteProcess(action, envVarsCount, envVars, heap, 0, false);
-    PrintNonNodeActionResult(TimerDiffSeconds(time_exec_started, TimerGet()), maxNodes, result.m_ReturnCode == 0 ? MessageStatusLevel::Success : MessageStatusLevel::Failure, fullAnnotation, &result);
+    PrintMessage(result.m_ReturnCode == 0 ? MessageStatusLevel::Success : MessageStatusLevel::Failure, (int)TimerDiffSeconds(time_exec_started, TimerGet()), &result, fullAnnotation);
     return result.m_ReturnCode == 0;
 }
 
-static bool SharedResourceCreate(const Frozen::SharedResourceData *sharedResource, MemAllocHeap *heap, int maxNodes)
+static bool SharedResourceCreate(const Frozen::SharedResourceData *sharedResource, MemAllocHeap *heap)
 {
     bool result = true;
     if (sharedResource->m_CreateAction != nullptr)
-        result = SharedResourceExecute(sharedResource, sharedResource->m_CreateAction, "Creating %s", heap, maxNodes);
+        result = SharedResourceExecute(sharedResource, sharedResource->m_CreateAction, "Creating %s", heap);
     return result;
 }
 
@@ -46,7 +46,7 @@ bool SharedResourceAcquire(BuildQueue *queue, MemAllocHeap *heap, uint32_t share
         // Check that another thread didn't start this resource while we were waiting for the lock
         if (refVar == 0)
         {
-            result = SharedResourceCreate(&queue->m_Config.m_SharedResources[sharedResourceIndex], heap, queue->m_Config.m_TotalRuntimeNodeCount);
+            result = SharedResourceCreate(&queue->m_Config.m_SharedResources[sharedResourceIndex], heap);
             AtomicIncrement(&refVar);
         }
         MutexUnlock(&queue->m_SharedResourcesLock);
@@ -59,7 +59,7 @@ void SharedResourceDestroy(BuildQueue *queue, MemAllocHeap *heap, uint32_t share
 {
     const Frozen::SharedResourceData *sharedResource = &queue->m_Config.m_SharedResources[sharedResourceIndex];
     if (sharedResource->m_DestroyAction != nullptr)
-        SharedResourceExecute(sharedResource, sharedResource->m_DestroyAction, "Destroying %s", heap, queue->m_Config.m_TotalRuntimeNodeCount);
+        SharedResourceExecute(sharedResource, sharedResource->m_DestroyAction, "Destroying %s", heap);
     queue->m_SharedResourcesCreated[sharedResourceIndex] = 0;
 }
 

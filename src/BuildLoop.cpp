@@ -23,6 +23,8 @@
 #include "MakeDirectories.hpp"
 #include "BuildLoop.hpp"
 #include "RunAction.hpp"
+#include "BuildQueue.hpp"
+#include "Driver.hpp"
 #include <stdarg.h>
 #include <algorithm>
 #include <stdio.h>

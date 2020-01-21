@@ -342,4 +342,13 @@ void PathFormatPartial(char (&output)[kMaxPathLength], const PathBuffer *buffer,
     *cursor = 0;
 }
 
-
+const char* FindFileNameInside(const char* path)
+{
+    const char* result = strrchr(path, '/');
+    if (result != nullptr)
+        return result+1;
+    result = strrchr(path, '\\');
+    if (result != nullptr)
+        return result+1;
+    return path;
+}
