@@ -35,15 +35,11 @@ void InitializeDynamicOutputDirectories(int workerThreadCount)
 
 struct Context
 {
-    const char* m_BasePath;
-    size_t m_BasePathLength;
     SinglyLinkedPathList* m_List;
     MemAllocLinear* m_Allocator;
 
-    Context(const char* basePath, MemAllocLinear* allocator, SinglyLinkedPathList* list)
+    Context(MemAllocLinear* allocator, SinglyLinkedPathList* list)
     {
-        m_BasePath = basePath;
-        m_BasePathLength = strlen(m_BasePath);
         m_Allocator = allocator;
         m_List = list;
     }
@@ -53,13 +49,7 @@ struct Context
         Context& context = *(Context*)ctx;
         SinglyLinkedPathList& result = *context.m_List;
 
-        size_t pathLength = strlen(path);
-
-        char* copiedPath = LinearAllocateArray<char>(context.m_Allocator, context.m_BasePathLength + 2 + pathLength);
-        memcpy(copiedPath, context.m_BasePath, context.m_BasePathLength);
-        copiedPath[context.m_BasePathLength] = '/';
-        memcpy(copiedPath + context.m_BasePathLength + 1, path, pathLength);
-        copiedPath[context.m_BasePathLength + pathLength + 1] = 0;
+        const char* copiedPath = StrDup(context.m_Allocator,path);
 
         SinglyLinkedPathListEntry* newEntry = LinearAllocate<SinglyLinkedPathListEntry>(context.m_Allocator);
         newEntry->next = result.head;
@@ -79,7 +69,7 @@ SinglyLinkedPathList* AllocateEmptyPathList(int threadIndex)
 
 void AppendDirectoryListingToList(const char* directoryToList, int threadIndex, SinglyLinkedPathList& appendToList)
 {
-    Context ctx(directoryToList, &s_State.m_PerThreadLinearAllocators[threadIndex], &appendToList);
+    Context ctx(&s_State.m_PerThreadLinearAllocators[threadIndex], &appendToList);
     ListDirectory(directoryToList, "*", true, &ctx, Context::Callback);
 }
 

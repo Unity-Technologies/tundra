@@ -184,7 +184,7 @@ void ListDirectory(
         FileInfo info = GetFileInfo(full_fn);
 
         if (matchesFilter)
-            (*callback)(user_data, info, entry.d_name);
+            (*callback)(user_data, info, full_fn);
 
         if (recurse && info.m_Flags & FileInfo::kFlagDirectory)
             ListDirectory(full_fn, filter, recurse, user_data, callback);
