@@ -41,6 +41,7 @@
 
 #if defined(TUNDRA_WIN32)
 static double s_PerfFrequency;
+const wchar_t g_LongPathPrefix[k_LongPathPrefixLength] = { L'\\', L'\\', L'?', L'\\' };
 #endif
 
 static bool DebuggerAttached()
@@ -411,7 +412,12 @@ bool MakeDirectory(const char *path)
     if (isalpha(path[0]) && 0 == memcmp(&path[1], ":\\\0", 3))
         return true;
 
-    if (!CreateDirectoryA(path, NULL))
+    const int wideStringLength = MultiByteToWideChar(CP_UTF8, 0, path, -1, NULL, 0);
+    wchar_t* widePath = static_cast<wchar_t*>(alloca(sizeof(wchar_t) * (wideStringLength + k_LongPathPrefixLength + 1)));
+    wcsncpy(widePath, g_LongPathPrefix, k_LongPathPrefixLength);
+    MultiByteToWideChar(CP_UTF8, 0, path, -1, widePath + k_LongPathPrefixLength, wideStringLength);
+
+    if (!CreateDirectoryW(widePath, NULL))
     {
         switch (GetLastError())
         {
