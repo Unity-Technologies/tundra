@@ -41,7 +41,6 @@
 
 #if defined(TUNDRA_WIN32)
 static double s_PerfFrequency;
-const wchar_t g_LongPathPrefix[k_LongPathPrefixLength] = { L'\\', L'\\', L'?', L'\\' };
 #endif
 
 static bool DebuggerAttached()
@@ -399,6 +398,45 @@ double TimerDiffSeconds(uint64_t start, uint64_t end)
     return TimerToSeconds(end - start);
 }
 
+#if defined(TUNDRA_WIN32)
+int LongPathToPrefixedWidePath(const char* path, wchar_t* buffer, int bufferSize)
+{
+    const int longPathPrefixLength = 4;
+    const wchar_t longPathPrefix[longPathPrefixLength] = { L'\\', L'\\', L'?', L'\\' };
+
+    const int wideStringLength = MultiByteToWideChar(CP_UTF8, 0, path, -1, NULL, 0);
+    bool isAbsolute = path[1] == ':' && (path[2] == '\\' || path[2] == '/');
+
+    if (bufferSize > longPathPrefixLength)
+    {
+        memcpy(buffer, longPathPrefix, sizeof(wchar_t) * longPathPrefixLength);
+        buffer += longPathPrefixLength;
+    }
+
+    if (!isAbsolute)
+    {
+        // We cannot use Win32 API methods for converting the path from relative to absolute because those methods do not handle long paths
+        const DWORD currentDirectorySize = GetCurrentDirectoryW(0, NULL);
+
+        int requiredBufferSize = longPathPrefixLength + currentDirectorySize + wideStringLength;
+        if (buffer == nullptr || bufferSize < requiredBufferSize)
+            return requiredBufferSize;
+
+        GetCurrentDirectoryW(currentDirectorySize, buffer);
+        buffer[currentDirectorySize - 1] = '\\';
+        buffer += currentDirectorySize;
+    }
+    else
+    {
+        if (bufferSize < longPathPrefixLength + wideStringLength)
+            return longPathPrefixLength + wideStringLength;
+    }
+
+    MultiByteToWideChar(CP_UTF8, 0, path, -1, buffer, wideStringLength);
+    return 0;
+}
+#endif
+
 bool MakeDirectory(const char *path)
 {
 #if defined(TUNDRA_UNIX)
@@ -412,10 +450,9 @@ bool MakeDirectory(const char *path)
     if (isalpha(path[0]) && 0 == memcmp(&path[1], ":\\\0", 3))
         return true;
 
-    const int wideStringLength = MultiByteToWideChar(CP_UTF8, 0, path, -1, NULL, 0);
-    wchar_t* widePath = static_cast<wchar_t*>(alloca(sizeof(wchar_t) * (wideStringLength + k_LongPathPrefixLength + 1)));
-    wcsncpy(widePath, g_LongPathPrefix, k_LongPathPrefixLength);
-    MultiByteToWideChar(CP_UTF8, 0, path, -1, widePath + k_LongPathPrefixLength, wideStringLength);
+    const int wideStringLength = LongPathToPrefixedWidePath(path, NULL, 0);
+    wchar_t* widePath = static_cast<wchar_t*>(alloca(sizeof(wchar_t) * wideStringLength));
+    LongPathToPrefixedWidePath(path, widePath, wideStringLength);
 
     if (!CreateDirectoryW(widePath, NULL))
     {
