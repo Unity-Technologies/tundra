@@ -40,6 +40,10 @@
 
 #define TD_ALIGN(v, alignment) (((v) + (alignment)-1) & ~((alignment)-1))
 
+#if TUNDRA_WIN32
+const int k_LongPathPrefixLength = 4;
+extern const wchar_t g_LongPathPrefix[k_LongPathPrefixLength];
+#endif
 
 
 void InitCommon(void);

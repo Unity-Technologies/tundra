@@ -61,14 +61,17 @@ FileInfo GetFileInfo(const char *path)
             goto Failure;
     }
 #elif defined(TUNDRA_WIN32)
-#if defined(TUNDRA_WIN32_MINGW)
-    if (0 != _stat64(path, &stbuf))
-#else
-    if (0 != __stat64(path, &stbuf))
-#endif
+
+    // To work around maximum path length limitations on Windows, we have to use the wide-character version of the API, with a special prefix
+    const int widePathLength = MultiByteToWideChar(CP_UTF8, 0, path, -1, NULL, 0);
+    wchar_t* widePath = static_cast<wchar_t*>(alloca(sizeof(wchar_t) * (widePathLength + k_LongPathPrefixLength + 1)));
+    wcsncpy(widePath, g_LongPathPrefix, k_LongPathPrefixLength);
+    MultiByteToWideChar(CP_UTF8, 0, path, -1, widePath + k_LongPathPrefixLength, widePathLength);
+
+    if (0 != _wstat64(widePath, &stbuf))
         goto Failure;
 
-    DWORD attrs = GetFileAttributesA(path);
+    DWORD attrs = GetFileAttributesW(widePath);
     if (attrs == INVALID_FILE_ATTRIBUTES)
         goto Failure;
 
