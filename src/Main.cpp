@@ -49,7 +49,6 @@ static const struct OptionTemplate
     {'G', "dag-regen-only", OptionType::kBool, offsetof(DriverOptions, m_GenDagOnly), "Quit after generating DAG (for debugging)"},
     {'t', "show-targets", OptionType::kBool, offsetof(DriverOptions, m_ShowTargets), "Show available targets and exit"},
     {'v', "verbose", OptionType::kBool, offsetof(DriverOptions, m_Verbose), "Enable verbose build messages"},
-    {'q', "quiet", OptionType::kBool, offsetof(DriverOptions, m_Quiet), "Be quiet"},
     {'Q', "silence-if-possible", OptionType::kBool, offsetof(DriverOptions, m_SilenceIfPossible), "If no actions taken, don't display a conclusion message"},
     {'l', "don't use previous results.", OptionType::kBool, offsetof(DriverOptions, m_DontReusePreviousResults), "Builds the requested target from scratch"},
     {'w', "spammy-verbose", OptionType::kBool, offsetof(DriverOptions, m_SpammyVerbose), "Enable spammy verbose build messages"},

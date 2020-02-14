@@ -28,7 +28,6 @@ struct DriverOptions
     bool m_SpammyVerbose;
     bool m_DisplayStats;
     bool m_GenDagOnly;
-    bool m_Quiet;
     bool m_SilenceIfPossible;
     bool m_DontReusePreviousResults;
     bool m_DebugSigning;

@@ -28,8 +28,6 @@ struct BuildQueueConfig
     {
         // Print command lines to the TTY as actions are executed.
         kFlagEchoCommandLines = 1 << 0,
-        // Print annotations to the TTY as actions are executed
-        kFlagEchoAnnotations = 1 << 1,
     };
 
     const DriverOptions* m_DriverOptions;
