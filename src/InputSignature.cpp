@@ -458,6 +458,31 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
         return true;
     }
 
+    if (queue->m_Config.m_DontReusePreviousResults)
+    {
+        if (IsStructuredLogActive())
+        {
+            MemAllocLinearScope allocScope(&thread_state->m_ScratchAlloc);
+
+            JsonWriter msg;
+            JsonWriteInit(&msg, &thread_state->m_ScratchAlloc);
+            JsonWriteStartObject(&msg);
+
+            JsonWriteKeyName(&msg, "msg");
+            JsonWriteValueString(&msg, "dontReusePreviousResults");
+
+            JsonWriteKeyName(&msg, "annotation");
+            JsonWriteValueString(&msg, dagnode->m_Annotation);
+
+            JsonWriteKeyName(&msg, "index");
+            JsonWriteValueInteger(&msg, dagnode->m_OriginalIndex);
+
+            JsonWriteEndObject(&msg);
+            LogStructured(&msg);
+        }
+        return true;
+    }
+
     if (prev_builtnode->m_InputSignature != node->m_InputSignature)
     {
         // The input signature has changed (either direct inputs or includes)

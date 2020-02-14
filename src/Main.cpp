@@ -60,8 +60,7 @@ static const struct OptionTemplate
      "If no actions taken, don't display a conclusion message"},
     {'c', "clean", OptionType::kBool, offsetof(DriverOptions, m_Clean),
      "Clean targets (remove output files)"},
-    {'l', "rebuild", OptionType::kBool, offsetof(DriverOptions, m_Rebuild),
-     "Rebuild targets (clean and build again)"},
+    {'l', "don't use previous results.", OptionType::kBool, offsetof(DriverOptions, m_DontReusePreviousResults), "Builds the requested target from scratch"},
     {'w', "spammy-verbose", OptionType::kBool, offsetof(DriverOptions, m_SpammyVerbose),
      "Enable spammy verbose build messages"},
     {'D', "debug", OptionType::kBool, offsetof(DriverOptions, m_DebugMessages),
@@ -490,15 +489,12 @@ int main(int argc, char *argv[])
 
     DriverRemoveStaleOutputs(&driver);
 
-    if (driver.m_Options.m_Clean || driver.m_Options.m_Rebuild)
+    if (driver.m_Options.m_Clean)
     {
         DriverCleanOutputs(&driver);
 
-        if (!driver.m_Options.m_Rebuild)
-        {
-            build_result = BuildResult::kOk;
-            goto leave;
-        }
+        build_result = BuildResult::kOk;
+        goto leave;
     }
 
     build_result = DriverBuild(&driver);

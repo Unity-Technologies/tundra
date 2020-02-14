@@ -75,7 +75,7 @@ void DriverOptionsInit(DriverOptions *self)
     self->m_Quiet = false;
     self->m_SilenceIfPossible = false;
     self->m_Clean = false;
-    self->m_Rebuild = false;
+    self->m_DontReusePreviousResults = false;
     self->m_DebugSigning = false;
     self->m_ContinueOnError = false;
     self->m_ThrottleOnHumanActivity = false;
@@ -833,6 +833,7 @@ BuildResult::Enum DriverBuild(Driver *self)
     queue_config.m_ThrottleInactivityPeriod = self->m_Options.m_ThrottleInactivityPeriod;
     queue_config.m_ThrottleOnHumanActivity = self->m_Options.m_ThrottleOnHumanActivity;
     queue_config.m_ThrottledThreadsAmount = self->m_Options.m_ThrottledThreadsAmount;
+    queue_config.m_DontReusePreviousResults = self->m_Options.m_DontReusePreviousResults;
 
     if (self->m_Options.m_Verbose)
     {
