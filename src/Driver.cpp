@@ -72,7 +72,6 @@ void DriverOptionsInit(DriverOptions *self)
     self->m_SpammyVerbose = false;
     self->m_DisplayStats = false;
     self->m_GenDagOnly = false;
-    self->m_Quiet = false;
     self->m_SilenceIfPossible = false;
     self->m_DontReusePreviousResults = false;
     self->m_DebugSigning = false;
@@ -831,11 +830,7 @@ BuildResult::Enum DriverBuild(Driver *self)
 
     if (self->m_Options.m_Verbose)
     {
-        queue_config.m_Flags |= BuildQueueConfig::kFlagEchoAnnotations | BuildQueueConfig::kFlagEchoCommandLines;
-    }
-    if (!self->m_Options.m_Quiet)
-    {
-        queue_config.m_Flags |= BuildQueueConfig::kFlagEchoAnnotations;
+        queue_config.m_Flags |= BuildQueueConfig::kFlagEchoCommandLines;
     }
 
     if (self->m_Options.m_DebugSigning)
