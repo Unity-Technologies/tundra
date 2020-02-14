@@ -85,8 +85,6 @@ static const struct OptionTemplate
      "Output included files into a json file and exit"},
     {'h', "help", OptionType::kBool, offsetof(DriverOptions, m_ShowHelp),
      "Show help"},
-    {'k', "continue", OptionType::kBool, offsetof(DriverOptions, m_ContinueOnError),
-     "Continue building on error"},
 #if defined(TUNDRA_WIN32)
     {'U', "unprotected", OptionType::kBool, offsetof(DriverOptions, m_RunUnprotected), "Run unprotected (same process group - for debugging)"},
 #endif

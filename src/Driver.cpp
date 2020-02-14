@@ -77,7 +77,6 @@ void DriverOptionsInit(DriverOptions *self)
     self->m_Clean = false;
     self->m_DontReusePreviousResults = false;
     self->m_DebugSigning = false;
-    self->m_ContinueOnError = false;
     self->m_ThrottleOnHumanActivity = false;
     self->m_ThrottleInactivityPeriod = 30;
     self->m_ThrottledThreadsAmount = 0;
@@ -842,10 +841,6 @@ BuildResult::Enum DriverBuild(Driver *self)
     if (!self->m_Options.m_Quiet)
     {
         queue_config.m_Flags |= BuildQueueConfig::kFlagEchoAnnotations;
-    }
-    if (self->m_Options.m_ContinueOnError)
-    {
-        queue_config.m_Flags |= BuildQueueConfig::kFlagContinueOnError;
     }
 
     if (self->m_Options.m_DebugSigning)

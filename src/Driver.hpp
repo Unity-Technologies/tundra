@@ -33,7 +33,6 @@ struct DriverOptions
     bool m_Clean;
     bool m_DontReusePreviousResults;
     bool m_DebugSigning;
-    bool m_ContinueOnError;
     bool m_ThrottleOnHumanActivity;
     int m_ThrottleInactivityPeriod;
     int m_ThrottledThreadsAmount;
