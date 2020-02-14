@@ -52,6 +52,7 @@ struct BuildQueueConfig
     int m_SharedResourcesCount;
     bool m_ThrottleOnHumanActivity;
     int m_ThrottledThreadsAmount;
+    bool m_DontReusePreviousResults;
 };
 
 struct BuildQueue;
