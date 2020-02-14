@@ -19,6 +19,7 @@
 #include "DigestCache.hpp"
 #include "SharedResources.hpp"
 #include "HumanActivityDetection.hpp"
+#include "Driver.hpp"
 #include <stdarg.h>
 
 #include <stdio.h>
@@ -458,7 +459,7 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
         return true;
     }
 
-    if (queue->m_Config.m_DontReusePreviousResults)
+    if (queue->m_Config.m_DriverOptions->m_DontReusePreviousResults)
     {
         if (IsStructuredLogActive())
         {

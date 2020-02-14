@@ -367,6 +367,12 @@ int main(int argc, char *argv[])
             CroakErrno("couldn't change directory to %s", options.m_WorkingDir);
     }
 
+    if (options.m_ThreadCount > kMaxBuildThreads)
+    {
+        Log(kWarning, "too many build threads (%d) - clamping to %d", options.m_ThreadCount, kMaxBuildThreads);
+        options.m_ThreadCount = kMaxBuildThreads;
+    }
+
     if (options.m_ShowHelp)
     {
         ShowHelp();
