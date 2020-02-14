@@ -29,8 +29,6 @@ struct BuildQueueConfig
         kFlagEchoCommandLines = 1 << 0,
         // Print annotations to the TTY as actions are executed
         kFlagEchoAnnotations = 1 << 1,
-        // Continue building even if there are errors.
-        kFlagContinueOnError = 1 << 2,
     };
 
     uint32_t m_Flags;
