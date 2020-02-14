@@ -814,9 +814,9 @@ BuildResult::Enum DriverBuild(Driver *self)
     Mutex debug_signing_mutex;
 
     BuildQueueConfig queue_config;
+    queue_config.m_DriverOptions = &self->m_Options;
     queue_config.m_Flags = 0;
     queue_config.m_Heap = &self->m_Heap;
-    queue_config.m_ThreadCount = (int)self->m_Options.m_ThreadCount;
     queue_config.m_DagNodes = self->m_DagData->m_DagNodes;
     queue_config.m_RuntimeNodes = self->m_RuntimeNodes.m_Storage;
     queue_config.m_TotalRuntimeNodeCount = (int)self->m_RuntimeNodes.m_Size;
@@ -828,10 +828,6 @@ BuildResult::Enum DriverBuild(Driver *self)
     queue_config.m_ShaDigestExtensions = dag->m_ShaExtensionHashes.GetArray();
     queue_config.m_SharedResources = dag->m_SharedResources.GetArray();
     queue_config.m_SharedResourcesCount = dag->m_SharedResources.GetCount();
-    queue_config.m_ThrottleInactivityPeriod = self->m_Options.m_ThrottleInactivityPeriod;
-    queue_config.m_ThrottleOnHumanActivity = self->m_Options.m_ThrottleOnHumanActivity;
-    queue_config.m_ThrottledThreadsAmount = self->m_Options.m_ThrottledThreadsAmount;
-    queue_config.m_DontReusePreviousResults = self->m_Options.m_DontReusePreviousResults;
 
     if (self->m_Options.m_Verbose)
     {

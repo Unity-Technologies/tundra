@@ -15,6 +15,7 @@ struct RuntimeNode;
 struct ScanCache;
 struct StatCache;
 struct DigestCache;
+struct DriverOptions;
 
 enum
 {
@@ -31,10 +32,9 @@ struct BuildQueueConfig
         kFlagEchoAnnotations = 1 << 1,
     };
 
+    const DriverOptions* m_DriverOptions;
     uint32_t m_Flags;
     MemAllocHeap *m_Heap;
-    int m_ThreadCount;
-    int m_ThrottleInactivityPeriod;
     const Frozen::DagNode *m_DagNodes;
     RuntimeNode *m_RuntimeNodes;
     int m_TotalRuntimeNodeCount;
@@ -48,9 +48,6 @@ struct BuildQueueConfig
     Mutex *m_FileSigningLogMutex;
     const Frozen::SharedResourceData *m_SharedResources;
     int m_SharedResourcesCount;
-    bool m_ThrottleOnHumanActivity;
-    int m_ThrottledThreadsAmount;
-    bool m_DontReusePreviousResults;
 };
 
 struct BuildQueue;

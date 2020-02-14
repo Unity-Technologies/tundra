@@ -7,6 +7,7 @@
 #include "HumanActivityDetection.hpp"
 #include "RuntimeNode.hpp"
 #include "BuildLoop.hpp"
+#include "Driver.hpp"
 #include <stdarg.h>
 #include <algorithm>
 
@@ -90,14 +91,8 @@ void BuildQueueInit(BuildQueue *queue, const BuildQueueConfig *config)
 
     CHECK(queue->m_Queue);
 
-    if (queue->m_Config.m_ThreadCount > kMaxBuildThreads)
-    {
-        Log(kWarning, "too many build threads (%d) - clamping to %d",
-            queue->m_Config.m_ThreadCount, kMaxBuildThreads);
-
-        queue->m_Config.m_ThreadCount = kMaxBuildThreads;
-    }
-    queue->m_DynamicMaxJobs = queue->m_Config.m_ThreadCount;
+    
+    queue->m_DynamicMaxJobs = queue->m_Config.m_DriverOptions->m_ThreadCount;
 
     Log(kDebug, "build queue initialized; ring buffer capacity = %u", queue->m_QueueCapacity);
 
@@ -106,7 +101,7 @@ void BuildQueueInit(BuildQueue *queue, const BuildQueueConfig *config)
     SignalHandlerSetCondition(&queue->m_BuildFinishedConditionalVariable);
 
     // Create build threads.
-    for (int i = 0, thread_count = queue->m_Config.m_ThreadCount; i < thread_count; ++i)
+    for (int i = 0, thread_count = queue->m_Config.m_DriverOptions->m_ThreadCount; i < thread_count; ++i)
     {
         ThreadState *thread_state = &queue->m_ThreadState[i];
 
@@ -131,7 +126,7 @@ void BuildQueueDestroy(BuildQueue *queue)
     WakeupAllBuildThreadsSoTheyCanExit(queue);
     MutexUnlock(&queue->m_Lock);
 
-    for (int i = 0, thread_count = config->m_ThreadCount; i < thread_count; ++i)
+    for (int i = 0, thread_count = config->m_DriverOptions->m_ThreadCount; i < thread_count; ++i)
     {
         {
             ProfilerScope profile_scope("JoinBuildThread", 0);
@@ -188,7 +183,7 @@ static bool throttled = false;
 
 static void ProcessThrottling(BuildQueue *queue)
 {
-    if (!queue->m_Config.m_ThrottleOnHumanActivity)
+    if (!queue->m_Config.m_DriverOptions->m_ThrottleOnHumanActivity)
         return;
 
     double t = TimeSinceLastDetectedHumanActivityOnMachine();
@@ -197,7 +192,7 @@ static void ProcessThrottling(BuildQueue *queue)
     if (t == -1)
         return;
 
-    int throttleInactivityPeriod = queue->m_Config.m_ThrottleInactivityPeriod;
+    int throttleInactivityPeriod = queue->m_Config.m_DriverOptions->m_ThrottleInactivityPeriod;
 
     if (!throttled)
     {
@@ -211,9 +206,9 @@ static void ProcessThrottling(BuildQueue *queue)
             return;
 
         //ok, let's actually throttle;
-        int maxJobs = queue->m_Config.m_ThrottledThreadsAmount;
+        int maxJobs = queue->m_Config.m_DriverOptions->m_ThrottledThreadsAmount;
         if (maxJobs == 0)
-            maxJobs = std::max(1, (int)(queue->m_Config.m_ThreadCount * 0.6));
+            maxJobs = std::max(1, (int)(queue->m_Config.m_DriverOptions->m_ThreadCount * 0.6));
         SetNewDynamicMaxJobs(queue, maxJobs, "Human activity detected, throttling to %d simultaneous jobs to leave system responsive", maxJobs);
         throttled = true;
     }
@@ -223,7 +218,7 @@ static void ProcessThrottling(BuildQueue *queue)
         return;
 
     //if we're throttled but haven't seen any user interaction with the machine for a while, we'll unthrottle.
-    int maxJobs = queue->m_Config.m_ThreadCount;
+    int maxJobs = queue->m_Config.m_DriverOptions->m_ThreadCount;
     SetNewDynamicMaxJobs(queue, maxJobs, "No human activity detected on this machine for %d seconds, unthrottling back up to %d simultaneous jobs", throttleInactivityPeriod, maxJobs);
     throttled = false;
 }
