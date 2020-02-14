@@ -30,7 +30,6 @@ struct DriverOptions
     bool m_GenDagOnly;
     bool m_Quiet;
     bool m_SilenceIfPossible;
-    bool m_Clean;
     bool m_DontReusePreviousResults;
     bool m_DebugSigning;
     bool m_ThrottleOnHumanActivity;

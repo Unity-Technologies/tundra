@@ -74,7 +74,6 @@ void DriverOptionsInit(DriverOptions *self)
     self->m_GenDagOnly = false;
     self->m_Quiet = false;
     self->m_SilenceIfPossible = false;
-    self->m_Clean = false;
     self->m_DontReusePreviousResults = false;
     self->m_DebugSigning = false;
     self->m_ThrottleOnHumanActivity = false;
@@ -1500,19 +1499,5 @@ void DriverRemoveStaleOutputs(Driver *self)
     HashSetDestroy(&file_table);
 }
 
-void DriverCleanOutputs(Driver *self)
-{
-    ProfilerScope prof_scope("Tundra Clean", 0);
-    int count = 0;
-    for (RuntimeNode &state : self->m_RuntimeNodes)
-    {
-        for (const FrozenFileAndHash &fh : state.m_DagNode->m_OutputFiles)
-        {
-            if (0 == RemoveFileOrDir(fh.m_Filename))
-                ++count;
-        }
-    }
-    Log(kInfo, "Removed %d output files\n", count);
-}
 
 
