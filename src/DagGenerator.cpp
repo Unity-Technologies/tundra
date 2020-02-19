@@ -1051,21 +1051,8 @@ static bool RunExternalTool(const char *options, ...)
     return true;
 }
 
-bool GenerateDag(const char *script_fn, const char *dag_fn)
+bool FreezeDagJson(const char * json_filename, const char * dag_filename)
 {
-    Log(kDebug, "regenerating DAG data");
-
-    char json_filename[kMaxPathLength];
-    snprintf(json_filename, sizeof json_filename, "%s.json", dag_fn);
-    json_filename[sizeof(json_filename) - 1] = '\0';
-
-    // Nuke any old JSON data.
-    remove(json_filename);
-
-    // Run DAG generator.
-    if (!RunExternalTool("generate-dag %s %s", script_fn, json_filename))
-        return false;
-
     FileInfo json_info = GetFileInfo(json_filename);
     if (!json_info.Exists())
     {
@@ -1099,7 +1086,7 @@ bool GenerateDag(const char *script_fn, const char *dag_fn)
 
     json_memory[json_size - 1] = 0;
 
-    bool success = CreateDagFromJsonData(json_memory, dag_fn);
+    bool success = CreateDagFromJsonData(json_memory, dag_filename);
 
     free(json_memory);
 
