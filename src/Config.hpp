@@ -45,11 +45,9 @@
 #define TUNDRA_UNIX 1
 #define TUNDRA_APPLE 1
 #define TUNDRA_CASE_INSENSITIVE_FILESYSTEM YES
-#define TUNDRA_EXE_SUFFIX ""
 #elif defined(_WIN32)
 #define TUNDRA_WIN32 1
 #define TUNDRA_CASE_INSENSITIVE_FILESYSTEM YES
-#define TUNDRA_EXE_SUFFIX ".exe"
 #if defined(__GNUC__)
 #define TUNDRA_WIN32_MINGW 1
 #endif
@@ -62,22 +60,18 @@
 #define TUNDRA_UNIX 1
 #define TUNDRA_LINUX 1
 #define TUNDRA_CASE_INSENSITIVE_FILESYSTEM NO
-#define TUNDRA_EXE_SUFFIX ""
 #elif defined(__FreeBSD__)
 #define TUNDRA_UNIX 1
 #define TUNDRA_FREEBSD 1
 #define TUNDRA_CASE_INSENSITIVE_FILESYSTEM NO
-#define TUNDRA_EXE_SUFFIX ""
 #elif defined(__NetBSD__)
 #define TUNDRA_UNIX 1
 #define TUNDRA_NETBSD 1
 #define TUNDRA_CASE_INSENSITIVE_FILESYSTEM NO
-#define TUNDRA_EXE_SUFFIX ""
 #elif defined(__OpenBSD__)
 #define TUNDRA_UNIX 1
 #define TUNDRA_OPENBSD 1
 #define TUNDRA_CASE_INSENSITIVE_FILESYSTEM NO
-#define TUNDRA_EXE_SUFFIX ""
 #else
 #error Unsupported OS
 #endif

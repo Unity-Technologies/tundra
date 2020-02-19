@@ -79,8 +79,6 @@ enum LogLevel
     kSpam = 1 << 4
 };
 
-int GetLogFlags();
-
 void SetLogFlags(int log_level);
 
 void Log(LogLevel level, const char *fmt, ...);
@@ -142,13 +140,6 @@ bool RemoveFileOrDir(const char *path);
 
 // Like rename(), but also works when target file exists on Windows.
 bool RenameFile(const char *oldf, const char *newf);
-
-//-----------------------------------------------------------------------------
-// Process info
-//-----------------------------------------------------------------------------
-
-// Return the path to the Tundra executable
-const char *GetExePath();
 
 //-----------------------------------------------------------------------------
 // Misc
