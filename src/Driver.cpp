@@ -65,7 +65,6 @@ void DriverInitializeTundraFilePaths(DriverOptions *driverOptions)
 void DriverOptionsInit(DriverOptions *self)
 {
     self->m_ShowHelp = false;
-    self->m_ForceDagRegen = false;
     self->m_ShowTargets = false;
     self->m_DebugMessages = false;
     self->m_Verbose = false;
@@ -345,19 +344,10 @@ static bool DriverPrepareDag(Driver *self, const char *dag_fn)
 
     snprintf(out_of_date_reason, out_of_date_reason_length, "Build frontend of %s ran (unknown reason)", dag_fn);
 
-    if (self->m_Options.m_ForceDagRegen)
-        snprintf(out_of_date_reason, out_of_date_reason_length, "Build frontend of %s ran (ForceDagRegen option used)", dag_fn);
-
     bool loadFrozenDataResult = LoadFrozenData<Frozen::Dag>(dag_fn, &self->m_DagFile, &self->m_DagData);
 
     if (!loadFrozenDataResult)
         snprintf(out_of_date_reason, out_of_date_reason_length, "Build frontend of %s ran (no suitable previous build dag file)", dag_fn);
-
-    if (loadFrozenDataResult)
-    {
-        if (self->m_DagData->m_ForceDagRebuild == 1)
-            snprintf(out_of_date_reason, out_of_date_reason_length, "Build frontend of %s ran (previous dag file indicated it should not be reused)", dag_fn);
-    }
 
     if (loadFrozenDataResult && self->m_Options.m_IncludesOutput != nullptr)
     {
@@ -366,7 +356,7 @@ static bool DriverPrepareDag(Driver *self, const char *dag_fn)
     }
 
     // Try to use an existing DAG
-    if (!self->m_Options.m_ForceDagRegen && loadFrozenDataResult && self->m_DagData->m_ForceDagRebuild == 0)
+    if (loadFrozenDataResult)
     {
         uint64_t time_exec_started = TimerGet();
         bool checkResult;

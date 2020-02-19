@@ -925,8 +925,6 @@ static bool CompileDag(const JsonObjectValue *root, BinaryWriter *writer, MemAll
     WriteStringPtr(main_seg, str_seg, FindStringValue(root, "BuildTitle", "Tundra"));
     WriteStringPtr(main_seg, str_seg, FindStringValue(root, "StructuredLogFileName"));
 
-    BinarySegmentWriteInt32(main_seg, (int)FindIntValue(root, "ForceDagRebuild", 0));
-
     HashTableDestroy(&shared_strings);
 
     //write magic number again at the end to pretect against writing too much / too little data and not noticing.

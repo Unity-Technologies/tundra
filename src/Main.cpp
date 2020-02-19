@@ -45,7 +45,6 @@ static const struct OptionTemplate
     const char *m_Help;
 } g_OptionTemplates[] = {
     {'j', "threads", OptionType::kInt, offsetof(DriverOptions, m_ThreadCount), "Specify number of build threads"},
-    {'f', "force-dag-regen", OptionType::kBool, offsetof(DriverOptions, m_ForceDagRegen), "Force regeneration of DAG data"},
     {'G', "dag-regen-only", OptionType::kBool, offsetof(DriverOptions, m_GenDagOnly), "Quit after generating DAG (for debugging)"},
     {'t', "show-targets", OptionType::kBool, offsetof(DriverOptions, m_ShowTargets), "Show available targets and exit"},
     {'v', "verbose", OptionType::kBool, offsetof(DriverOptions, m_Verbose), "Enable verbose build messages"},
