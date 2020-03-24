@@ -19,7 +19,7 @@ struct DriverOptions;
 
 enum
 {
-    kMaxBuildThreads = 64
+    kMaxBuildThreads = 128
 };
 
 struct BuildQueueConfig
