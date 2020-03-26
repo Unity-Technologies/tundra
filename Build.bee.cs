@@ -47,7 +47,7 @@ class Build
 
             // We can enable this by committing valgrind to the repository or uploading a public stevedore artifact.
             this.Defines.Add("USE_VALGRIND=NO");
-            this.Defines.Add(IsWindows, "WIN32_LEAN_AND_MEAN", "NOMINMAX", "WINVER=0x0600", "_WIN32_WINNT=0x0600");
+            this.Defines.Add(IsWindows, "WIN32_LEAN_AND_MEAN", "NOMINMAX", "WINVER=0x0601", "_WIN32_WINNT=0x0601"); // allow using Windows 7+ APIs
             this.DynamicLinkerSettingsForMsvc().Add(linker => linker.WithSubSystemType(SubSystemType.Console));
 
             //the toolchain we currently use on linux has a many bugs when combining -g and -flto. turn off -g for linux in master builds for now
