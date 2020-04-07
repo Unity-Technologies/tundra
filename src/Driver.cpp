@@ -27,6 +27,7 @@
 #include <string.h>
 #include <vector>
 #include <sstream>
+#include <stdarg.h>
 
 #if ENABLED(TUNDRA_CASE_INSENSITIVE_FILESYSTEM)
 #if defined(_MSC_VER) || defined(TUNDRA_WIN32_MINGW)
