@@ -87,6 +87,7 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
 {
     const Frozen::DagNode *node_data = node->m_DagNode;
     const bool isWriteFileAction = node->m_DagNode->m_Flags & Frozen::DagNode::kFlagIsWriteTextFileAction;
+    const bool silenceOnSuccess = node->m_DagNode->m_Flags & Frozen::DagNode::kFlagSilenceOnSuccess;
     const char *cmd_line = node_data->m_Action;
 
     if (!isWriteFileAction && (!cmd_line || cmd_line[0] == '\0'))
@@ -232,6 +233,11 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
         {
             last_cmd_line = cmd_line;
             result = ExecuteProcess(cmd_line, env_count, env_vars, thread_state->m_Queue->m_Config.m_Heap, job_id, false, SlowCallback, &slowCallbackData);
+
+            if (silenceOnSuccess && result.m_ReturnCode == 0) {
+                result.m_OutputBuffer.cursor = 0;
+            }
+
             passedOutputValidation = ValidateExecResultAgainstAllowedOutput(&result, node_data);
         }
 

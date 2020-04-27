@@ -460,6 +460,7 @@ static bool WriteNodes(
         flags |= GetNodeFlag(node, "AllowUnexpectedOutput", Frozen::DagNode::kFlagAllowUnexpectedOutput, false);
         flags |= GetNodeFlag(node, "AllowUnwrittenOutputFiles", Frozen::DagNode::kFlagAllowUnwrittenOutputFiles, false);
         flags |= GetNodeFlag(node, "BanContentDigestForInputs", Frozen::DagNode::kFlagBanContentDigestForInputs, false);
+        flags |= GetNodeFlag(node, "SilenceOnSuccess", Frozen::DagNode::kFlagSilenceOnSuccess, false);
 
         if (writetextfile_payload != nullptr)
             flags |= Frozen::DagNode::kFlagIsWriteTextFileAction;

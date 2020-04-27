@@ -95,7 +95,11 @@ struct DagNode
 
         kFlagIsWriteTextFileAction = 1 << 4,
         kFlagAllowUnwrittenOutputFiles = 1 << 5,
-        kFlagBanContentDigestForInputs = 1 << 6
+        kFlagBanContentDigestForInputs = 1 << 6,
+
+        // Only print console output if the command failed.
+        // Useful for overly noisy actions.
+        kFlagSilenceOnSuccess = 1 << 7,
     };
 
     FrozenString m_Action;
