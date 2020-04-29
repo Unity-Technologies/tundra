@@ -47,7 +47,7 @@ class Build
 
             // We can enable this by committing valgrind to the repository or uploading a public stevedore artifact.
             this.Defines.Add("USE_VALGRIND=NO");
-            this.Defines.Add(IsWindows, "WIN32_LEAN_AND_MEAN", "NOMINMAX", "WINVER=0x0600", "_WIN32_WINNT=0x0600");
+            this.Defines.Add(IsWindows, "WIN32_LEAN_AND_MEAN", "NOMINMAX", "WINVER=0x0601", "_WIN32_WINNT=0x0601"); // allow using Windows 7+ APIs
             this.DynamicLinkerSettingsForMsvc().Add(linker => linker.WithSubSystemType(SubSystemType.Console));
 
             //the toolchain we currently use on linux has a many bugs when combining -g and -flto. turn off -g for linux in master builds for now
@@ -58,22 +58,29 @@ class Build
 
     static NPath GenerateGitFile()
     {
-        var result = Shell.Execute("git for-each-ref --count 1 --format \"%(objectname):%(refname:short)\"");
-        if (!result.Success)
-            return null;
+        try
+        {
+            var result = Shell.Execute("git for-each-ref --count 1 --format \"%(objectname):%(refname:short)\"");
+            if (!result.Success)
+                return null;
 
-        var matches = Regex.Matches(result.StdOut, @"(\w+?):(.+)");
-        if (matches.Count == 0)
-            return null;
+            var matches = Regex.Matches(result.StdOut, @"(\w+?):(.+)");
+            if (matches.Count == 0)
+                return null;
 
-        var hash = matches[0].Groups[0].Captures[0].Value;
-        var branch = matches[0].Groups[1].Captures[0].Value;
-        var gitRevFile = Configuration.AbsoluteRootArtifactsPath.Combine($"generated/git_rev.c");
-        gitRevFile.WriteAllText($@"
-            const char g_GitVersion[] = ""${hash}"";
-            const char g_GitBranch[]  = ""${branch}"";
-        ");
-        return gitRevFile;
+            var hash = matches[0].Groups[0].Captures[0].Value;
+            var branch = matches[0].Groups[1].Captures[0].Value;
+            var gitRevFile = Configuration.AbsoluteRootArtifactsPath.Combine($"generated/git_rev.c");
+            gitRevFile.WriteAllText($@"
+                const char g_GitVersion[] = ""${hash}"";
+                const char g_GitBranch[]  = ""${branch}"";
+            ");
+            return gitRevFile;
+        }
+        catch (Exception) // e.g. Win32Exception if git is not found
+        {
+            return null;
+        }
     }
 
     static void RegisterAlias(string name, NativeProgramConfiguration config, NPath file)

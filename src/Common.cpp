@@ -439,9 +439,14 @@ bool MakeDirectory(const char *path)
 int GetCpuCount()
 {
 #if defined(TUNDRA_WIN32)
-    SYSTEM_INFO si;
-    GetSystemInfo(&si);
-    return (int)si.dwNumberOfProcessors;
+    // Note: GetSystemInfo dwNumberOfProcessors is capped at 64, even if CPU has more.
+    // GetActiveProcessorCount with ALL_PROCESSOR_GROUPS will return all of them.
+    // Each process is still limited to only using 64 CPUs by default, so our own worker
+    // threads will be running on max 64 cores, if we create more. However our own worker threads
+    // are not doing "expensive work"; the expensive work is build processes launched by them.
+    // So Should Be Fine.
+    DWORD cpus = GetActiveProcessorCount(ALL_PROCESSOR_GROUPS);
+    return (int)cpus;
 #else
     long nprocs_max = sysconf(_SC_NPROCESSORS_CONF);
     if (nprocs_max < 0)
