@@ -30,7 +30,7 @@ ValidationResult ValidateExecResultAgainstAllowedOutput(ExecResult *result, cons
 
     const char *buffer = result->m_OutputBuffer.buffer;
     if (!HasAnyNonNewLine(buffer))
-        return ValidationResult::Pass;
+        return ValidationResult::SwallowStdout;
 
     for (int i = 0; i != allowed.GetCount(); i++)
     {
