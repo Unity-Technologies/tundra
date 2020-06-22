@@ -46,6 +46,7 @@ struct BuildQueueConfig
     Mutex *m_FileSigningLogMutex;
     const Frozen::SharedResourceData *m_SharedResources;
     int m_SharedResourcesCount;
+    int32_t m_AmountOfRuntimeNodesSpecificallyRequested;
 };
 
 struct BuildQueue;

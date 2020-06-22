@@ -73,6 +73,8 @@ struct Driver
     // Space for dynamic DAG node state
     Buffer<RuntimeNode> m_RuntimeNodes;
 
+    int32_t m_AmountOfRuntimeNodesSpecificallyRequested;
+
     MemAllocLinear m_ScanCacheAllocator;
     ScanCache m_ScanCache;
 

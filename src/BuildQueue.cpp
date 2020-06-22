@@ -91,7 +91,7 @@ void BuildQueueInit(BuildQueue *queue, const BuildQueueConfig *config)
 
     CHECK(queue->m_Queue);
 
-    
+
     queue->m_DynamicMaxJobs = queue->m_Config.m_DriverOptions->m_ThreadCount;
 
     Log(kDebug, "build queue initialized; ring buffer capacity = %u", queue->m_QueueCapacity);
@@ -230,16 +230,12 @@ BuildResult::Enum BuildQueueBuild(BuildQueue *queue)
     RuntimeNode *runtime_nodes = queue->m_Config.m_RuntimeNodes;
 
     int amountQueued = 0;
-    for (int i = 0; i < queue->m_Config.m_TotalRuntimeNodeCount; ++i)
+
+    for (int i = 0; i < queue->m_Config.m_AmountOfRuntimeNodesSpecificallyRequested; ++i)
     {
         RuntimeNode *runtime_node = runtime_nodes + i;
-
-        //to start up, let's enqueue all nodes that have 0 dependencies.
-        if (runtime_node->m_DagNode->m_Dependencies.GetCount() == 0)
-        {
-            RuntimeNodeFlagQueued(runtime_node);
-            build_queue[amountQueued++] = i;
-        }
+        RuntimeNodeFlagQueued(runtime_node);
+        build_queue[amountQueued++] = i;
     }
 
     queue->m_QueueWriteIndex = amountQueued;

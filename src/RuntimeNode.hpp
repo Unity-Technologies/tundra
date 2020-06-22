@@ -19,6 +19,7 @@ namespace RuntimeNodeFlags
 {
     static const uint16_t kQueued = 1 << 0;
     static const uint16_t kActive = 1 << 1;
+    static const uint16_t kHasEverBeenQueued = 1 << 2;
 }
 
 namespace Frozen
@@ -51,9 +52,15 @@ inline bool RuntimeNodeIsQueued(const RuntimeNode *runtime_node)
     return 0 != (runtime_node->m_Flags & RuntimeNodeFlags::kQueued);
 }
 
+inline bool RuntimeNodeHasEverBeenQueued(const RuntimeNode *runtime_node)
+{
+    return 0 != (runtime_node->m_Flags & RuntimeNodeFlags::kHasEverBeenQueued);
+}
+
 inline void RuntimeNodeFlagQueued(RuntimeNode *runtime_node)
 {
     runtime_node->m_Flags |= RuntimeNodeFlags::kQueued;
+    runtime_node->m_Flags |= RuntimeNodeFlags::kHasEverBeenQueued;
 }
 
 inline void RuntimeNodeFlagUnqueued(RuntimeNode *runtime_node)

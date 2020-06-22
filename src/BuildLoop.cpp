@@ -157,7 +157,29 @@ static void AdvanceNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
     CHECK(!node->m_Finished);
     CHECK(RuntimeNodeIsActive(node));
     CHECK(!RuntimeNodeIsQueued(node));
-    CHECK(AllDependenciesAreFinished(queue, node));
+
+    if (!AllDependenciesAreFinished(queue,node))
+    {
+        int enqueue_count = 0;
+
+        for (int32_t depDagIndex : node->m_DagNode->m_Dependencies)
+        {
+            if (RuntimeNode *dependentNode = GetRuntimeNodeForDagNodeIndex(queue, depDagIndex))
+            {
+                // Did someone else get to the node first?
+                if (RuntimeNodeHasEverBeenQueued(dependentNode))
+                    continue;
+
+                Enqueue(queue, dependentNode);
+                ++enqueue_count;
+            }
+        }
+        if (enqueue_count > 1)
+            WakeWaiters(queue, enqueue_count-1);
+
+        RuntimeNodeFlagInactive(node);
+        return;
+    }
 
     if (AllDependenciesAreSuccesful(queue, node))
     {

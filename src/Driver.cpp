@@ -676,6 +676,8 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
     const size_t node_word_count = (dag->m_NodeCount + 31) / 32;
     uint32_t *node_visited_bits = HeapAllocateArrayZeroed<uint32_t>(heap, node_word_count);
 
+    self->m_AmountOfRuntimeNodesSpecificallyRequested = node_stack.m_Size;
+
     int node_count = 0;
 
     Buffer<int32_t> node_indices;
@@ -842,6 +844,7 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count)
     queue_config.m_ShaDigestExtensions = dag->m_ShaExtensionHashes.GetArray();
     queue_config.m_SharedResources = dag->m_SharedResources.GetArray();
     queue_config.m_SharedResourcesCount = dag->m_SharedResources.GetCount();
+    queue_config.m_AmountOfRuntimeNodesSpecificallyRequested = self->m_AmountOfRuntimeNodesSpecificallyRequested;
 
     if (self->m_Options.m_Verbose)
     {
