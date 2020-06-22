@@ -84,6 +84,7 @@ void BuildQueueInit(BuildQueue *queue, const BuildQueueConfig *config)
     queue->m_Config = *config;
     queue->m_FinalBuildResult = BuildResult::kOk;
     queue->m_FinishedNodeCount = 0;
+    queue->m_FinishedRequestedNodeCount = 0;
     queue->m_MainThreadWantsToCleanUp = false;
     queue->m_BuildFinishedConditionalVariableSignaled = false;
     queue->m_SharedResourcesCreated = HeapAllocateArrayZeroed<uint32_t>(heap, config->m_SharedResourcesCount);

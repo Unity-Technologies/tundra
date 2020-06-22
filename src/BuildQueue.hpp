@@ -92,6 +92,7 @@ struct BuildQueue
 
     BuildResult::Enum m_FinalBuildResult;
     uint32_t m_FinishedNodeCount;
+    uint32_t m_FinishedRequestedNodeCount;
 
     ThreadId m_Threads[kMaxBuildThreads];
     ThreadState m_ThreadState[kMaxBuildThreads];

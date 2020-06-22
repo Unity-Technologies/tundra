@@ -20,6 +20,7 @@ namespace RuntimeNodeFlags
     static const uint16_t kQueued = 1 << 0;
     static const uint16_t kActive = 1 << 1;
     static const uint16_t kHasEverBeenQueued = 1 << 2;
+    static const uint16_t kExplicitlyRequested = 1 << 3;
 }
 
 namespace Frozen
@@ -81,4 +82,16 @@ inline void RuntimeNodeFlagActive(RuntimeNode *runtime_node)
 inline void RuntimeNodeFlagInactive(RuntimeNode *runtime_node)
 {
     runtime_node->m_Flags &= ~RuntimeNodeFlags::kActive;
+}
+
+
+
+inline bool RuntimeNodeIsExplicitlyRequested(const RuntimeNode *runtime_node)
+{
+    return 0 != (runtime_node->m_Flags & RuntimeNodeFlags::kExplicitlyRequested);
+}
+
+inline void RuntimeNodeSetExplicitlyRequested(RuntimeNode *runtime_node)
+{
+    runtime_node->m_Flags |= RuntimeNodeFlags::kExplicitlyRequested;
 }

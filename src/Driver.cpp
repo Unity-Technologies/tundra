@@ -719,6 +719,9 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
 #if ENABLED(CHECKED_BUILD)
         out_nodes[i].m_DebugAnnotation = src_node->m_Annotation.Get();
 #endif
+
+        if (i<self->m_AmountOfRuntimeNodesSpecificallyRequested)
+            RuntimeNodeSetExplicitlyRequested(&out_nodes[i]);
     }
 
     // Find frozen node state from previous build, if present.
