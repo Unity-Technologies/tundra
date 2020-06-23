@@ -120,7 +120,7 @@ static void EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(BuildQueue *queue, R
         if (RuntimeNode *waiter = GetRuntimeNodeForDagNodeIndex(queue, link))
         {
             // Did someone else get to the node first?
-            if (RuntimeNodeIsQueued(waiter) || RuntimeNodeIsActive(waiter))
+            if (RuntimeNodeIsQueued(waiter) || RuntimeNodeIsActive(waiter) || waiter->m_Finished)
                 continue;
 
             // If the node isn't ready, skip it.
