@@ -79,7 +79,7 @@ void DriverOptionsInit(DriverOptions *self)
     self->m_ThrottleInactivityPeriod = 30;
     self->m_ThrottledThreadsAmount = 0;
     self->m_IdentificationColor = 0;
-    self->m_ThreadCount = 1;//GetCpuCount();
+    self->m_ThreadCount = GetCpuCount();
     self->m_WorkingDir = nullptr;
     self->m_DAGFileName = ".tundra2.dag";
     self->m_ProfileOutput = nullptr;
