@@ -95,7 +95,8 @@ struct DagNode
 
         kFlagIsWriteTextFileAction = 1 << 4,
         kFlagAllowUnwrittenOutputFiles = 1 << 5,
-        kFlagBanContentDigestForInputs = 1 << 6
+        kFlagBanContentDigestForInputs = 1 << 6,
+        kFlagCacheable = 1 << 7
     };
 
     FrozenString m_Action;

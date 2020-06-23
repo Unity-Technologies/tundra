@@ -25,6 +25,7 @@
 #include "RunAction.hpp"
 #include "BuildQueue.hpp"
 #include "Driver.hpp"
+#include "Caching.hpp"
 #include <stdarg.h>
 #include <algorithm>
 #include <stdio.h>
@@ -150,67 +151,67 @@ static void SignalMainThreadToStartCleaningUp(BuildQueue *queue)
     MutexUnlock(&queue->m_BuildFinishedMutex);
 }
 
-static void AdvanceNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node, Mutex *queue_lock)
+static bool IsNodeCacheable(RuntimeNode* node)
 {
-    Log(kSpam, "T=%d, Advancing %s\n", thread_state->m_ThreadIndex, node->m_DagNode->m_Annotation.Get());
+    return 0 != (node->m_DagNode->m_Flags & Frozen::DagNode::kFlagCacheable);
+}
 
-    CHECK(!node->m_Finished);
-    CHECK(RuntimeNodeIsActive(node));
-    CHECK(!RuntimeNodeIsQueued(node));
 
-    if (!AllDependenciesAreFinished(queue,node))
+static void EnqueueDependencies(BuildQueue* queue, RuntimeNode* node)
+{
+    int enqueue_count = 0;
+
+    for (int32_t depDagIndex : node->m_DagNode->m_Dependencies)
     {
-        int enqueue_count = 0;
-
-        for (int32_t depDagIndex : node->m_DagNode->m_Dependencies)
+        if (RuntimeNode *dependentNode = GetRuntimeNodeForDagNodeIndex(queue, depDagIndex))
         {
-            if (RuntimeNode *dependentNode = GetRuntimeNodeForDagNodeIndex(queue, depDagIndex))
-            {
-                // Did someone else get to the node first?
-                if (RuntimeNodeHasEverBeenQueued(dependentNode))
-                    continue;
+            // Did someone else get to the node first?
+            if (RuntimeNodeHasEverBeenQueued(dependentNode))
+                continue;
 
-                Enqueue(queue, dependentNode);
-                ++enqueue_count;
-            }
-        }
-        if (enqueue_count > 1)
-            WakeWaiters(queue, enqueue_count-1);
-
-        RuntimeNodeFlagInactive(node);
-        return;
-    }
-
-    if (AllDependenciesAreSuccesful(queue, node))
-    {
-        MutexUnlock(queue_lock);
-        bool haveToRunAction = CheckInputSignatureToSeeNodeNeedsExecuting(queue, thread_state, node);
-        if (haveToRunAction)
-        {
-            NodeBuildResult::Enum runActionResult = RunAction(queue, thread_state, node, queue_lock);
-            MutexLock(queue_lock);
-            node->m_BuildResult = runActionResult;
-
-            switch (runActionResult)
-            {
-            case NodeBuildResult::kRanFailed:
-                queue->m_FinalBuildResult = BuildResult::kBuildError;
-                SignalMainThreadToStartCleaningUp(queue);
-                break;
-            case NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun:
-                if (queue->m_FinalBuildResult == BuildResult::kOk)
-                    queue->m_FinalBuildResult = BuildResult::kRequireFrontendRerun;
-                break;
-            default:
-                break;
-            }
-        }
-        else
-        {
-            MutexLock(queue_lock);
-            node->m_BuildResult = NodeBuildResult::kUpToDate;
+            Enqueue(queue, dependentNode);
+            ++enqueue_count;
         }
     }
+    if (enqueue_count > 1)
+        WakeWaiters(queue, enqueue_count-1);
+
+    RuntimeNodeFlagInactive(node);
+}
+
+static void ExecuteNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node, Mutex *queue_lock)
+{
+   MutexUnlock(queue_lock);
+    bool haveToRunAction = CheckInputSignatureToSeeNodeNeedsExecuting(queue, thread_state, node);
+    if (haveToRunAction)
+    {
+        NodeBuildResult::Enum runActionResult = RunAction(queue, thread_state, node, queue_lock);
+        MutexLock(queue_lock);
+        node->m_BuildResult = runActionResult;
+
+        switch (runActionResult)
+        {
+        case NodeBuildResult::kRanFailed:
+            queue->m_FinalBuildResult = BuildResult::kBuildError;
+            SignalMainThreadToStartCleaningUp(queue);
+            break;
+        case NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun:
+            if (queue->m_FinalBuildResult == BuildResult::kOk)
+                queue->m_FinalBuildResult = BuildResult::kRequireFrontendRerun;
+            break;
+        default:
+            break;
+        }
+    }
+    else
+    {
+        MutexLock(queue_lock);
+        node->m_BuildResult = NodeBuildResult::kUpToDate;
+    }
+}
+
+static void FinishNode(BuildQueue* queue, RuntimeNode* node)
+{
     node->m_Finished = true;
     queue->m_FinishedNodeCount++;
 
@@ -222,6 +223,48 @@ static void AdvanceNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
         SignalMainThreadToStartCleaningUp(queue);
 
     EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(queue, node);
+}
+
+static void AdvanceNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node, Mutex *queue_lock)
+{
+    Log(kSpam, "T=%d, Advancing %s\n", thread_state->m_ThreadIndex, node->m_DagNode->m_Annotation.Get());
+
+    CHECK(!node->m_Finished);
+    CHECK(RuntimeNodeIsActive(node));
+    CHECK(!RuntimeNodeIsQueued(node));
+
+    if (IsNodeCacheable(node) && !RuntimeNodeAlreadyAttemptedCacheLookup(node))
+    {
+        HashDigest digest = ComputeCacheKey(node);
+
+        RuntimeNodeSetAttemptedCacheLookup(node);
+        bool success = InvokeCacheMe(digest, node->m_DagNode->m_OutputFiles, thread_state, CacheMode::kLookUp);
+
+        if (success)
+        {
+            FinishNode(queue, node);
+            return;
+        }
+    }
+
+    if (!AllDependenciesAreFinished(queue,node))
+    {
+        EnqueueDependencies(queue,node);
+        return;
+    }
+
+    if (AllDependenciesAreSuccesful(queue, node))
+    {
+        ExecuteNode(queue, thread_state, node, queue_lock);
+
+        if (IsNodeCacheable(node) && node->m_BuildResult == NodeBuildResult::kRanSuccesfully)
+        {
+            HashDigest digest = ComputeCacheKey(node);
+            InvokeCacheMe(digest, node->m_DagNode->m_OutputFiles, thread_state, CacheMode::kPost);
+        }
+    }
+
+    FinishNode(queue, node);
 }
 
 static RuntimeNode *NextNode(BuildQueue *queue)
