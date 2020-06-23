@@ -8,7 +8,7 @@
 
 
 
-static void ComputeFileSignatureSha1(HashState *state, StatCache *stat_cache, DigestCache *digest_cache, const char *filename, uint32_t fn_hash)
+void ComputeFileSignatureSha1(HashState *state, StatCache *stat_cache, DigestCache *digest_cache, const char *filename, uint32_t fn_hash)
 {
     FileInfo file_info = StatCacheStat(stat_cache, filename, fn_hash);
 
@@ -42,6 +42,10 @@ static void ComputeFileSignatureSha1(HashState *state, StatCache *stat_cache, Di
         fclose(f);
 
         HashFinalize(&h, &digest);
+
+        char tempString[kDigestStringSize];
+        DigestToString(tempString, digest);
+        printf("finished hashing %s %s\n", tempString, filename );
         DigestCacheSet(digest_cache, filename, fn_hash, file_info.m_Timestamp, digest);
     }
     else

@@ -79,7 +79,7 @@ void DriverOptionsInit(DriverOptions *self)
     self->m_ThrottleInactivityPeriod = 30;
     self->m_ThrottledThreadsAmount = 0;
     self->m_IdentificationColor = 0;
-    self->m_ThreadCount = GetCpuCount();
+    self->m_ThreadCount = 1;//GetCpuCount();
     self->m_WorkingDir = nullptr;
     self->m_DAGFileName = ".tundra2.dag";
     self->m_ProfileOutput = nullptr;
@@ -385,7 +385,7 @@ static bool DriverPrepareDag(Driver *self, const char *dag_fn)
             const char* reason = dagExists ? "Timestamp of .json > .dag" : ".dag file didn't exist";
 
             uint64_t time_exec_started = TimerGet();
-            if (!FreezeDagJson(json_filename, dag_fn))
+            if (!FreezeDagJson(json_filename, dag_fn, self))
                 return ExitRequestingFrontendRun("%s failed to freeze", json_filename);
             uint64_t now = TimerGet();
             double duration = TimerDiffSeconds(time_exec_started, now);
@@ -659,6 +659,39 @@ static void DriverSelectNodes(const Frozen::Dag *dag, const char **targets, int 
     Log(kDebug, "Node selection finished with %d nodes to build", (int)out_nodes->m_Size);
 }
 
+static void FindAllDependentNodes(const Frozen::DagNode* dagNodes, int dagNodeCount, MemAllocHeap* heap, Buffer<int32_t>& out_resultIndices, Buffer<int32_t>& nodesToScan)
+{
+    const size_t node_word_count = (dagNodeCount + 31) / 32;
+    uint32_t *node_visited_bits = HeapAllocateArrayZeroed<uint32_t>(heap, node_word_count);
+    const Frozen::DagNode *src_nodes = dagNodes;
+
+    while (nodesToScan.m_Size > 0)
+    {
+        int dag_index = BufferPopOne(&nodesToScan);
+        const int dag_word = dag_index / 32;
+        const int dag_bit = 1 << (dag_index & 31);
+
+        if (0 == (node_visited_bits[dag_word] & dag_bit))
+        {
+            const Frozen::DagNode *node = src_nodes + dag_index;
+
+            BufferAppendOne(&out_resultIndices, heap, dag_index);
+
+            node_visited_bits[dag_word] |= dag_bit;
+
+            // Stash node dependencies on the work queue to keep iterating
+            BufferAppend(&nodesToScan, heap, node->m_Dependencies.GetArray(), node->m_Dependencies.GetCount());
+        }
+    }
+
+    HeapFree(heap, node_visited_bits);
+}
+
+void FindAllDependentNodes(BuildQueueConfig* config, Buffer<int32_t>& out_resultIndices, Buffer<int32_t>& nodesToScan)
+{
+    FindAllDependentNodes(config->m_DagNodes, config->m_DagNodeCount, config->m_Heap, out_resultIndices, nodesToScan);
+}
+
 bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
 {
     ProfilerScope prof_scope("Tundra PrepareNodes", 0);
@@ -672,44 +705,17 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
     BufferInitWithCapacity(&node_stack, heap, 1024);
 
     DriverSelectNodes(dag, targets, target_count, &node_stack, heap);
-
-    const size_t node_word_count = (dag->m_NodeCount + 31) / 32;
-    uint32_t *node_visited_bits = HeapAllocateArrayZeroed<uint32_t>(heap, node_word_count);
-
     self->m_AmountOfRuntimeNodesSpecificallyRequested = node_stack.m_Size;
-
-    int node_count = 0;
 
     Buffer<int32_t> node_indices;
     BufferInitWithCapacity(&node_indices, heap, 1024);
 
-    while (node_stack.m_Size > 0)
-    {
-        int dag_index = BufferPopOne(&node_stack);
-        const int dag_word = dag_index / 32;
-        const int dag_bit = 1 << (dag_index & 31);
+    FindAllDependentNodes(dag->m_DagNodes, dag->m_NodeCount, heap, node_indices, node_stack);
 
-        if (0 == (node_visited_bits[dag_word] & dag_bit))
-        {
-            const Frozen::DagNode *node = src_nodes + dag_index;
-
-            BufferAppendOne(&node_indices, &self->m_Heap, dag_index);
-
-            node_visited_bits[dag_word] |= dag_bit;
-
-            // Update counts
-            ++node_count;
-
-            // Stash node dependencies on the work queue to keep iterating
-            BufferAppend(&node_stack, &self->m_Heap, node->m_Dependencies.GetArray(), node->m_Dependencies.GetCount());
-        }
-    }
-
-    HeapFree(heap, node_visited_bits);
-    node_visited_bits = nullptr;
+    int node_count = node_indices.m_Size;
 
     // Allocate space for nodes
-    RuntimeNode *out_nodes = BufferAllocZero(&self->m_RuntimeNodes, &self->m_Heap, node_count);
+    RuntimeNode *out_nodes = BufferAllocZero(&self->m_RuntimeNodes, heap, node_count);
 
     // Initialize node state
     for (int i = 0; i < node_count; ++i)
@@ -837,6 +843,7 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count)
     queue_config.m_Flags = 0;
     queue_config.m_Heap = &self->m_Heap;
     queue_config.m_DagNodes = self->m_DagData->m_DagNodes;
+    queue_config.m_DagNodeCount = self->m_DagData->m_NodeCount;
     queue_config.m_RuntimeNodes = self->m_RuntimeNodes.m_Storage;
     queue_config.m_TotalRuntimeNodeCount = (int)self->m_RuntimeNodes.m_Size;
     queue_config.m_DagNodeIndexToRuntimeNodeIndex_Table = self->m_DagNodeIndexToRuntimeNodeIndex_Table.m_Storage;

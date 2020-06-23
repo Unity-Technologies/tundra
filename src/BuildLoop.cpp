@@ -236,7 +236,7 @@ static void AdvanceNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
 
     if (IsNodeCacheable(node) && !RuntimeNodeAlreadyAttemptedCacheLookup(node))
     {
-        HashDigest leafInputSignature = ComputeLeafInputSignature(node);
+        HashDigest leafInputSignature = ComputeLeafInputSignature(&queue->m_Config, node->m_DagNode);
 
         if (node->m_BuiltNode != nullptr)
         {
@@ -247,16 +247,18 @@ static void AdvanceNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
             }
         }
 
+        //remember leafinput signature for the cache post later.
+        node->m_LeafInputSignature = leafInputSignature;
+
         bool success = InvokeCacheMe(leafInputSignature, node->m_DagNode->m_OutputFiles, thread_state, CacheMode::kLookUp);
         if (success)
         {
+            node->m_BuildResult = NodeBuildResult::kRanSuccesfully;
             FinishNode(queue,node);
             return;
         }
 
         RuntimeNodeSetAttemptedCacheLookup(node);
-        //remember leafinput signature for the cache post later.
-        node->m_LeafInputSignature = leafInputSignature;
     }
 
     if (!AllDependenciesAreFinished(queue,node))

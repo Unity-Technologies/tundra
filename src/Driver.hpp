@@ -110,3 +110,5 @@ bool DriverSaveAllBuiltNodes(Driver *self);
 bool DriverSaveDigestCache(Driver *self);
 
 void DriverInitializeTundraFilePaths(DriverOptions *driverOptions);
+
+void FindAllDependentNodes(BuildQueueConfig* config, Buffer<int32_t>& out_resultIndices, Buffer<int32_t>& nodesToScan);

@@ -11,6 +11,7 @@
 #include "HashTable.hpp"
 #include "FileSign.hpp"
 #include "BuildQueue.hpp"
+#include "Driver.hpp"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -121,6 +122,34 @@ static bool WriteFileArray(
     return true;
 }
 
+
+static bool WriteIntArray(
+    BinarySegment *seg,
+    BinarySegment *payload_segment,
+    const JsonArrayValue *integers)
+{
+    if (!integers || 0 == integers->m_Count)
+    {
+        BinarySegmentWriteInt32(seg, 0);
+        BinarySegmentWriteNullPointer(seg);
+        return true;
+    }
+
+    BinarySegmentWriteInt32(seg, (int)integers->m_Count);
+    BinarySegmentWritePointer(seg, BinarySegmentPosition(payload_segment));
+
+    for (size_t i = 0, count = integers->m_Count; i < count; ++i)
+    {
+        const JsonNumberValue *the_integer = integers->m_Values[i]->AsNumber();
+        if (!the_integer)
+            return false;
+
+        BinarySegmentWriteInt32(payload_segment, (int)the_integer->m_Number);
+    }
+
+    return true;
+}
+
 static bool EmptyArray(const JsonArrayValue *a)
 {
     return nullptr == a || a->m_Count == 0;
@@ -172,8 +201,12 @@ static uint32_t GetNodeFlag(const JsonObjectValue *node, const char *name, uint3
     return GetNodeFlagBool(node, name, defaultValue) ? value : 0;
 }
 
-static void EmitFileSignatures(const JsonObjectValue *json, BinarySegment *main_seg, BinarySegment *aux_seg, BinarySegment *str_seg)
+static void EmitFileSignatures(const JsonObjectValue *json, BinarySegment *main_seg, BinarySegment *aux_seg, BinarySegment *str_seg, Driver* driver)
 {
+
+    auto& digest_cache = driver->m_DigestCache;
+    auto& stat_cache = driver->m_StatCache;
+
     if (const JsonArrayValue *file_sigs = FindArrayValue(json, "FileSignatures"))
     {
         size_t count = file_sigs->m_Count;
@@ -189,6 +222,12 @@ static void EmitFileSignatures(const JsonObjectValue *json, BinarySegment *main_
                 {
                     Croak("bad FileSignatures data: could not get 'File' member for object at index %zu\n", i);
                 }
+
+                HashState state;
+                HashInit(&state);
+                ComputeFileSignatureSha1(&state, &driver->m_StatCache, &driver->m_DigestCache, path, Djb2Hash(path));
+                HashDigest digest;
+                HashFinalize(&state, &digest);
 
                 int64_t timestamp = GetFileInfo(path).m_Timestamp;
                 WriteStringPtr(aux_seg, str_seg, path);
@@ -257,7 +296,7 @@ static bool WriteNodes(
     HashTable<CommonStringRecord, kFlagCaseSensitive> *shared_strings,
     MemAllocLinear *scratch,
     const TempNodeGuid *order,
-    const int32_t *remap_table)
+    const int32_t *remap_table, Driver* driver)
 {
     BinarySegmentWritePointer(main_seg, BinarySegmentPosition(node_data_seg)); // m_DagNodes
 
@@ -315,6 +354,7 @@ static bool WriteNodes(
         const char *annotation = FindStringValue(node, "Annotation");
         const JsonArrayValue *deps = FindArrayValue(node, "Deps");
         const JsonArrayValue *inputs = FindArrayValue(node, "Inputs");
+        const JsonArrayValue *leafInputIndices = FindArrayValue(node, "LeafInputIndices");
         const JsonArrayValue *outputs = FindArrayValue(node, "Outputs");
         const JsonArrayValue *output_dirs = FindArrayValue(node, "TargetDirectories");
         const JsonArrayValue *aux_outputs = FindArrayValue(node, "AuxOutputs");
@@ -374,6 +414,7 @@ static bool WriteNodes(
         }
 
         WriteFileArray(node_data_seg, array2_seg, str_seg, inputs);
+        WriteIntArray(node_data_seg, array2_seg, leafInputIndices);
         WriteFileArray(node_data_seg, array2_seg, str_seg, outputs);
         WriteFileArray(node_data_seg, array2_seg, str_seg, output_dirs);
 
@@ -451,7 +492,7 @@ static bool WriteNodes(
             BinarySegmentWriteNullPointer(node_data_seg);
         }
 
-        EmitFileSignatures(node, node_data_seg, array2_seg, str_seg);
+        EmitFileSignatures(node, node_data_seg, array2_seg, str_seg, driver);
         EmitGlobSignatures(node, node_data_seg, array2_seg, str_seg, heap, scratch);
 
         uint32_t flags = 0;
@@ -782,7 +823,7 @@ bool WriteSharedResources(const JsonArrayValue *resources, BinarySegment *main_s
     return true;
 }
 
-static bool CompileDag(const JsonObjectValue *root, BinaryWriter *writer, MemAllocHeap *heap, MemAllocLinear *scratch)
+static bool CompileDag(const JsonObjectValue *root, BinaryWriter *writer, MemAllocHeap *heap, MemAllocLinear *scratch, Driver* driver)
 {
     HashTable<CommonStringRecord, kFlagCaseSensitive> shared_strings;
     HashTableInit(&shared_strings, heap);
@@ -841,7 +882,7 @@ static bool CompileDag(const JsonObjectValue *root, BinaryWriter *writer, MemAll
     }
 
     // Write nodes.
-    if (!WriteNodes(nodes, main_seg, node_data_seg, aux_seg, str_seg, writetextfile_payloads_seg, scanner_ptrs, heap, &shared_strings, scratch, guid_table, remap_table))
+    if (!WriteNodes(nodes, main_seg, node_data_seg, aux_seg, str_seg, writetextfile_payloads_seg, scanner_ptrs, heap, &shared_strings, scratch, guid_table, remap_table, driver))
         return false;
 
     const JsonObjectValue *named_nodes = FindObjectValue(root, "NamedNodes");
@@ -880,7 +921,7 @@ static bool CompileDag(const JsonObjectValue *root, BinaryWriter *writer, MemAll
     if (!WriteSharedResources(shared_resources, main_seg, aux_seg, aux2_seg, str_seg))
         return false;
 
-    EmitFileSignatures(root, main_seg, aux_seg, str_seg);
+    EmitFileSignatures(root, main_seg, aux_seg, str_seg, driver);
     EmitGlobSignatures(root, main_seg, aux_seg, str_seg, heap, scratch);
 
     // Emit hashes of file extensions to sign using SHA-1 content digest instead of the normal timestamp signing.
@@ -934,7 +975,7 @@ static bool CompileDag(const JsonObjectValue *root, BinaryWriter *writer, MemAll
     return true;
 }
 
-static bool CreateDagFromJsonData(char *json_memory, const char *dag_fn)
+static bool CreateDagFromJsonData(char *json_memory, const char *dag_fn, Driver* driver)
 {
     MemAllocHeap heap;
     HeapInit(&heap);
@@ -964,7 +1005,7 @@ static bool CreateDagFromJsonData(char *json_memory, const char *dag_fn)
             BinaryWriter writer;
             BinaryWriterInit(&writer, &heap);
 
-            result = CompileDag(obj, &writer, &heap, &scratch);
+            result = CompileDag(obj, &writer, &heap, &scratch, driver);
 
             result = result && BinaryWriterFlush(&writer, dag_fn);
 
@@ -987,7 +1028,7 @@ static bool CreateDagFromJsonData(char *json_memory, const char *dag_fn)
     return result;
 }
 
-bool FreezeDagJson(const char* json_filename, const char* dag_fn)
+bool FreezeDagJson(const char* json_filename, const char* dag_fn, Driver* driver)
 {
     FileInfo json_info = GetFileInfo(json_filename);
     if (!json_info.Exists())
@@ -1022,7 +1063,7 @@ bool FreezeDagJson(const char* json_filename, const char* dag_fn)
 
     json_memory[json_size - 1] = 0;
 
-    bool success = CreateDagFromJsonData(json_memory, dag_fn);
+    bool success = CreateDagFromJsonData(json_memory, dag_fn, driver);
 
     free(json_memory);
 
