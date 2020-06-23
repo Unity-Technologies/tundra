@@ -7,6 +7,7 @@
 #include "Buffer.hpp"
 #include "Driver.hpp"
 #include "FileSign.hpp"
+#include "MakeDirectories.hpp"
 
 HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, const Frozen::DagNode* dagNode)
 {
@@ -67,7 +68,7 @@ HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, const Frozen::Dag
     return result;
 }
 
-bool InvokeCacheMe(const HashDigest& digest, const FrozenArray<FrozenFileAndHash>& outputFiles, ThreadState* thread_state, CacheMode::CacheMode mode)
+bool InvokeCacheMe(const HashDigest& digest, StatCache *stat_cache, const FrozenArray<FrozenFileAndHash>& outputFiles, ThreadState* thread_state, CacheMode::CacheMode mode)
 {
     char buffer[5000];
 
@@ -88,7 +89,12 @@ bool InvokeCacheMe(const HashDigest& digest, const FrozenArray<FrozenFileAndHash
     bufferPos += snprintf(bufferPos, sizeof(buffer), " %s %s00000000000000000000000000000001", cmd, digestString);
 
     for (auto &it : outputFiles)
+    {
+        PathBuffer output;
+        PathInit(&output, it.m_Filename);
+        MakeDirectoriesForFile(stat_cache, output);
         bufferPos += snprintf(bufferPos, sizeof(buffer), " %s", it.m_Filename.Get());
+    }
 
     printf("debug: %s\n", buffer);
 

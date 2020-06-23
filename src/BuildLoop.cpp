@@ -249,8 +249,7 @@ static void AdvanceNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
 
         //remember leafinput signature for the cache post later.
         node->m_LeafInputSignature = leafInputSignature;
-
-        bool success = InvokeCacheMe(leafInputSignature, node->m_DagNode->m_OutputFiles, thread_state, CacheMode::kLookUp);
+        bool success = InvokeCacheMe(leafInputSignature, queue->m_Config.m_StatCache, node->m_DagNode->m_OutputFiles, thread_state, CacheMode::kLookUp);
         if (success)
         {
             node->m_BuildResult = NodeBuildResult::kRanSuccesfully;
@@ -273,7 +272,7 @@ static void AdvanceNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
 
         if (IsNodeCacheable(node) && node->m_BuildResult == NodeBuildResult::kRanSuccesfully)
         {
-            InvokeCacheMe(node->m_LeafInputSignature, node->m_DagNode->m_OutputFiles, thread_state, CacheMode::kPost);
+            InvokeCacheMe(node->m_LeafInputSignature, queue->m_Config.m_StatCache, node->m_DagNode->m_OutputFiles, thread_state, CacheMode::kPost);
         }
     }
 
