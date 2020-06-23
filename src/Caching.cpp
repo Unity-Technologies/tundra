@@ -76,9 +76,19 @@ bool InvokeCacheMe(const HashDigest& digest, const FrozenArray<FrozenFileAndHash
 
     //todo put files in rsp.
 
-    char* cmd = mode == CacheMode::kLookUp ? "down" : "up";
+    const char* cmd = mode == CacheMode::kLookUp ? "down" : "up";
 
-    snprintf(buffer, sizeof(buffer), "c:\\cacheme\\cacheme.exe %s %s00000000000000000000000000000001 artifacts/myprogram/debug_Win64_VS2019_nonlump/myprogram.exe artifacts/myprogram/debug_Win64_VS2019_nonlump/myprogram.pdb", cmd, digestString);
+    char *bufferPos = buffer;
+
+#if defined(TUNDRA_WIN32)
+    bufferPos += snprintf(bufferPos, sizeof(buffer), "cacheme.exe");
+#else
+    bufferPos += snprintf(bufferPos, sizeof(buffer), "cacheme");
+#endif    
+    bufferPos += snprintf(bufferPos, sizeof(buffer), " %s %s00000000000000000000000000000001", cmd, digestString);
+
+    for (auto &it : outputFiles)
+        bufferPos += snprintf(bufferPos, sizeof(buffer), " %s", it.m_Filename.Get());
 
     printf("debug: %s\n", buffer);
 
@@ -88,6 +98,6 @@ bool InvokeCacheMe(const HashDigest& digest, const FrozenArray<FrozenFileAndHash
 
     EnvVariable* envs = &env_var;
 
-    ExecResult result = ExecuteProcess(buffer, 1, envs, thread_state->m_Queue->m_Config.m_Heap, thread_state->m_ThreadIndex, true, nullptr, nullptr);
+    ExecResult result = ExecuteProcess(buffer, 1, envs, nullptr, thread_state->m_ThreadIndex, true, nullptr, nullptr);
     return result.m_ReturnCode == 0;
 }

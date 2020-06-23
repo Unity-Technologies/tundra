@@ -204,8 +204,8 @@ static uint32_t GetNodeFlag(const JsonObjectValue *node, const char *name, uint3
 static void EmitFileSignatures(const JsonObjectValue *json, BinarySegment *main_seg, BinarySegment *aux_seg, BinarySegment *str_seg, Driver* driver)
 {
 
-    auto& digest_cache = driver->m_DigestCache;
-    auto& stat_cache = driver->m_StatCache;
+//    auto& digest_cache = driver->m_DigestCache;
+  //  auto& stat_cache = driver->m_StatCache;
 
     if (const JsonArrayValue *file_sigs = FindArrayValue(json, "FileSignatures"))
     {
@@ -223,11 +223,11 @@ static void EmitFileSignatures(const JsonObjectValue *json, BinarySegment *main_
                     Croak("bad FileSignatures data: could not get 'File' member for object at index %zu\n", i);
                 }
 
-                HashState state;
+                /*HashState state;
                 HashInit(&state);
                 ComputeFileSignatureSha1(&state, &driver->m_StatCache, &driver->m_DigestCache, path, Djb2Hash(path));
                 HashDigest digest;
-                HashFinalize(&state, &digest);
+                HashFinalize(&state, &digest);*/
 
                 int64_t timestamp = GetFileInfo(path).m_Timestamp;
                 WriteStringPtr(aux_seg, str_seg, path);
