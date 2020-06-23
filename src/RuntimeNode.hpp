@@ -45,6 +45,7 @@ struct RuntimeNode
     NodeBuildResult::Enum m_BuildResult;
     bool m_Finished;
     HashDigest m_InputSignature;
+    HashDigest m_LeafInputSignature;
 
     SinglyLinkedPathList* m_DynamicallyDiscoveredOutputFiles;
 };

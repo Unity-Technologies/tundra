@@ -947,7 +947,7 @@ struct StateSavingSegments
 };
 
 template <class TNodeType>
-static void save_node_sharedcode(bool nodeWasBuiltSuccesfully, const HashDigest *input_signature, const TNodeType *src_node, const HashDigest *guid, const StateSavingSegments &segments, const SinglyLinkedPathList* additionalDiscoveredOutputFiles)
+static void save_node_sharedcode(bool nodeWasBuiltSuccesfully, const HashDigest *input_signature, const HashDigest *leafinput_signature, const TNodeType *src_node, const HashDigest *guid, const StateSavingSegments &segments, const SinglyLinkedPathList* additionalDiscoveredOutputFiles)
 {
     //we're writing to two arrays in one go.  the FrozenArray<HashDigest> m_NodeGuids and the FrozenArray<BuiltNode> m_BuiltNodes
     //the hashdigest is quick
@@ -956,6 +956,7 @@ static void save_node_sharedcode(bool nodeWasBuiltSuccesfully, const HashDigest 
     //the rest not so much
     BinarySegmentWriteInt32(segments.built_nodes, nodeWasBuiltSuccesfully ? 1 : 0);
     BinarySegmentWrite(segments.built_nodes, (const char *)input_signature, sizeof(HashDigest));
+    BinarySegmentWrite(segments.built_nodes, (const char *)leafinput_signature, sizeof(HashDigest));
 
     auto WriteFrozenFileAndHashIntoBuiltNodesStream = [segments](const FrozenFileAndHash& f) -> void {
         BinarySegmentWritePointer(segments.array, BinarySegmentPosition(segments.string));
@@ -1060,7 +1061,7 @@ bool DriverSaveAllBuiltNodes(Driver *self)
 
         bool nodeWasBuiltSuccessfully = runtime_node->m_BuildResult == NodeBuildResult::kRanSuccesfully || runtime_node->m_BuildResult == NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun;
 
-        save_node_sharedcode(nodeWasBuiltSuccessfully, &runtime_node->m_InputSignature, runtime_node->m_DagNode, guid, segments, runtime_node->m_DynamicallyDiscoveredOutputFiles);
+        save_node_sharedcode(nodeWasBuiltSuccessfully, &runtime_node->m_InputSignature, &runtime_node->m_LeafInputSignature, runtime_node->m_DagNode, guid, segments, runtime_node->m_DynamicallyDiscoveredOutputFiles);
 
         HashSet<kFlagPathStrings> implicitDependencies;
         if (dag_node->m_Scanner)
@@ -1148,7 +1149,7 @@ bool DriverSaveAllBuiltNodes(Driver *self)
 
     auto EmitBuiltNodeFromPreviouslyBuiltNode = [=, &emitted_built_nodes_count, &shared_strings](const Frozen::BuiltNode *built_node, const HashDigest *guid) -> void {
 
-        save_node_sharedcode(built_node->m_WasBuiltSuccessfully, &built_node->m_InputSignature, built_node, guid, segments, nullptr);
+        save_node_sharedcode(built_node->m_WasBuiltSuccessfully, &built_node->m_InputSignature, &built_node->m_LeafInputSignature, built_node, guid, segments, nullptr);
         emitted_built_nodes_count++;
 
         int32_t file_count = built_node->m_InputFiles.GetCount();

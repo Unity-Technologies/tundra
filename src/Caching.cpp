@@ -5,7 +5,7 @@
 #include "Hash.hpp"
 #include "Caching.hpp"
 
-HashDigest ComputeCacheKey(RuntimeNode* node)
+HashDigest ComputeLeafInputSignature(RuntimeNode* node)
 {
     HashDigest result;
     memset(&result, 0, sizeof(HashDigest));

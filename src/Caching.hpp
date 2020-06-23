@@ -5,7 +5,7 @@
 struct RuntimeNode;
 struct ThreadState;
 
-HashDigest ComputeCacheKey(RuntimeNode* node);
+HashDigest ComputeLeafInputSignature(RuntimeNode* node);
 
 namespace CacheMode
 {
