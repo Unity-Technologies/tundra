@@ -10,9 +10,12 @@
 #include "MakeDirectories.hpp"
 #include "Scanner.hpp"
 #include "HashTable.hpp"
+#include "Profiler.hpp"
 
 HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, ThreadState* thread_state, const Frozen::DagNode* dagNode)
 {
+    ProfilerScope profiler_scope("ComputeLeafInputSignature", thread_state->m_ProfilerThreadId, dagNode->m_Annotation);
+
     MemAllocHeap* heap = config->m_Heap;
     Buffer<int32_t> allDependencies;
     BufferInitWithCapacity(&allDependencies, heap, 1024);
@@ -41,27 +44,7 @@ HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, ThreadState* thre
         {
             auto& inputFile = dependencyDagNode.m_InputFiles[leafInputIndex];
 
-            {
-                HashState tempState = hashState;
-                HashDigest tempDigest;
-                HashFinalize(&tempState, &tempDigest);
-                char digestString[kDigestStringSize];
-                DigestToString(digestString, tempDigest);
-
-                printf("Before to hashState for: %s: %s\n", digestString, inputFile.m_Filename.Get());
-            }
-
             ComputeFileSignatureSha1(&hashState, stat_cache, digest_cache, inputFile.m_Filename, inputFile.m_FilenameHash);
-
-            {
-                HashState tempState = hashState;
-                HashDigest tempDigest;
-                HashFinalize(&tempState, &tempDigest);
-                char digestString[kDigestStringSize];
-                DigestToString(digestString, tempDigest);
-
-                printf("Added to hashState for: %s: %s\n", digestString, inputFile.m_Filename.Get());
-            }
 
             if (dependencyDagNode.m_Scanner != nullptr)
             {
@@ -102,6 +85,8 @@ HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, ThreadState* thre
 
 bool InvokeCacheMe(const HashDigest& digest, StatCache *stat_cache, const FrozenArray<FrozenFileAndHash>& outputFiles, ThreadState* thread_state, CacheMode::CacheMode mode)
 {
+    ProfilerScope profiler_scope(mode == CacheMode::kLookUp ? "InvokeCacheMe-down" : "InvokeCacheMe-up", thread_state->m_ProfilerThreadId, outputFiles[0].m_Filename);
+
     char buffer[5000];
 
     char digestString[kDigestStringSize];
