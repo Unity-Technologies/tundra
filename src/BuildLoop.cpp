@@ -236,12 +236,15 @@ static void AdvanceNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
 
     if (IsNodeCacheable(node) && !RuntimeNodeAlreadyAttemptedCacheLookup(node))
     {
+        MutexUnlock(queue_lock);
         HashDigest leafInputSignature = ComputeLeafInputSignature(&queue->m_Config, thread_state, node->m_DagNode);
+        MutexLock(queue_lock);
 
         if (node->m_BuiltNode != nullptr)
         {
             if (leafInputSignature == node->m_BuiltNode->m_LeafInputSignature && !OutputFilesMissing(queue->m_Config.m_StatCache, node))
             {
+                node->m_BuildResult = NodeBuildResult::kUpToDate;
                 FinishNode(queue,node);
                 return;
             }
@@ -249,7 +252,11 @@ static void AdvanceNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
 
         //remember leafinput signature for the cache post later.
         node->m_LeafInputSignature = leafInputSignature;
+
+        MutexUnlock(queue_lock);
         bool success = InvokeCacheMe(leafInputSignature, queue->m_Config.m_StatCache, node->m_DagNode->m_OutputFiles, thread_state, CacheMode::kLookUp);
+        MutexLock(queue_lock);
+
         if (success)
         {
             node->m_BuildResult = NodeBuildResult::kRanSuccesfully;
@@ -272,7 +279,9 @@ static void AdvanceNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
 
         if (IsNodeCacheable(node) && node->m_BuildResult == NodeBuildResult::kRanSuccesfully)
         {
+            MutexUnlock(queue_lock);
             InvokeCacheMe(node->m_LeafInputSignature, queue->m_Config.m_StatCache, node->m_DagNode->m_OutputFiles, thread_state, CacheMode::kPost);
+            MutexLock(queue_lock);
         }
     }
 
