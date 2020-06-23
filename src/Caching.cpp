@@ -8,8 +8,10 @@
 #include "Driver.hpp"
 #include "FileSign.hpp"
 #include "MakeDirectories.hpp"
+#include "Scanner.hpp"
+#include "HashTable.hpp"
 
-HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, const Frozen::DagNode* dagNode)
+HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, ThreadState* thread_state, const Frozen::DagNode* dagNode)
 {
     MemAllocHeap* heap = config->m_Heap;
     Buffer<int32_t> allDependencies;
@@ -28,6 +30,9 @@ HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, const Frozen::Dag
 
     auto stat_cache = config->m_StatCache;
     auto digest_cache = config->m_DigestCache;
+
+    HashSet<kFlagPathStrings> implicitDeps;
+    HashSetInit(&implicitDeps, heap);
 
     for (int dependencyIndex: allDependencies)
     {
@@ -57,11 +62,38 @@ HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, const Frozen::Dag
 
                 printf("Added to hashState for: %s: %s\n", digestString, inputFile.m_Filename.Get());
             }
+
+            if (dependencyDagNode.m_Scanner != nullptr)
+            {
+                ScanInput scan_input;
+                scan_input.m_ScannerConfig = dependencyDagNode.m_Scanner;
+                scan_input.m_ScratchAlloc = &thread_state->m_ScratchAlloc;
+                scan_input.m_ScratchHeap = &thread_state->m_LocalHeap;
+                scan_input.m_FileName = inputFile.m_Filename;
+                scan_input.m_ScanCache = config->m_ScanCache;
+
+                ScanOutput scan_output;
+
+                if (ScanImplicitDeps(stat_cache, &scan_input, &scan_output))
+                {
+                    for (int i = 0, count = scan_output.m_IncludedFileCount; i < count; ++i)
+                    {
+                        const FileAndHash &path = scan_output.m_IncludedFiles[i];
+                        if (!HashSetLookup(&implicitDeps, path.m_FilenameHash, path.m_Filename))
+                            HashSetInsert(&implicitDeps, path.m_FilenameHash, path.m_Filename);
+                    }
+                }
+            }
         }
     }
 
     BufferDestroy(&allDependencies, heap);
     BufferDestroy(&rootNode, heap);
+
+    HashSetWalk(&implicitDeps, [&](uint32_t index, uint32_t hash, const char *filename) {
+        ComputeFileSignatureSha1(&hashState, stat_cache, digest_cache, filename, Djb2HashPath(filename));
+    });
+
 
     HashDigest result;
     HashFinalize(&hashState, &result);

@@ -236,7 +236,7 @@ static void AdvanceNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
 
     if (IsNodeCacheable(node) && !RuntimeNodeAlreadyAttemptedCacheLookup(node))
     {
-        HashDigest leafInputSignature = ComputeLeafInputSignature(&queue->m_Config, node->m_DagNode);
+        HashDigest leafInputSignature = ComputeLeafInputSignature(&queue->m_Config, thread_state, node->m_DagNode);
 
         if (node->m_BuiltNode != nullptr)
         {

@@ -5,7 +5,7 @@
 struct RuntimeNode;
 struct ThreadState;
 
-HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, const Frozen::DagNode* dagNode);
+HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, ThreadState* thread_state, const Frozen::DagNode* dagNode);
 
 namespace CacheMode
 {
