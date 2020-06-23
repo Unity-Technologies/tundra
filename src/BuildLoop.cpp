@@ -240,7 +240,7 @@ static void AdvanceNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
 
         if (node->m_BuiltNode != nullptr)
         {
-            if (leafInputSignature == node->m_BuiltNode->m_LeafInputSignature)
+            if (leafInputSignature == node->m_BuiltNode->m_LeafInputSignature && !OutputFilesMissing(queue->m_Config.m_StatCache, node))
             {
                 FinishNode(queue,node);
                 return;

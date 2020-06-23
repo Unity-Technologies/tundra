@@ -291,7 +291,7 @@ static void ReportInputSignatureChanges(
     }
 }
 
-static bool OutputFilesMissing(StatCache *stat_cache, RuntimeNode* node)
+bool OutputFilesMissing(StatCache *stat_cache, RuntimeNode* node)
 {
     for (const FrozenFileAndHash &f : node->m_BuiltNode->m_OutputFiles)
     {
