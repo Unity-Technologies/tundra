@@ -33,6 +33,20 @@ static void HashEntry(FILE* debug_hash_fd, HashState* state, const char* label, 
     HashAddInteger(state, payload);
 }
 
+static bool MyIgnoreFunc(void* userData, const char* filename)
+{
+    const Frozen::Dag* dag = static_cast<Frozen::Dag*>(userData);
+
+    for(auto& implicitdir: dag->m_DirectoriesCausingImplicitDependencies)
+    {
+        bool match = strncmp(implicitdir.Get(), filename, strlen(implicitdir.Get()) ) == 0;
+        if (match)
+            return true;
+    }
+
+    return false;
+}
+
 HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, ThreadState* thread_state, const Frozen::DagNode* dagNode)
 {
     ProfilerScope profiler_scope("ComputeLeafInputSignature", thread_state->m_ProfilerThreadId, dagNode->m_Annotation);
@@ -109,7 +123,11 @@ HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, ThreadState* thre
 
                 ScanOutput scan_output;
 
-                if (ScanImplicitDeps(stat_cache, &scan_input, &scan_output))
+                IgnoreCallback mycallback;
+                mycallback.userData = (void*)config->m_Dag;
+                mycallback.callback = &MyIgnoreFunc;
+
+                if (ScanImplicitDeps(stat_cache, &scan_input, &scan_output, &mycallback))
                 {
                     for (int i = 0, count = scan_output.m_IncludedFileCount; i < count; ++i)
                     {

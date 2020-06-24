@@ -25,4 +25,16 @@ struct ScanOutput
     const FileAndHash *m_IncludedFiles;
 };
 
-bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput *output);
+typedef bool IgnoreFunc(void* userData, const char* filename);
+struct IgnoreCallback
+{
+    void* userData;
+    IgnoreFunc* callback;
+
+    bool Invoke(const char* filename)
+    {
+        return callback(userData, filename);
+    }
+};
+
+bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput *output, IgnoreCallback* ignoreCallback = nullptr);

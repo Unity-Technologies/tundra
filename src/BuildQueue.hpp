@@ -35,6 +35,7 @@ struct BuildQueueConfig
     MemAllocHeap *m_Heap;
     const Frozen::DagNode *m_DagNodes;
     int32_t m_DagNodeCount;
+    const Frozen::Dag* m_Dag;
     RuntimeNode *m_RuntimeNodes;
     int m_TotalRuntimeNodeCount;
     const int32_t *m_DagNodeIndexToRuntimeNodeIndex_Table;

@@ -150,6 +150,35 @@ static bool WriteIntArray(
     return true;
 }
 
+
+static bool WriteStringArray(
+    BinarySegment *main_seg,
+    BinarySegment *payload_segment,
+    BinarySegment *string_segment,
+    const JsonArrayValue *strings)
+{
+    if (!strings || 0 == strings->m_Count)
+    {
+        BinarySegmentWriteInt32(main_seg, 0);
+        BinarySegmentWriteNullPointer(main_seg);
+        return true;
+    }
+
+    BinarySegmentWriteInt32(main_seg, (int)strings->m_Count);
+    BinarySegmentWritePointer(main_seg, BinarySegmentPosition(payload_segment));
+
+    for (size_t i = 0, count = strings->m_Count; i < count; ++i)
+    {
+        const JsonStringValue *the_string = strings->m_Values[i]->AsString();
+        if (!the_string)
+            return false;
+
+        WriteStringPtr(payload_segment, string_segment, the_string->m_String);
+    }
+
+    return true;
+}
+
 static bool EmptyArray(const JsonArrayValue *a)
 {
     return nullptr == a || a->m_Count == 0;
@@ -468,6 +497,7 @@ static bool WriteNodes(
         {
             BinarySegmentWriteNullPointer(node_data_seg);
         }
+
 
         if (shared_resources && shared_resources->m_Count > 0)
         {
@@ -916,6 +946,9 @@ static bool CompileDag(const JsonObjectValue *root, BinaryWriter *writer, MemAll
         fprintf(stderr, "bad DefaultNodes data\n");
         return false;
     }
+
+    auto directoriesCausingImplicitDependencies = FindArrayValue(root, "DirectoriesCausingImplicitDependencies");
+    WriteStringArray(main_seg, aux2_seg, str_seg, directoriesCausingImplicitDependencies);
 
     // Write shared resources
     if (!WriteSharedResources(shared_resources, main_seg, aux_seg, aux2_seg, str_seg))

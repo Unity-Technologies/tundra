@@ -844,6 +844,7 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count)
     queue_config.m_Heap = &self->m_Heap;
     queue_config.m_DagNodes = self->m_DagData->m_DagNodes;
     queue_config.m_DagNodeCount = self->m_DagData->m_NodeCount;
+    queue_config.m_Dag = self->m_DagData;
     queue_config.m_RuntimeNodes = self->m_RuntimeNodes.m_Storage;
     queue_config.m_TotalRuntimeNodeCount = (int)self->m_RuntimeNodes.m_Size;
     queue_config.m_DagNodeIndexToRuntimeNodeIndex_Table = self->m_DagNodeIndexToRuntimeNodeIndex_Table.m_Storage;
