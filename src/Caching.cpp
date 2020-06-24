@@ -11,10 +11,41 @@
 #include "Scanner.hpp"
 #include "HashTable.hpp"
 #include "Profiler.hpp"
+#include "DagData.hpp"
+
+static void HashEntry(FILE* debug_hash_fd, HashState* state, const char* label, const char* str)
+{
+    fprintf(debug_hash_fd, "%s: %s\n", label, str);
+    HashAddString(state, str);
+}
+
+static void HashEntry(FILE* debug_hash_fd, HashState* state, const char* label, const char* file, HashDigest& digest)
+{
+    char temp[kDigestStringSize];
+    DigestToString(temp, digest);
+    fprintf(debug_hash_fd, "%s: %s %s\n", label, file, temp);
+    HashUpdate(state, &digest, sizeof(digest));
+}
+
+static void HashEntry(FILE* debug_hash_fd, HashState* state, const char* label, int payload)
+{
+    fprintf(debug_hash_fd, "%s: %d\n", label, payload);
+    HashAddInteger(state, payload);
+}
 
 HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, ThreadState* thread_state, const Frozen::DagNode* dagNode)
 {
     ProfilerScope profiler_scope("ComputeLeafInputSignature", thread_state->m_ProfilerThreadId, dagNode->m_Annotation);
+
+    char filename[1000];
+
+    snprintf(filename, sizeof(filename), "artifacts/cachesignatures_%d.txt", Djb2Hash(dagNode->m_Annotation.Get()));
+    FILE* debug_hash_fd = fopen(filename, "w");
+
+    if (debug_hash_fd == 0)
+    {
+        CroakAbort("Failed to create %s!!", filename);
+    }
 
     MemAllocHeap* heap = config->m_Heap;
     Buffer<int32_t> allDependencies;
@@ -40,11 +71,32 @@ HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, ThreadState* thre
     for (int dependencyIndex: allDependencies)
     {
         auto& dependencyDagNode = config->m_DagNodes[dependencyIndex];
+
+        for (auto& f: dependencyDagNode.m_OutputFiles)
+        {
+            HashEntry(debug_hash_fd, &hashState, "outputFile", f.m_Filename.Get());
+        }
+
+
+        HashAddString(&hashState, dependencyDagNode.m_Action.Get());
+        for (auto& e: dependencyDagNode.m_EnvVars)
+        {
+            HashEntry(debug_hash_fd, &hashState, "env-name", e.m_Name);
+            HashEntry(debug_hash_fd, &hashState, "env-value", e.m_Value);
+        }
+
+        for (auto& s: dependencyDagNode.m_AllowedOutputSubstrings)
+            HashEntry(debug_hash_fd, &hashState, "allowedOutputStrings", s.Get());
+
+        if (dependencyDagNode.m_Flags != (Frozen::DagNode::kFlagOverwriteOutputs | Frozen::DagNode::kFlagAllowUnexpectedOutput))
+            HashEntry(debug_hash_fd, &hashState, "flags", dependencyDagNode.m_Flags);
+
         for (int leafInputIndex: dependencyDagNode.m_LeafInputFiles)
         {
             auto& inputFile = dependencyDagNode.m_InputFiles[leafInputIndex];
 
-            ComputeFileSignatureSha1(&hashState, stat_cache, digest_cache, inputFile.m_Filename, inputFile.m_FilenameHash);
+            HashDigest digest = ComputeFileSignatureSha1(stat_cache, digest_cache, inputFile.m_Filename, inputFile.m_FilenameHash);
+            HashEntry(debug_hash_fd, &hashState, "leafInput: ", inputFile.m_Filename, digest);
 
             if (dependencyDagNode.m_Scanner != nullptr)
             {
@@ -69,29 +121,18 @@ HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, ThreadState* thre
             }
         }
 
-        HashAddString(&hashState, dependencyDagNode.m_Action.Get());
-        for (auto& e: dependencyDagNode.m_EnvVars)
-        {
-            HashAddString(&hashState, e.m_Name);
-            HashAddString(&hashState, e.m_Value);
-        }
-
-        for (auto& s: dependencyDagNode.m_AllowedOutputSubstrings)
-            HashAddString(&hashState, s.Get());
-
-        for (auto& f: dependencyDagNode.m_OutputFiles)
-            HashAddString(&hashState, f.m_Filename.Get());
-
-        HashAddInteger(&hashState, dependencyDagNode.m_Flags);
+        fprintf(debug_hash_fd,"\n\n");
     }
 
     BufferDestroy(&allDependencies, heap);
     BufferDestroy(&rootNode, heap);
 
     HashSetWalk(&implicitDeps, [&](uint32_t index, uint32_t hash, const char *filename) {
+        fprintf(debug_hash_fd, "implicitDeps: %s\n", filename);
         ComputeFileSignatureSha1(&hashState, stat_cache, digest_cache, filename, Djb2HashPath(filename));
     });
 
+    fclose(debug_hash_fd);
 
     HashDigest result;
     HashFinalize(&hashState, &result);
@@ -127,6 +168,7 @@ bool InvokeCacheMe(const HashDigest& digest, StatCache *stat_cache, const Frozen
         MakeDirectoriesForFile(stat_cache, output);
         bufferPos += snprintf(bufferPos, sizeof(buffer), " %s", it.m_Filename.Get());
     }
+
 
     printf("debug: %s\n", buffer);
 
