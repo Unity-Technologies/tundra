@@ -11,7 +11,7 @@
 static IncludeData *
 ScanCppLine(const char *start, MemAllocLinear *allocator)
 {
-    while (isspace(*start))
+    while (isspace((unsigned char)*start))
         ++start;
 
     if (*start++ != '#')
