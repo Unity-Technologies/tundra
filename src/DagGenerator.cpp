@@ -384,6 +384,7 @@ static bool WriteNodes(
         const JsonArrayValue *deps = FindArrayValue(node, "Deps");
         const JsonArrayValue *inputs = FindArrayValue(node, "Inputs");
         const JsonArrayValue *leafInputIndices = FindArrayValue(node, "LeafInputIndices");
+        const JsonArrayValue *filesThatMightBeIncluded = FindArrayValue(node, "FilesThatMightBeIncluded");
         const JsonArrayValue *outputs = FindArrayValue(node, "Outputs");
         const JsonArrayValue *output_dirs = FindArrayValue(node, "TargetDirectories");
         const JsonArrayValue *aux_outputs = FindArrayValue(node, "AuxOutputs");
@@ -444,6 +445,7 @@ static bool WriteNodes(
 
         WriteFileArray(node_data_seg, array2_seg, str_seg, inputs);
         WriteIntArray(node_data_seg, array2_seg, leafInputIndices);
+        WriteFileArray(node_data_seg, array2_seg, str_seg, filesThatMightBeIncluded);
         WriteFileArray(node_data_seg, array2_seg, str_seg, outputs);
         WriteFileArray(node_data_seg, array2_seg, str_seg, output_dirs);
 
