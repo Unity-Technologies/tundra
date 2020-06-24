@@ -6,7 +6,49 @@
 #include "Buffer.hpp"
 #include <stdio.h>
 
+HashDigest ComputeFileSignatureSha1(StatCache *stat_cache, DigestCache *digest_cache, const char *filename, uint32_t fn_hash)
+{
+    HashDigest digest = {};
+    FileInfo file_info = StatCacheStat(stat_cache, filename, fn_hash);
 
+    if (!file_info.Exists())
+    {
+        return digest;
+    }
+
+    if (!DigestCacheGet(digest_cache, filename, fn_hash, file_info.m_Timestamp, &digest))
+    {
+        TimingScope timing_scope(&g_Stats.m_FileDigestCount, &g_Stats.m_FileDigestTimeCycles);
+
+        FILE *f = fopen(filename, "rb");
+        if (!f)
+        {
+            return digest;
+        }
+
+        HashState h;
+        HashInit(&h);
+
+        char buffer[8192];
+        while (size_t nbytes = fread(buffer, 1, sizeof buffer, f))
+        {
+            HashUpdate(&h, buffer, nbytes);
+        }
+        fclose(f);
+
+        HashFinalize(&h, &digest);
+
+     //   char tempString[kDigestStringSize];
+     //   DigestToString(tempString, digest);
+     //   printf("finished hashing %s %s\n", tempString, filename );
+        DigestCacheSet(digest_cache, filename, fn_hash, file_info.m_Timestamp, digest);
+    }
+    else
+    {
+        AtomicIncrement(&g_Stats.m_DigestCacheHits);
+    }
+    return digest;
+}
 
 void ComputeFileSignatureSha1(HashState *state, StatCache *stat_cache, DigestCache *digest_cache, const char *filename, uint32_t fn_hash)
 {
@@ -43,9 +85,9 @@ void ComputeFileSignatureSha1(HashState *state, StatCache *stat_cache, DigestCac
 
         HashFinalize(&h, &digest);
 
-        char tempString[kDigestStringSize];
-        DigestToString(tempString, digest);
-        printf("finished hashing %s %s\n", tempString, filename );
+        //char tempString[kDigestStringSize];
+        //DigestToString(tempString, digest);
+        //printf("finished hashing %s %s\n", tempString, filename );
         DigestCacheSet(digest_cache, filename, fn_hash, file_info.m_Timestamp, digest);
     }
     else
