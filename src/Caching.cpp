@@ -68,6 +68,21 @@ HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, ThreadState* thre
                 }
             }
         }
+
+        HashAddString(&hashState, dependencyDagNode.m_Action.Get());
+        for (auto& e: dependencyDagNode.m_EnvVars)
+        {
+            HashAddString(&hashState, e.m_Name);
+            HashAddString(&hashState, e.m_Value);
+        }
+
+        for (auto& s: dependencyDagNode.m_AllowedOutputSubstrings)
+            HashAddString(&hashState, s.Get());
+
+        for (auto& f: dependencyDagNode.m_OutputFiles)
+            HashAddString(&hashState, f.m_Filename.Get());
+
+        HashAddInteger(&hashState, dependencyDagNode.m_Flags);
     }
 
     BufferDestroy(&allDependencies, heap);
@@ -102,7 +117,7 @@ bool InvokeCacheMe(const HashDigest& digest, StatCache *stat_cache, const Frozen
     bufferPos += snprintf(bufferPos, sizeof(buffer), "cacheme.exe");
 #else
     bufferPos += snprintf(bufferPos, sizeof(buffer), "cacheme");
-#endif    
+#endif
     bufferPos += snprintf(bufferPos, sizeof(buffer), " %s %s00000000000000000000000000000001", cmd, digestString);
 
     for (auto &it : outputFiles)
