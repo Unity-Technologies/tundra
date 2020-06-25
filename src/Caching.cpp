@@ -187,9 +187,6 @@ bool InvokeCacheMe(const HashDigest& digest, StatCache *stat_cache, const Frozen
         bufferPos += snprintf(bufferPos, sizeof(buffer), " %s", it.m_Filename.Get());
     }
 
-
-    printf("debug: %s\n", buffer);
-
     EnvVariable env_var;
     env_var.m_Name = "CACHE_SERVER_ADDRESS";
     env_var.m_Value = "127.0.0.1:9092";

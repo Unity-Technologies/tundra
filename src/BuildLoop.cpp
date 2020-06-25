@@ -259,11 +259,13 @@ static void AdvanceNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
 
         if (success)
         {
+            PrintMessage(MessageStatusLevel::Success, 0, "%s [Cache hit]", node->m_DagNode->m_Annotation.Get());
             node->m_BuildResult = NodeBuildResult::kRanSuccesfully;
             FinishNode(queue,node);
             return;
         }
 
+        PrintMessage(MessageStatusLevel::Info, 0, "%s [Cache miss]", node->m_DagNode->m_Annotation.Get());
         RuntimeNodeSetAttemptedCacheLookup(node);
     }
 
