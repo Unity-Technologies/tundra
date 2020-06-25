@@ -82,6 +82,9 @@ HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, ThreadState* thre
     HashSet<kFlagPathStrings> implicitDeps;
     HashSetInit(&implicitDeps, heap);
 
+    MemAllocLinear includeLinearAlloc;
+    LinearAllocInit(&includeLinearAlloc, &thread_state->m_LocalHeap, 1024*1024*16, "includes");
+
     for (int dependencyIndex: allDependencies)
     {
         auto& dependencyDagNode = config->m_DagNodes[dependencyIndex];
@@ -92,7 +95,7 @@ HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, ThreadState* thre
         }
 
 
-        HashAddString(&hashState, dependencyDagNode.m_Action.Get());
+        HashEntry(debug_hash_fd, &hashState, "action", dependencyDagNode.m_Action.Get());
         for (auto& e: dependencyDagNode.m_EnvVars)
         {
             HashEntry(debug_hash_fd, &hashState, "env-name", e.m_Name);
@@ -114,6 +117,8 @@ HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, ThreadState* thre
 
             if (dependencyDagNode.m_Scanner != nullptr)
             {
+                MemAllocLinearScope scratch_scope(&thread_state->m_ScratchAlloc);
+
                 ScanInput scan_input;
                 scan_input.m_ScannerConfig = dependencyDagNode.m_Scanner;
                 scan_input.m_ScratchAlloc = &thread_state->m_ScratchAlloc;
@@ -133,7 +138,7 @@ HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, ThreadState* thre
                     {
                         const FileAndHash &path = scan_output.m_IncludedFiles[i];
                         if (!HashSetLookup(&implicitDeps, path.m_FilenameHash, path.m_Filename))
-                            HashSetInsert(&implicitDeps, path.m_FilenameHash, path.m_Filename);
+                            HashSetInsert(&implicitDeps, path.m_FilenameHash, StrDup(&includeLinearAlloc, path.m_Filename));
                     }
                 }
             }
@@ -146,11 +151,12 @@ HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, ThreadState* thre
     BufferDestroy(&rootNode, heap);
 
     HashSetWalk(&implicitDeps, [&](uint32_t index, uint32_t hash, const char *filename) {
-        fprintf(debug_hash_fd, "implicitDeps: %s\n", filename);
-        ComputeFileSignatureSha1(&hashState, stat_cache, digest_cache, filename, Djb2HashPath(filename));
+        HashDigest digest = ComputeFileSignatureSha1(stat_cache, digest_cache, filename, Djb2HashPath(filename));
+        HashEntry(debug_hash_fd, &hashState, "implicitDeps: ", filename, digest);
     });
 
     fclose(debug_hash_fd);
+    LinearAllocDestroy(&includeLinearAlloc);
 
     HashDigest result;
     HashFinalize(&hashState, &result);
