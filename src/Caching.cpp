@@ -53,7 +53,10 @@ HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, ThreadState* thre
 
     char filename[1000];
 
-    snprintf(filename, sizeof(filename), "artifacts/cachesignatures_%d.txt", Djb2Hash(dagNode->m_Annotation.Get()));
+    snprintf(filename, sizeof(filename), "artifacts/cachesignatures/%s", dagNode->m_Annotation.Get());
+    PathBuffer output;
+    PathInit(&output, filename);
+    MakeDirectoriesForFile(config->m_StatCache, output);
     FILE* debug_hash_fd = fopen(filename, "w");
 
     if (debug_hash_fd == 0)
