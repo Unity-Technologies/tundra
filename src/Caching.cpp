@@ -198,7 +198,22 @@ bool InvokeCacheMe(const HashDigest& digest, StatCache *stat_cache, const Frozen
 
     EnvVariable env_var;
     env_var.m_Name = "CACHE_SERVER_ADDRESS";
-    env_var.m_Value = "127.0.0.1:9092";
+    env_var.m_Value = "127.0.0.1:9092"; // default for testing.
+#if defined(TUNDRA_WIN32)
+    char val[128];
+    DWORD bsize;
+    bsize = GetEnvironmentVariable("CACHE_SERVER_ADDRESS", val, 128);
+    if (bsize > 0)
+    {
+        env_var.m_Value = val;
+    }
+#else
+    char *val = getenv("CACHE_SERVER_ADDRESS");
+    if (val)
+    {
+        env_var.m_Value = val;
+    }
+#endif
 
     EnvVariable* envs = &env_var;
 
