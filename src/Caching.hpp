@@ -4,6 +4,7 @@
 
 struct RuntimeNode;
 struct ThreadState;
+struct Mutex;
 
 HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, ThreadState* thread_state, const Frozen::DagNode* dagNode);
 
@@ -16,4 +17,5 @@ namespace CacheMode
     };
 };
 
-bool InvokeCacheMe(const HashDigest& digest, StatCache *stat_cache, const FrozenArray<FrozenFileAndHash>& outputFiles, ThreadState* thread_state, CacheMode::CacheMode mode);
+bool InvokeCacheMe(const HashDigest& digest, StatCache *stat_cache, const FrozenArray<FrozenFileAndHash>& outputFiles, ThreadState* thread_state, CacheMode::CacheMode mode, const Frozen::DagNode* dagNode, Mutex* queue_lock);
+

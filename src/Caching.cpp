@@ -12,6 +12,8 @@
 #include "HashTable.hpp"
 #include "Profiler.hpp"
 #include "DagData.hpp"
+#include "RunAction.hpp"
+#include "NodeResultPrinting.hpp"
 
 static void HashEntry(FILE* debug_hash_fd, HashState* state, const char* label, const char* str)
 {
@@ -176,7 +178,29 @@ HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, ThreadState* thre
     return result;
 }
 
-bool InvokeCacheMe(const HashDigest& digest, StatCache *stat_cache, const FrozenArray<FrozenFileAndHash>& outputFiles, ThreadState* thread_state, CacheMode::CacheMode mode)
+
+static int SlowCallback(void *user_data, const char* label)
+{
+    SlowCallbackData *data = (SlowCallbackData *)user_data;
+    MutexLock(data->queue_lock);
+    char buffer[1000];
+    snprintf(buffer,sizeof(buffer),"%s %s", label, data->node_data->m_Annotation.Get());
+    int sendNextCallbackIn = PrintNodeInProgress(data->node_data, data->time_of_start, data->build_queue, buffer);
+    MutexUnlock(data->queue_lock);
+    return sendNextCallbackIn;
+}
+
+static int SlowCallback_CacheGet(void *user_data)
+{
+    return SlowCallback(user_data, "[CacheGet]");
+}
+
+static int SlowCallback_CachePost(void *user_data)
+{
+    return SlowCallback(user_data, "[CachePush]");
+}
+
+bool InvokeCacheMe(const HashDigest& digest, StatCache *stat_cache, const FrozenArray<FrozenFileAndHash>& outputFiles, ThreadState* thread_state, CacheMode::CacheMode mode, const Frozen::DagNode* dagNode, Mutex* queue_lock)
 {
     ProfilerScope profiler_scope(mode == CacheMode::kLookUp ? "InvokeCacheMe-down" : "InvokeCacheMe-up", thread_state->m_ProfilerThreadId, outputFiles[0].m_Filename);
 
@@ -212,6 +236,12 @@ bool InvokeCacheMe(const HashDigest& digest, StatCache *stat_cache, const Frozen
 
     EnvVariable* envs = &env_var;
 
-    ExecResult result = ExecuteProcess(buffer, 1, envs, nullptr, thread_state->m_ThreadIndex, true, nullptr, nullptr);
+    SlowCallbackData slowCallbackData;
+    slowCallbackData.node_data = dagNode;
+    slowCallbackData.time_of_start = TimerGet();
+    slowCallbackData.queue_lock = queue_lock;
+    slowCallbackData.build_queue = thread_state->m_Queue;
+
+    ExecResult result = ExecuteProcess(buffer, 1, envs, nullptr, thread_state->m_ThreadIndex, true, mode == CacheMode::kLookUp ? SlowCallback_CacheGet : SlowCallback_CachePost , &slowCallbackData);
     return result.m_ReturnCode == 0;
 }
