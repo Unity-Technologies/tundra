@@ -23,7 +23,13 @@ static void HashEntry(FILE* debug_hash_fd, HashState* state, const char* label, 
 {
     char temp[kDigestStringSize];
     DigestToString(temp, digest);
-    fprintf(debug_hash_fd, "%s: %s %s\n", label, file, temp);
+
+    char buffer[1000];
+    strncpy(buffer, file, sizeof(buffer));
+    char*p = buffer;
+    for ( ; *p; ++p) *p = tolower(*p);
+
+    fprintf(debug_hash_fd, "%s: %s %s\n", label, buffer, temp);
     HashUpdate(state, &digest, sizeof(digest));
 }
 
@@ -53,7 +59,7 @@ HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, ThreadState* thre
 
     char filename[1000];
 
-    snprintf(filename, sizeof(filename), "artifacts/cachesignatures/%s", dagNode->m_Annotation.Get());
+    snprintf(filename, sizeof(filename), "artifacts/cachesignatures/%s.txt", dagNode->m_Annotation.Get());
     PathBuffer output;
     PathInit(&output, filename);
     MakeDirectoriesForFile(config->m_StatCache, output);
@@ -102,14 +108,16 @@ HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, ThreadState* thre
         for (auto& e: dependencyDagNode.m_EnvVars)
         {
             HashEntry(debug_hash_fd, &hashState, "env-name", e.m_Name);
-            HashEntry(debug_hash_fd, &hashState, "env-value", e.m_Value);
+            if (strcmp("_MSPDBSRV_ENDPOINT_",e.m_Name.Get()) != 0)
+                HashEntry(debug_hash_fd, &hashState, "env-value", e.m_Value);
         }
 
         for (auto& s: dependencyDagNode.m_AllowedOutputSubstrings)
             HashEntry(debug_hash_fd, &hashState, "allowedOutputStrings", s.Get());
 
-        if (dependencyDagNode.m_Flags != (Frozen::DagNode::kFlagOverwriteOutputs | Frozen::DagNode::kFlagAllowUnexpectedOutput))
-            HashEntry(debug_hash_fd, &hashState, "flags", dependencyDagNode.m_Flags);
+        int relevantFlags = dependencyDagNode.m_Flags & ~Frozen::DagNode::kFlagCacheable;
+        if (relevantFlags != (Frozen::DagNode::kFlagOverwriteOutputs | Frozen::DagNode::kFlagAllowUnexpectedOutput))
+            HashEntry(debug_hash_fd, &hashState, "flags", relevantFlags);
 
         for (int leafInputIndex: dependencyDagNode.m_LeafInputFiles)
         {
@@ -155,6 +163,8 @@ HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, ThreadState* thre
 
     HashSetWalk(&implicitDeps, [&](uint32_t index, uint32_t hash, const char *filename) {
         HashDigest digest = ComputeFileSignatureSha1(stat_cache, digest_cache, filename, Djb2HashPath(filename));
+
+
         HashEntry(debug_hash_fd, &hashState, "implicitDeps: ", filename, digest);
     });
 
@@ -193,7 +203,7 @@ bool InvokeCacheMe(const HashDigest& digest, StatCache *stat_cache, const Frozen
         PathBuffer output;
         PathInit(&output, it.m_Filename);
         MakeDirectoriesForFile(stat_cache, output);
-        bufferPos += snprintf(bufferPos, sizeof(buffer), " %s", it.m_Filename.Get());
+        bufferPos += snprintf(bufferPos, sizeof(buffer), " \"%s\" ", it.m_Filename.Get());
     }
 
     EnvVariable env_var;
