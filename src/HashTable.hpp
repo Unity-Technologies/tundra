@@ -105,7 +105,7 @@ inline int FastCompareNoCase(const char *lhs, const char *rhs)
 }
 
 template <uint32_t kFlags>
-int HashTableBaseLookup(HashTableBase<kFlags> *self, uint32_t hash, const char *string)
+int HashTableBaseLookup(const HashTableBase<kFlags> *self, uint32_t hash, const char *string)
 {
     uint32_t size = self->m_TableSize;
 
@@ -151,7 +151,7 @@ int HashTableBaseLookup(HashTableBase<kFlags> *self, uint32_t hash, const char *
 }
 
 template <typename T, uint32_t kFlags>
-T *HashTableLookup(HashTable<T, kFlags> *self, uint32_t hash, const char *string)
+T *HashTableLookup(const HashTable<T, kFlags> *self, uint32_t hash, const char *string)
 {
     int index = HashTableBaseLookup(self, hash, string);
 
@@ -162,7 +162,7 @@ T *HashTableLookup(HashTable<T, kFlags> *self, uint32_t hash, const char *string
 }
 
 template <uint32_t kFlags>
-bool HashSetLookup(HashSet<kFlags> *self, uint32_t hash, const char *string)
+bool HashSetLookup(const HashSet<kFlags> *self, uint32_t hash, const char *string)
 {
     int index = HashTableBaseLookup(self, hash, string);
     return -1 != index;
