@@ -265,41 +265,6 @@ static bool WriteNodes(
 
     size_t node_count = nodes->m_Count;
 
-    struct BacklinkRec
-    {
-        Buffer<int32_t> m_Links;
-    };
-
-    BacklinkRec *links = HeapAllocateArrayZeroed<BacklinkRec>(heap, node_count);
-
-    for (size_t i = 0; i < node_count; ++i)
-    {
-        const JsonObjectValue *node = nodes->m_Values[i]->AsObject();
-        if (!node)
-            return false;
-
-        const JsonArrayValue *deps = FindArrayValue(node, "Deps");
-
-        if (EmptyArray(deps))
-            continue;
-
-        for (size_t di = 0, count = deps->m_Count; di < count; ++di)
-        {
-            if (const JsonNumberValue *dep_index_n = deps->m_Values[di]->AsNumber())
-            {
-                int32_t dep_index = (int)dep_index_n->m_Number;
-                if (dep_index < 0 || dep_index >= (int)node_count)
-                    return false;
-
-                BufferAppendOne(&links[dep_index].m_Links, heap, int32_t(i));
-            }
-            else
-            {
-                return false;
-            }
-        }
-    }
-
     uint32_t *reverse_remap = (uint32_t *)HeapAllocate(heap, node_count * sizeof(uint32_t));
     for (uint32_t i = 0; i < node_count; ++i)
     {
@@ -349,22 +314,6 @@ static bool WriteNodes(
                 {
                     return false;
                 }
-            }
-        }
-        else
-        {
-            BinarySegmentWriteInt32(node_data_seg, 0);
-            BinarySegmentWriteNullPointer(node_data_seg);
-        }
-
-        const Buffer<int32_t> &backlinks = links[i].m_Links;
-        if (backlinks.m_Size > 0)
-        {
-            BinarySegmentWriteInt32(node_data_seg, (int)backlinks.m_Size);
-            BinarySegmentWritePointer(node_data_seg, BinarySegmentPosition(array2_seg));
-            for (int32_t index : backlinks)
-            {
-                BinarySegmentWriteInt32(array2_seg, remap_table[index]);
             }
         }
         else
@@ -469,13 +418,7 @@ static bool WriteNodes(
         BinarySegmentWriteUint32(node_data_seg, reverse_remap[ni]);
     }
 
-    for (size_t i = 0; i < node_count; ++i)
-    {
-        BufferDestroy(&links[i].m_Links, heap);
-    }
-
     HeapFree(heap, reverse_remap);
-    HeapFree(heap, links);
 
     return true;
 }
@@ -781,6 +724,46 @@ bool WriteSharedResources(const JsonArrayValue *resources, BinarySegment *main_s
     return true;
 }
 
+struct BacklinkRec
+{
+    Buffer<int32_t> m_Links;
+};
+bool CompileDagDerived(const Frozen::Dag* dag, MemAllocHeap* heap, MemAllocLinear* scratch, const char* dagderived_filename)
+{
+    BinaryWriter _writer;
+    BinaryWriter* writer = &_writer;
+    BinaryWriterInit(writer, heap);
+
+    BinarySegment *main_seg = BinaryWriterAddSegment(writer);
+    BinarySegment *node_seg = BinaryWriterAddSegment(writer);
+    BinarySegment *arraydata_seg = BinaryWriterAddSegment(writer);
+    BinarySegment *str_seg = BinaryWriterAddSegment(writer);
+    BinarySegmentWriteUint32(main_seg, Frozen::DagDerived::MagicNumber);
+    int node_count = dag->m_NodeCount;
+    BinarySegmentWriteUint32(main_seg, node_count);
+    BacklinkRec *links = HeapAllocateArrayZeroed<BacklinkRec>(heap, node_count);
+
+    for (int32_t i = 0; i < node_count; ++i)
+    {
+        for(int dep : dag->m_DagNodes[i].m_Dependencies)
+           BufferAppendOne(&links[dep].m_Links, heap, i);
+    }
+    BinarySegmentWritePointer(main_seg, BinarySegmentPosition(node_seg));
+    for (int32_t i = 0; i < node_count; ++i)
+    {
+        BinarySegmentWriteInt32(node_seg, links[i].m_Links.m_Size);
+        BinarySegmentWritePointer(node_seg, BinarySegmentPosition(arraydata_seg));
+        for(int32_t backLink : links[i].m_Links)
+            BinarySegmentWriteInt32(arraydata_seg, backLink);
+    }
+    BinarySegmentWriteUint32(main_seg, Frozen::DagDerived::MagicNumber);
+    for (size_t i = 0; i < node_count; ++i)
+        BufferDestroy(&links[i].m_Links, heap);
+    HeapFree(heap, links);
+    bool result = BinaryWriterFlush(writer, dagderived_filename);
+    BinaryWriterDestroy(writer);
+    return result;
+}
 static bool CompileDag(const JsonObjectValue *root, BinaryWriter *writer, MemAllocHeap *heap, MemAllocLinear *scratch)
 {
     HashTable<CommonStringRecord, kFlagCaseSensitive> shared_strings;

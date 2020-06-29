@@ -4,7 +4,7 @@
 #include "BinaryData.hpp"
 #include "Hash.hpp"
 #include "PathUtil.hpp"
-
+#include "Buffer.hpp"
 
 namespace Frozen
 {
@@ -101,7 +101,6 @@ struct DagNode
     FrozenString m_Action;
     FrozenString m_Annotation;
     FrozenArray<int32_t> m_Dependencies;
-    FrozenArray<int32_t> m_BackLinks;
     FrozenArray<FrozenFileAndHash> m_InputFiles;
     FrozenArray<FrozenFileAndHash> m_OutputFiles;
     FrozenArray<FrozenFileAndHash> m_OutputDirectories;
@@ -127,7 +126,7 @@ struct SharedResourceData
 
 struct Dag
 {
-    static const uint32_t MagicNumber = 0xaBD9224f ^ kTundraHashMagic;
+    static const uint32_t MagicNumber = 0xfac9224f ^ kTundraHashMagic;
 
     uint32_t m_MagicNumber;
 
@@ -161,6 +160,24 @@ struct Dag
 
     uint32_t m_MagicNumberEnd;
 };
+
+
+//the *Derived dag data is data that is stored in a separate file, can be calculated from the original dag data.
+//The reason it's in a separate file is that it's much faster to generate it from the binary dag than from the json dag.
+struct DagNodeDerived
+{
+    FrozenArray<int32_t> m_BackLinks;
+};
+struct DagDerived
+{
+    static const uint32_t MagicNumber = 0xadead123 ^ kTundraHashMagic;
+
+    uint32_t m_MagicNumber;
+    int32_t m_NodeCount;
+    FrozenPtr<DagNodeDerived> m_NodesDerived;
+    uint32_t m_MagicNumberEnd;
+};
+
 }
 
 void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* dag, int32_t* searchRootIndices, int32_t searchRootCount, Buffer<int32_t>& results);

@@ -54,6 +54,9 @@ struct Driver
     // Read-only memory mapped data - DAG data
     MemoryMappedFile m_DagFile;
 
+    // Read-only memory mapped data - DAG data
+    MemoryMappedFile m_DagDerivedFile;
+
     // Read-only memory mapped data - previous build state
     MemoryMappedFile m_StateFile;
 
@@ -62,6 +65,7 @@ struct Driver
 
     // Stores pointers to mmaped data.
     const Frozen::Dag *m_DagData;
+    const Frozen::DagDerived *m_DagDerivedData;
     const Frozen::AllBuiltNodes *m_AllBuiltNodes;
     const Frozen::ScanData *m_ScanData;
 

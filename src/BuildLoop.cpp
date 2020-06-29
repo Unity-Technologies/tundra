@@ -114,7 +114,7 @@ static void EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(BuildQueue *queue, R
 {
     int enqueue_count = 0;
 
-    for (int32_t link : node->m_DagNode->m_BackLinks)
+    for (int32_t link : node->m_DagNodeDerived->m_BackLinks)
     {
         if (RuntimeNode *waiter = GetRuntimeNodeForDagNodeIndex(queue, link))
         {

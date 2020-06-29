@@ -10,6 +10,20 @@
 #include <time.h>
 
 
+static void DumpDagDerived(const Frozen::DagDerived* data)
+{
+    printf("magic number: 0x%08x\n", data->m_MagicNumber);
+    int node_count = data->m_NodeCount;
+    printf("node count: %u\n", node_count);
+    for (int i=0; i<node_count;i++)
+    {
+        printf("node %d:\n", i);
+        printf("  backlinks: ");
+        for (int32_t b : data->m_NodesDerived[i].m_BackLinks)
+            printf("%d,", b);
+        printf("\n");
+    }
+}
 
 static void DumpDag(const Frozen::Dag *data)
 {
@@ -37,11 +51,6 @@ static void DumpDag(const Frozen::Dag *data)
         printf("  dependencies:");
         for (int32_t dep : node.m_Dependencies)
             printf(" %u", dep);
-        printf("\n");
-
-        printf("  backlinks:");
-        for (int32_t link : node.m_BackLinks)
-            printf(" %u", link);
         printf("\n");
 
         printf("  inputs:\n");
@@ -247,6 +256,18 @@ int main(int argc, char *argv[])
             if (data->m_MagicNumber == Frozen::Dag::MagicNumber)
             {
                 DumpDag(data);
+            }
+            else
+            {
+                fprintf(stderr, "%s: bad magic number\n", fn);
+            }
+        }
+        else if (0 == strcmp(suffix, ".dag_derived"))
+        {
+            const Frozen::DagDerived *data = (const Frozen::DagDerived *)f.m_Address;
+            if (data->m_MagicNumber == Frozen::DagDerived::MagicNumber)
+            {
+                DumpDagDerived(data);
             }
             else
             {

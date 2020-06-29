@@ -366,17 +366,22 @@ static bool DriverPrepareDag(Driver *self, const char *dag_fn)
 
     snprintf(out_of_date_reason, out_of_date_reason_length, "(unknown reason)");
 
-
     char json_filename[kMaxPathLength];
     snprintf(json_filename, sizeof json_filename, "%s.json", dag_fn);
     json_filename[sizeof(json_filename) - 1] = '\0';
 
+    char dagderived_filename[kMaxPathLength];
+    snprintf(dagderived_filename, sizeof dagderived_filename, "%s_derived", dag_fn);
+    dagderived_filename[sizeof(dagderived_filename) - 1] = '\0';
+
     FileInfo dag_info = GetFileInfo(dag_fn);
+    FileInfo dagderived_info = GetFileInfo(dagderived_filename);
     FileInfo json_info = GetFileInfo(json_filename);
 
     if (!dag_info.Exists() && !json_info.Exists())
         return ExitRequestingFrontendRun("%s does not exist yet", json_filename);
 
+    bool frozeDag = false;
     if (json_info.Exists())
     {
         bool dagExists = dag_info.Exists();
@@ -387,6 +392,7 @@ static bool DriverPrepareDag(Driver *self, const char *dag_fn)
             uint64_t time_exec_started = TimerGet();
             if (!FreezeDagJson(json_filename, dag_fn))
                 return ExitRequestingFrontendRun("%s failed to freeze", json_filename);
+            frozeDag = true;
             uint64_t now = TimerGet();
             double duration = TimerDiffSeconds(time_exec_started, now);
             PrintMessage(MessageStatusLevel::Success, duration, "Freezing %s into .dag (%s)", FindFileNameInside(json_filename), reason);
@@ -396,6 +402,20 @@ static bool DriverPrepareDag(Driver *self, const char *dag_fn)
     if (!LoadFrozenData<Frozen::Dag>(dag_fn, &self->m_DagFile, &self->m_DagData))
     {
         remove(dag_fn);
+        remove(dagderived_filename);
+        return ExitRequestingFrontendRun("%s couldn't be loaded", dag_fn);
+    }
+
+    if (!dagderived_info.Exists() || frozeDag)
+    {
+        if (!CompileDagDerived(self->m_DagData, &self->m_Heap, &self->m_Allocator, dagderived_filename))
+            return ExitRequestingFrontendRun("failed to create derived dag file %s", dagderived_filename);
+    }
+
+    if (!LoadFrozenData<Frozen::DagDerived>(dagderived_filename, &self->m_DagDerivedFile, &self->m_DagDerivedData))
+    {
+        remove(dag_fn);
+        remove(dagderived_filename);
         return ExitRequestingFrontendRun("%s couldn't be loaded", dag_fn);
     }
 
@@ -422,9 +442,13 @@ static bool DriverPrepareDag(Driver *self, const char *dag_fn)
 
     MmapFileUnmap(&self->m_DagFile);
     self->m_DagData = nullptr;
+    MmapFileUnmap(&self->m_DagDerivedFile);
+    self->m_DagDerivedData = nullptr;
 
     if (remove(dag_fn))
         Croak("Failed to remove out of date dag at %s", dag_fn);
+    if (remove(dagderived_filename))
+        Croak("Failed to remove out of date dagderived file at %s", dagderived_filename);
 
     ExitRequestingFrontendRun("%s no longer valid. %s", FindFileNameInside(dag_fn), out_of_date_reason);
 
@@ -664,7 +688,8 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
     ProfilerScope prof_scope("Tundra PrepareNodes", 0);
 
     const Frozen::Dag *dag = self->m_DagData;
-    const Frozen::DagNode *src_nodes = dag->m_DagNodes;
+    const Frozen::DagNode *dag_nodes = dag->m_DagNodes;
+    const Frozen::DagNodeDerived *derived_nodes = self->m_DagDerivedData->m_NodesDerived;
     const HashDigest *dag_node_guids = dag->m_NodeGuids;
     MemAllocHeap *heap = &self->m_Heap;
 
@@ -686,10 +711,12 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
     // Initialize node state
     for (int i = 0; i < node_count; ++i)
     {
-        const Frozen::DagNode *src_node = src_nodes + node_indices[i];
-        out_nodes[i].m_DagNode = src_node;
+        const Frozen::DagNode *dag_node = dag_nodes + node_indices[i];
+        const Frozen::DagNodeDerived *node_derived = derived_nodes + node_indices[i];
+        out_nodes[i].m_DagNode = dag_node;
+        out_nodes[i].m_DagNodeDerived = node_derived;
 #if ENABLED(CHECKED_BUILD)
-        out_nodes[i].m_DebugAnnotation = src_node->m_Annotation.Get();
+        out_nodes[i].m_DebugAnnotation = dag_node->m_Annotation.Get();
 #endif
 
         if (i<self->m_AmountOfRuntimeNodesSpecificallyRequested)
@@ -724,7 +751,7 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
     for (int local_index = 0; local_index < node_count; ++local_index)
     {
         const Frozen::DagNode *global_node = out_nodes[local_index].m_DagNode;
-        const int global_index = int(global_node - src_nodes);
+        const int global_index = int(global_node - dag_nodes);
         CHECK(node_remap[global_index] == -1);
         node_remap[global_index] = local_index;
     }

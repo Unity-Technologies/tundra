@@ -26,6 +26,7 @@ namespace RuntimeNodeFlags
 namespace Frozen
 {
     struct DagNode;
+    struct DagNodeDerived;
     struct BuiltNode;
 }
 
@@ -39,6 +40,7 @@ struct RuntimeNode
     const char *m_DebugAnnotation;
 #endif
     const Frozen::DagNode *m_DagNode;
+    const Frozen::DagNodeDerived* m_DagNodeDerived;
     const Frozen::BuiltNode *m_BuiltNode;
 
     NodeBuildResult::Enum m_BuildResult;
