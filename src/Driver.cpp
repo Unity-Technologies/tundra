@@ -673,41 +673,13 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
 
     DriverSelectNodes(dag, targets, target_count, &node_stack, heap);
 
-    const size_t node_word_count = (dag->m_NodeCount + 31) / 32;
-    uint32_t *node_visited_bits = HeapAllocateArrayZeroed<uint32_t>(heap, node_word_count);
-
     self->m_AmountOfRuntimeNodesSpecificallyRequested = node_stack.m_Size;
-
-    int node_count = 0;
 
     Buffer<int32_t> node_indices;
     BufferInitWithCapacity(&node_indices, heap, 1024);
+    FindDependentNodesFromRootIndices(heap, dag, &node_stack[0], node_stack.m_Size, node_indices);
 
-    while (node_stack.m_Size > 0)
-    {
-        int dag_index = BufferPopOne(&node_stack);
-        const int dag_word = dag_index / 32;
-        const int dag_bit = 1 << (dag_index & 31);
-
-        if (0 == (node_visited_bits[dag_word] & dag_bit))
-        {
-            const Frozen::DagNode *node = src_nodes + dag_index;
-
-            BufferAppendOne(&node_indices, &self->m_Heap, dag_index);
-
-            node_visited_bits[dag_word] |= dag_bit;
-
-            // Update counts
-            ++node_count;
-
-            // Stash node dependencies on the work queue to keep iterating
-            BufferAppend(&node_stack, &self->m_Heap, node->m_Dependencies.GetArray(), node->m_Dependencies.GetCount());
-        }
-    }
-
-    HeapFree(heap, node_visited_bits);
-    node_visited_bits = nullptr;
-
+    int node_count = node_indices.m_Size;
     // Allocate space for nodes
     RuntimeNode *out_nodes = BufferAllocZero(&self->m_RuntimeNodes, &self->m_Heap, node_count);
 

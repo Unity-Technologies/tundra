@@ -162,3 +162,5 @@ struct Dag
     uint32_t m_MagicNumberEnd;
 };
 }
+
+void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* dag, int32_t* searchRootIndices, int32_t searchRootCount, Buffer<int32_t>& results);
