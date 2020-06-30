@@ -18,19 +18,27 @@ static void DumpDagDerived(const Frozen::DagDerived* data)
         printf("  outputdir: %s\n", d.Get());
 
     printf("node count: %u\n", node_count);
-    for (int i=0; i<node_count;i++)
+    for (int nodeIndex=0; nodeIndex<node_count;nodeIndex++)
     {
-        printf("node %d:\n", i);
+        printf("node %d:\n", nodeIndex);
         printf("  backlinks: ");
-        for (int32_t b : data->m_NodeBacklinks[i].Values)
+        for (int32_t b : data->m_NodeBacklinks[nodeIndex])
             printf("%d,", b);
         printf("\n");
         printf("  leafInputs: \n");
-        for (auto& leafInput : data->m_NodeLeafInputs[i].Values)
+        for (auto& leafInput : data->m_NodeLeafInputs[nodeIndex])
             printf("    %s\n", leafInput.m_Filename.Get());
 
+        const FrozenArray<FrozenArray<FrozenFileAndHash>>& scannersToFilesToScan = data->m_Nodes_to_Scanners_to_FilesToScan[nodeIndex];
+        for (int scannerIndex=0; scannerIndex < scannersToFilesToScan.GetCount(); scannerIndex++)
+        {
+            printf("  ScannerIndex %d will run on the following files:\n", scannerIndex);
+            for(auto& file: scannersToFilesToScan[scannerIndex])
+                printf("    %s\n",file.m_Filename.Get());
+        }
+
         char tmp[kDigestStringSize];
-        DigestToString(tmp, data->m_LeafInputHash_Offline[i]);
+        DigestToString(tmp, data->m_LeafInputHash_Offline[nodeIndex]);
         printf("  leafInputsHash_OffLine: %s\n", tmp);
     }
 }
@@ -85,8 +93,10 @@ static void DumpDag(const Frozen::Dag *data)
             printf("    %s = %s\n", env.m_Name.Get(), env.m_Value.Get());
         }
 
-        if (const Frozen::ScannerData *s = node.m_Scanner)
+        printf("  scannerIndex: %d\n", node.m_ScannerIndex);
+        if (node.m_ScannerIndex != -1)
         {
+            auto s = data->m_Scanners[node.m_ScannerIndex].Get();
             printf("  scanner:\n");
             switch (s->m_ScannerType)
             {
@@ -129,6 +139,8 @@ static void DumpDag(const Frozen::Dag *data)
                 }
             }
         }
+
+
 
         printf("\n");
     }
