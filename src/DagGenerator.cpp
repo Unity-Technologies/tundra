@@ -756,6 +756,25 @@ bool CompileDagDerived(const Frozen::Dag* dag, MemAllocHeap* heap, MemAllocLinea
         for(int32_t backLink : links[i].m_Links)
             BinarySegmentWriteInt32(arraydata_seg, backLink);
     }
+
+    Buffer<const char*> allOutputDirectories;
+    BufferInitWithCapacity(&allOutputDirectories, heap, 500);
+
+    for (int32_t i = 0; i < node_count; ++i)
+    {
+        const Frozen::DagNode& node = dag->m_DagNodes[i];
+        for(auto& targetDir : node.m_OutputDirectories)
+            BufferAppendOne(&allOutputDirectories, heap, targetDir.m_Filename.Get());
+    }
+    for(auto& dir: dag->m_DirectoriesCausingImplicitDependencies)
+        BufferAppendOne(&allOutputDirectories, heap, dir.Get());
+
+    //write all output directories
+    BinarySegmentWriteUint32(main_seg, allOutputDirectories.m_Size);
+    BinarySegmentWritePointer(main_seg, BinarySegmentPosition(arraydata_seg));
+    for (auto& dir: allOutputDirectories)
+        WriteStringPtr(arraydata_seg, str_seg, dir);
+    BufferDestroy(&allOutputDirectories, heap);
     BinarySegmentWriteUint32(main_seg, Frozen::DagDerived::MagicNumber);
     for (size_t i = 0; i < node_count; ++i)
         BufferDestroy(&links[i].m_Links, heap);
@@ -778,6 +797,7 @@ static bool CompileDag(const JsonObjectValue *root, BinaryWriter *writer, MemAll
     BinarySegment *writetextfile_payloads_seg = BinaryWriterAddSegment(writer);
 
     const JsonArrayValue *nodes = FindArrayValue(root, "Nodes");
+    const JsonArrayValue *directoriesCausingImplicitDependencies = FindArrayValue(root, "DirectoriesCausingImplicitDependencies");
     const JsonArrayValue *scanners = FindArrayValue(root, "Scanners");
     const JsonArrayValue *shared_resources = FindArrayValue(root, "SharedResources");
     const char *identifier = FindStringValue(root, "Identifier", "default");
@@ -864,6 +884,21 @@ static bool CompileDag(const JsonObjectValue *root, BinaryWriter *writer, MemAll
 
     EmitFileSignatures(root, main_seg, aux_seg, str_seg);
     EmitGlobSignatures(root, main_seg, aux_seg, str_seg, heap, scratch);
+
+    if (directoriesCausingImplicitDependencies != nullptr)
+    {
+        BinarySegmentWriteInt32(main_seg, (int)directoriesCausingImplicitDependencies->m_Count);
+        BinarySegmentWritePointer(main_seg, BinarySegmentPosition(aux_seg));
+        for (size_t i = 0, count = directoriesCausingImplicitDependencies->m_Count; i < count; ++i)
+        {
+            const char* str = directoriesCausingImplicitDependencies->m_Values[i]->AsString()->m_String;
+            WriteStringPtr(aux_seg, str_seg, str);
+        }
+    } else
+    {
+        BinarySegmentWriteInt32(main_seg, 0);
+        BinarySegmentWriteNullPointer(main_seg);
+    }
 
     // Emit hashes of file extensions to sign using SHA-1 content digest instead of the normal timestamp signing.
     if (const JsonArrayValue *sha_exts = FindArrayValue(root, "ContentDigestExtensions"))

@@ -14,6 +14,10 @@ static void DumpDagDerived(const Frozen::DagDerived* data)
 {
     printf("magic number: 0x%08x\n", data->m_MagicNumber);
     int node_count = data->m_NodeCount;
+    printf("allOutputDirectories count: %d\n", data->m_AllOutputDirectories.GetCount());
+    for (auto& d: data->m_AllOutputDirectories)
+        printf("  outputdir: %s\n", d.Get());
+
     printf("node count: %u\n", node_count);
     for (int i=0; i<node_count;i++)
     {

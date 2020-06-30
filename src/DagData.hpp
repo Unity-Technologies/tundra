@@ -126,7 +126,7 @@ struct SharedResourceData
 
 struct Dag
 {
-    static const uint32_t MagicNumber = 0xfac9224f ^ kTundraHashMagic;
+    static const uint32_t MagicNumber = 0xfac92242 ^ kTundraHashMagic;
 
     uint32_t m_MagicNumber;
 
@@ -143,6 +143,9 @@ struct Dag
 
     FrozenArray<DagFileSignature> m_FileSignatures;
     FrozenArray<DagGlobSignature> m_GlobSignatures;
+
+    //we should remove this feature, and exluseively use the new .TargetDirectories that live on DagNode.
+    FrozenArray<FrozenString> m_DirectoriesCausingImplicitDependencies;
 
     // Hashes of filename extensions to use SHA-1 digest signing instead of timestamp signing.
     FrozenArray<uint32_t> m_ShaExtensionHashes;
@@ -170,11 +173,12 @@ struct DagNodeDerived
 };
 struct DagDerived
 {
-    static const uint32_t MagicNumber = 0xadead123 ^ kTundraHashMagic;
+    static const uint32_t MagicNumber = 0x9dead123 ^ kTundraHashMagic;
 
     uint32_t m_MagicNumber;
     int32_t m_NodeCount;
     FrozenPtr<DagNodeDerived> m_NodesDerived;
+    FrozenArray<FrozenString> m_AllOutputDirectories;
     uint32_t m_MagicNumberEnd;
 };
 
