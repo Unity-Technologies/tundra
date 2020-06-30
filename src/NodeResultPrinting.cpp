@@ -542,7 +542,7 @@ void PrintDeferredMessages(BuildQueue *queue)
     deferred_message_count = 0;
 }
 
-int PrintNodeInProgress(const Frozen::DagNode *node_data, uint64_t time_of_start, const BuildQueue *queue)
+int PrintNodeInProgress(const Frozen::DagNode *node_data, uint64_t time_of_start, const BuildQueue *queue, const char* message)
 {
     uint64_t now = TimerGet();
     int seconds_job_has_been_running_for = TimerDiffSeconds(time_of_start, now);
@@ -551,6 +551,9 @@ int PrintNodeInProgress(const Frozen::DagNode *node_data, uint64_t time_of_start
     int acceptable_time_since_last_message = last_progress_message_job == node_data ? 10 : (total_number_node_results_printed == 0 ? 0 : 5);
     int only_print_if_slower_than = seconds_since_last_progress_message_of_any_job > 30 ? 0 : 5;
 
+    if (message == nullptr)
+        message = node_data->m_Annotation.Get();
+
     if (seconds_since_last_progress_message_of_any_job > acceptable_time_since_last_message && seconds_job_has_been_running_for > only_print_if_slower_than)
     {
         int maxDigits = ceil(log10(m_VisualMaxNodes + 1));
@@ -558,7 +561,7 @@ int PrintNodeInProgress(const Frozen::DagNode *node_data, uint64_t time_of_start
         EmitColor(YEL);
         printf("[BUSY %*ds] ", maxDigits * 2 - 1, seconds_job_has_been_running_for);
         EmitColor(RESET);
-        printf("%s\n", (const char *)node_data->m_Annotation);
+        printf("%s\n", message);
         last_progress_message_of_any_job = now;
         last_progress_message_job = node_data;
 

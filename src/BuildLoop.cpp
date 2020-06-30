@@ -253,19 +253,22 @@ static void AdvanceNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
         //remember leafinput signature for the cache post later.
         node->m_LeafInputSignature = leafInputSignature;
 
+        uint64_t time_exec_started = TimerGet();
+
         MutexUnlock(queue_lock);
-        bool success = InvokeCacheMe(leafInputSignature, queue->m_Config.m_StatCache, node->m_DagNode->m_OutputFiles, thread_state, CacheMode::kLookUp);
+        bool success = InvokeCacheMe(leafInputSignature, queue->m_Config.m_StatCache, node->m_DagNode->m_OutputFiles, thread_state, CacheMode::kLookUp, node->m_DagNode, queue_lock);
         MutexLock(queue_lock);
+        uint64_t now = TimerGet();
 
         if (success)
         {
-            PrintMessage(MessageStatusLevel::Success, 0, "%s [Cache hit]", node->m_DagNode->m_Annotation.Get());
+            double duration = TimerDiffSeconds(time_exec_started, now);
+            PrintMessage(MessageStatusLevel::Success, duration, "[CacheHit] %s", node->m_DagNode->m_Annotation.Get());
             node->m_BuildResult = NodeBuildResult::kRanSuccesfully;
             FinishNode(queue,node);
             return;
         }
 
-        PrintMessage(MessageStatusLevel::Info, 0, "%s [Cache miss]", node->m_DagNode->m_Annotation.Get());
         RuntimeNodeSetAttemptedCacheLookup(node);
     }
 
@@ -279,11 +282,15 @@ static void AdvanceNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
     {
         ExecuteNode(queue, thread_state, node, queue_lock);
 
-        if (IsNodeCacheable(node) && node->m_BuildResult == NodeBuildResult::kRanSuccesfully)
+        if (IsNodeCacheable(node) && (node->m_BuildResult == NodeBuildResult::kRanSuccesfully || node->m_BuildResult == NodeBuildResult::kUpToDate))
         {
+            uint64_t time_exec_started = TimerGet();
             MutexUnlock(queue_lock);
-            InvokeCacheMe(node->m_LeafInputSignature, queue->m_Config.m_StatCache, node->m_DagNode->m_OutputFiles, thread_state, CacheMode::kPost);
+            bool result = InvokeCacheMe(node->m_LeafInputSignature, queue->m_Config.m_StatCache, node->m_DagNode->m_OutputFiles, thread_state, CacheMode::kPost, node->m_DagNode, queue_lock);
             MutexLock(queue_lock);
+            uint64_t now = TimerGet();
+            double duration = TimerDiffSeconds(time_exec_started, now);
+            PrintMessage(result ? MessageStatusLevel::Success : MessageStatusLevel::Failure, duration, "[CachePost] %s", node->m_DagNode->m_Annotation.Get());
         }
     }
 

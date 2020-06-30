@@ -84,7 +84,7 @@ void DriverOptionsInit(DriverOptions *self)
     self->m_DAGFileName = ".tundra2.dag";
     self->m_ProfileOutput = nullptr;
     self->m_IncludesOutput = nullptr;
-    self->m_VisualMaxNodes = 1000;
+    self->m_VisualMaxNodes = 10000;
 #if defined(TUNDRA_WIN32)
     self->m_RunUnprotected = true;
 #endif
