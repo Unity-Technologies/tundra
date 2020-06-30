@@ -42,13 +42,10 @@ static void HashEntry(FILE* debug_hash_fd, HashState* state, const char* label, 
 
 bool IsFileGenerated(const Frozen::Dag* dag, const char* filename)
 {
-     for(auto& implicitdir: dag->m_DirectoriesCausingImplicitDependencies)
+    for(auto& implicitdir: dag->m_DirectoriesCausingImplicitDependencies)
     {
-        bool match = strncmp(implicitdir.Get(), filename, strlen(implicitdir.Get()) ) == 0;
-        if (match)
-        {
+        if (strncmp(implicitdir.Get(), filename, strlen(implicitdir.Get()) ) == 0)
             return true;
-        }
     }
     return false;
 }
