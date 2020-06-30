@@ -117,6 +117,7 @@ static void ReportValueWithOptionalTruncation(JsonWriter *msg, const char *keyNa
 
 static void ReportInputSignatureChanges(
     JsonWriter *msg,
+    const Frozen::Dag* dag,
     RuntimeNode *node,
     const Frozen::DagNode *dagnode,
     const Frozen::BuiltNode *previously_built_node,
@@ -205,7 +206,7 @@ static void ReportInputSignatureChanges(
 
     ReportChangedInputFiles(msg, previously_built_node->m_InputFiles, "explicit", digest_cache, stat_cache, sha_extension_hashes, sha_extension_hash_count, force_use_timestamp);
 
-    if (dagnode->m_Scanner)
+    if (dagnode->m_ScannerIndex != -1)
     {
         HashTable<bool, kFlagPathStrings> implicitDependencies;
         HashTableInit(&implicitDependencies, &thread_state->m_LocalHeap);
@@ -216,7 +217,7 @@ static void ReportInputSignatureChanges(
             MemAllocLinearScope alloc_scope(&thread_state->m_ScratchAlloc);
 
             ScanInput scan_input;
-            scan_input.m_ScannerConfig = dagnode->m_Scanner;
+            scan_input.m_ScannerConfig = dag->m_Scanners[dagnode->m_ScannerIndex];
             scan_input.m_ScratchAlloc = &thread_state->m_ScratchAlloc;
             scan_input.m_ScratchHeap = &thread_state->m_LocalHeap;
             scan_input.m_FileName = input.m_Filename;
@@ -319,7 +320,7 @@ static HashDigest CalculateInputSignature(BuildQueue* queue, ThreadState* thread
     HashAddString(&sighash, dagnode->m_Action);
     HashAddSeparator(&sighash);
 
-    const Frozen::ScannerData *scanner = dagnode->m_Scanner;
+    const Frozen::ScannerData *scanner = dagnode->m_ScannerIndex == -1 ? nullptr : config.m_Dag->m_Scanners[dagnode->m_ScannerIndex].Get();
 
     // TODO: The input files are not guaranteed to be in a stably sorted order. If the order changes then the input
     // TODO: signature might change, giving us a false-positive for the node needing to be rebuilt. We should look into
@@ -507,7 +508,7 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
             JsonWriteKeyName(&msg, "changes");
             JsonWriteStartArray(&msg);
 
-            ReportInputSignatureChanges(&msg, node, dagnode, prev_builtnode, stat_cache, digest_cache, queue->m_Config.m_ScanCache, config.m_ShaDigestExtensions, config.m_ShaDigestExtensionCount, thread_state);
+            ReportInputSignatureChanges(&msg, queue->m_Config.m_Dag, node, dagnode, prev_builtnode, stat_cache, digest_cache, queue->m_Config.m_ScanCache, config.m_ShaDigestExtensions, config.m_ShaDigestExtensionCount, thread_state);
 
             JsonWriteEndArray(&msg);
             JsonWriteEndObject(&msg);

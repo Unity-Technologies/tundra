@@ -112,7 +112,9 @@ struct DagNode
     FrozenArray<FrozenFileAndHash> m_FrontendResponseFiles;
     FrozenArray<FrozenString> m_AllowedOutputSubstrings;
     FrozenArray<EnvVarData> m_EnvVars;
-    FrozenPtr<ScannerData> m_Scanner;
+
+    int32_t m_ScannerIndex;
+
     FrozenArray<int32_t> m_SharedResources;
     FrozenArray<DagFileSignature> m_FileSignatures;
     FrozenArray<DagGlobSignature> m_GlobSignatures;
@@ -152,6 +154,8 @@ struct Dag
     //we should remove this feature, and exluseively use the new .TargetDirectories that live on DagNode.
     FrozenArray<FrozenString> m_DirectoriesCausingImplicitDependencies;
 
+    FrozenArray<FrozenPtr<ScannerData>> m_Scanners;
+
     // Hashes of filename extensions to use SHA-1 digest signing instead of timestamp signing.
     FrozenArray<uint32_t> m_ShaExtensionHashes;
 
@@ -169,15 +173,7 @@ struct Dag
     uint32_t m_MagicNumberEnd;
 };
 
-struct BackLinks
 {
-    FrozenArray<int> Values;
-};
-
-struct LeafInputs
-{
-    FrozenArray<FrozenFileAndHash> Values;
-};
 
 struct DagDerived
 {
@@ -187,8 +183,8 @@ struct DagDerived
     uint32_t m_NodeCount;
     FrozenArray<FrozenString> m_AllOutputDirectories;
 
-    FrozenArray<BackLinks> m_NodeBacklinks;
-    FrozenArray<LeafInputs> m_NodeLeafInputs;
+    FrozenArray<FrozenArray<uint32_t>> m_NodeBacklinks;
+    FrozenArray<FrozenArray<FrozenFileAndHash>> m_NodeLeafInputs;
     FrozenArray<HashDigest> m_LeafInputHash_Offline;
 
     uint32_t m_MagicNumberEnd;

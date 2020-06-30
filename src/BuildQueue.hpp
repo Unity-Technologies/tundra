@@ -33,6 +33,7 @@ struct BuildQueueConfig
     const DriverOptions* m_DriverOptions;
     uint32_t m_Flags;
     MemAllocHeap *m_Heap;
+    const Frozen::Dag* m_Dag;
     const Frozen::DagNode *m_DagNodes;
     const Frozen::DagDerived* m_DagDerived;
     RuntimeNode *m_RuntimeNodes;

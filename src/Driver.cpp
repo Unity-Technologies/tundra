@@ -222,11 +222,12 @@ bool DriverReportIncludes(Driver *self)
     {
         const Frozen::DagNode &node = dag->m_DagNodes[i];
 
-        const Frozen::ScannerData *s = node.m_Scanner;
-        if (s != nullptr && node.m_InputFiles.GetCount() > 0)
+
+        if (node.m_ScannerIndex != -1 && node.m_InputFiles.GetCount() > 0)
         {
             const char *fn = node.m_InputFiles[0].m_Filename.Get();
             uint32_t fnHash = node.m_InputFiles[0].m_FilenameHash;
+            const Frozen::ScannerData *s = dag->m_Scanners[node.m_ScannerIndex];
             GetIncludesRecursive(s->m_ScannerGuid, fn, fnHash, scan_data, 0, seen, direct);
         }
     }
@@ -833,6 +834,7 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count)
     queue_config.m_DriverOptions = &self->m_Options;
     queue_config.m_Flags = 0;
     queue_config.m_Heap = &self->m_Heap;
+    queue_config.m_Dag = self->m_DagData;
     queue_config.m_DagNodes = self->m_DagData->m_DagNodes;
     queue_config.m_DagDerived = self->m_DagDerivedData;
     queue_config.m_RuntimeNodes = self->m_RuntimeNodes.m_Storage;
@@ -1061,7 +1063,7 @@ bool DriverSaveAllBuiltNodes(Driver *self)
         save_node_sharedcode(nodeWasBuiltSuccessfully, &runtime_node->m_InputSignature, runtime_node->m_DagNode, guid, segments, runtime_node->m_DynamicallyDiscoveredOutputFiles);
 
         HashSet<kFlagPathStrings> implicitDependencies;
-        if (dag_node->m_Scanner)
+        if (dag_node->m_ScannerIndex != -1)
             HashSetInit(&implicitDependencies, &self->m_Heap);
 
         int32_t file_count = dag_node->m_InputFiles.GetCount();
@@ -1078,12 +1080,12 @@ bool DriverSaveAllBuiltNodes(Driver *self)
 
             WriteCommonStringPtr(array_seg, string_seg, dag_node->m_InputFiles[i].m_Filename, &shared_strings, scratch);
 
-            if (dag_node->m_Scanner)
+            if (dag_node->m_ScannerIndex != -1)
             {
                 MemAllocLinearScope alloc_scope(scratch);
 
                 ScanInput scan_input;
-                scan_input.m_ScannerConfig = dag_node->m_Scanner;
+                scan_input.m_ScannerConfig = self->m_DagData->m_Scanners[dag_node->m_ScannerIndex];
                 scan_input.m_ScratchAlloc = scratch;
                 scan_input.m_ScratchHeap = &self->m_Heap;
                 scan_input.m_FileName = dag_node->m_InputFiles[i].m_Filename;
@@ -1105,7 +1107,7 @@ bool DriverSaveAllBuiltNodes(Driver *self)
             }
         }
 
-        if (dag_node->m_Scanner)
+        if (dag_node->m_ScannerIndex != -1)
         {
             BinarySegmentWriteInt32(built_nodes_seg, implicitDependencies.m_RecordCount);
             BinarySegmentWritePointer(built_nodes_seg, BinarySegmentPosition(array_seg));

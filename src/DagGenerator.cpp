@@ -370,14 +370,7 @@ static bool WriteNodes(
             BinarySegmentWriteNullPointer(node_data_seg);
         }
 
-        if (-1 != scanner_index)
-        {
-            BinarySegmentWritePointer(node_data_seg, scanner_ptrs[scanner_index]);
-        }
-        else
-        {
-            BinarySegmentWriteNullPointer(node_data_seg);
-        }
+        BinarySegmentWriteInt32(node_data_seg, scanner_index);
 
         if (shared_resources && shared_resources->m_Count > 0)
         {
@@ -1050,6 +1043,19 @@ static bool CompileDag(const JsonObjectValue *root, BinaryWriter *writer, MemAll
     {
         BinarySegmentWriteInt32(main_seg, 0);
         BinarySegmentWriteNullPointer(main_seg);
+    }
+
+    if (scanner_ptrs == nullptr)
+    {
+        BinarySegmentWriteInt32(main_seg, 0);
+        BinarySegmentWriteNullPointer(main_seg);
+    } else {
+        BinarySegmentWriteInt32(main_seg, scanners->m_Count);
+        BinarySegmentWritePointer(main_seg, BinarySegmentPosition(aux_seg));
+        for (int i=0; i<scanners->m_Count; i++)
+        {
+            BinarySegmentWritePointer(aux_seg, scanner_ptrs[i]);
+        }
     }
 
     // Emit hashes of file extensions to sign using SHA-1 content digest instead of the normal timestamp signing.
