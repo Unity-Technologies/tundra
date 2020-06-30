@@ -29,11 +29,11 @@ static void DumpDagDerived(const Frozen::DagDerived* data)
         for (auto& leafInput : data->m_NodeLeafInputs[nodeIndex])
             printf("    %s\n", leafInput.m_Filename.Get());
 
-        const FrozenArray<FrozenArray<FrozenFileAndHash>>& scannersToFilesToScan = data->m_Nodes_to_Scanners_to_FilesToScan[nodeIndex];
-        for (int scannerIndex=0; scannerIndex < scannersToFilesToScan.GetCount(); scannerIndex++)
+        const FrozenArray<Frozen::ScannerIndexWithListOfFiles>& scannersWithListsOfFiles = data->m_Nodes_to_ScannersWithListsOfFiles[nodeIndex];
+        for (auto& scannerWithListOfFiles: scannersWithListsOfFiles)
         {
-            printf("  ScannerIndex %d will run on the following files:\n", scannerIndex);
-            for(auto& file: scannersToFilesToScan[scannerIndex])
+            printf("  ScannerIndex %d will run on the following files:\n", scannerWithListOfFiles.m_ScannerIndex);
+            for(auto& file: scannerWithListOfFiles.m_FilesToScan)
                 printf("    %s\n",file.m_Filename.Get());
         }
 
@@ -159,6 +159,9 @@ static void DumpDag(const Frozen::Dag *data)
         printf("path            : %s\n", sig.m_Path.Get());
         printf("digest          : %s\n", digest_str);
     }
+
+    for (const FrozenFileAndHash& directoryCausingImplicitDependencies: data->m_DirectoriesCausingImplicitDependencies)
+        printf("directoryCausingImplicitDependencies: %s\n", directoryCausingImplicitDependencies.m_Filename.Get());
 
     printf("m_StateFileName : %s\n", data->m_StateFileName.Get());
     printf("m_StateFileNameTmp : %s\n", data->m_StateFileNameTmp.Get());

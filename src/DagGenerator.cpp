@@ -753,7 +753,12 @@ static void FindAllOutputDirectories(const Frozen::Dag* dag, MemAllocHeap* heap,
             BufferAppendOne(output_buffer, heap, targetDir.m_Filename.Get());
     }
     for(auto& dir: dag->m_DirectoriesCausingImplicitDependencies)
-        BufferAppendOne(output_buffer, heap, dir.Get());
+        BufferAppendOne(output_buffer, heap, dir.m_Filename.Get());
+}
+
+static void SortBufferOfFileAndHash(Buffer<FileAndHash>& buffer)
+{
+    std::sort(buffer.begin(), buffer.end(), [](const FileAndHash& a, const FileAndHash& b) { return strcmp(a.m_Filename, b.m_Filename) < 0; });
 }
 
 bool CompileDagDerived(const Frozen::Dag* dag, MemAllocHeap* heap, MemAllocLinear* scratch, const char* dagderived_filename)
@@ -768,6 +773,9 @@ bool CompileDagDerived(const Frozen::Dag* dag, MemAllocHeap* heap, MemAllocLinea
     BinarySegment *main_seg = BinaryWriterAddSegment(writer);
     BinarySegment *data_seg = BinaryWriterAddSegment(writer);
     BinarySegment *arraydata_seg = BinaryWriterAddSegment(writer);
+    BinarySegment *arraydata2_seg = BinaryWriterAddSegment(writer);
+    BinarySegment *leafnodearray_seg = BinaryWriterAddSegment(writer);
+    BinarySegment *scannerindex_seg = BinaryWriterAddSegment(writer);
     BinarySegment *str_seg = BinaryWriterAddSegment(writer);
 
     BinarySegmentWriteUint32(main_seg, Frozen::DagDerived::MagicNumber);
@@ -817,56 +825,117 @@ bool CompileDagDerived(const Frozen::Dag* dag, MemAllocHeap* heap, MemAllocLinea
     Buffer<int32_t> all_dependent_nodes;
     BufferInitWithCapacity(&all_dependent_nodes, heap, 1024);
 
-    {  //Write LeafInputs array
+    {   //Write LeafInputs array   and m_ScannerIndices_To_FilesToScan
         BinarySegmentWriteUint32(main_seg, node_count);
-        BinarySegmentWritePointer(main_seg, BinarySegmentPosition(data_seg));
-        for (int32_t i = 0; i < node_count; ++i)
+        BinarySegmentWritePointer(main_seg, BinarySegmentPosition(leafnodearray_seg));
+
+        //m_ScannerIndices_To_Files_To_Scan
+        BinarySegmentWriteUint32(main_seg, node_count);
+        BinarySegmentWritePointer(main_seg, BinarySegmentPosition(scannerindex_seg));
+
+        for (int32_t nodeIndex = 0; nodeIndex < node_count; ++nodeIndex)
         {
-            const Frozen::DagNode& node = dag->m_DagNodes[i];
+            const Frozen::DagNode& node = dag->m_DagNodes[nodeIndex];
             if (0 == (node.m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs))
             {
-                BinarySegmentWriteInt32(data_seg, 0);
-                BinarySegmentWriteNullPointer(data_seg);
+                BinarySegmentWriteInt32(leafnodearray_seg, 0);
+                BinarySegmentWriteNullPointer(leafnodearray_seg);
+
+                BinarySegmentWriteInt32(scannerindex_seg, 0);
+                BinarySegmentWriteNullPointer(scannerindex_seg);
                 continue;
             }
 
             BufferClear(&all_dependent_nodes);
-            FindDependentNodesFromRootIndex(heap, dag, i, all_dependent_nodes);
+            FindDependentNodesFromRootIndex(heap, dag, nodeIndex, all_dependent_nodes);
 
             HashSet<kFlagPathStrings> leafInputsCollector;
             HashSetInit(&leafInputsCollector, heap);
 
+            struct ScannerIndexWithListOfFiles
+            {
+                int32_t m_ScannerIndex;
+                Buffer<FileAndHash> m_FilesToScan;
+            };
+
+            Buffer<ScannerIndexWithListOfFiles> scannersWithListsOfFiles;
+            BufferInit(&scannersWithListsOfFiles);
+
+            Buffer<FileAndHash> leafInputBuffer;
+            BufferInitWithCapacity(&leafInputBuffer, heap, all_dependent_nodes.m_Size);
+
             for(int32_t childNodeIndex : all_dependent_nodes)
             {
+                const Frozen::DagNode& dagNode = dag->m_DagNodes[childNodeIndex];
+
                 auto addToLeafInputs = [&](const FrozenFileAndHash& file)
                 {
                     if (IsGeneratedFile(file, outputFiles, allOutputDirectories))
                         return;
 
                     if (!HashSetLookup(&leafInputsCollector, file.m_FilenameHash, file.m_Filename.Get()))
+                    {
                         HashSetInsert(&leafInputsCollector,file.m_FilenameHash, file.m_Filename.Get());
+
+                        FileAndHash leafInputFile;
+                        leafInputFile.m_Filename = file.m_Filename.Get();
+                        leafInputFile.m_FilenameHash = file.m_FilenameHash;
+
+                        BufferAppendOne(&leafInputBuffer, heap, leafInputFile);
+
+                        if (dagNode.m_ScannerIndex != -1)
+                        {
+                            auto findOrMakeScannerWithListOfFilesFor = [&](int scannerIndex) -> ScannerIndexWithListOfFiles*
+                            {
+                                for (auto& s: scannersWithListsOfFiles)
+                                    if (s.m_ScannerIndex == scannerIndex)
+                                        return &s;
+                                ScannerIndexWithListOfFiles* newEntry = BufferAlloc(&scannersWithListsOfFiles, heap, 1);
+                                newEntry->m_ScannerIndex = scannerIndex;
+                                BufferInit(&newEntry->m_FilesToScan);
+                                return newEntry;
+                            };
+                            ScannerIndexWithListOfFiles* scannerIndexWithListsOfFiles = findOrMakeScannerWithListOfFilesFor(dagNode.m_ScannerIndex);
+                            BufferAppendOne(&scannerIndexWithListsOfFiles->m_FilesToScan, heap, leafInputFile);
+                        }
+                    }
                 };
 
-                for (auto& inputFile: dag->m_DagNodes[childNodeIndex].m_InputFiles)
+                for (auto& inputFile: dagNode.m_InputFiles)
                     addToLeafInputs(inputFile);
-                for (auto& fileThatMightBeIncluded: dag->m_DagNodes[childNodeIndex].m_FilesThatMightBeIncluded)
+                for (auto& fileThatMightBeIncluded: dagNode.m_FilesThatMightBeIncluded)
                     addToLeafInputs(fileThatMightBeIncluded);
             }
 
-            Buffer<const char*> sortBuffer;
-            BufferInitWithCapacity(&sortBuffer, heap, leafInputsCollector.m_RecordCount);
-            HashSetWalk(&leafInputsCollector, [&](uint32_t index, uint32_t hash, const char *str) {
-                BufferAppendOne(&sortBuffer, heap, str);
-            });
-            std::sort(sortBuffer.begin(), sortBuffer.end(), [](const char *a, const char *b) { return strcmp(a, b) < 0; });
+            SortBufferOfFileAndHash(leafInputBuffer);
 
-            BinarySegmentWriteInt32(data_seg, leafInputsCollector.m_RecordCount);
-            BinarySegmentWritePointer(data_seg, BinarySegmentPosition(arraydata_seg));
-            for(const char* s: sortBuffer)
+            BinarySegmentWriteInt32(leafnodearray_seg, leafInputBuffer.m_Size);
+            BinarySegmentWritePointer(leafnodearray_seg, BinarySegmentPosition(arraydata_seg));
+            for(const FileAndHash& leafInput: leafInputBuffer)
             {
-                WriteCommonStringPtr(arraydata_seg, str_seg, s, &shared_strings, scratch);
-                BinarySegmentWriteInt32(arraydata_seg, Djb2HashPath(s));
+                WriteCommonStringPtr(arraydata_seg, str_seg, leafInput.m_Filename, &shared_strings, scratch);
+                BinarySegmentWriteInt32(arraydata_seg, leafInput.m_FilenameHash);
             }
+
+            BinarySegmentWriteInt32(scannerindex_seg, scannersWithListsOfFiles.m_Size);
+            BinarySegmentWritePointer(scannerindex_seg, BinarySegmentPosition(arraydata_seg));
+            for(ScannerIndexWithListOfFiles& scannerIndexWithListOfFiles: scannersWithListsOfFiles)
+            {
+                BinarySegmentWriteInt32(arraydata_seg, scannerIndexWithListOfFiles.m_ScannerIndex);
+                BinarySegmentWriteInt32(arraydata_seg, scannerIndexWithListOfFiles.m_FilesToScan.m_Size);
+                BinarySegmentWritePointer(arraydata_seg, BinarySegmentPosition(arraydata2_seg));
+
+                SortBufferOfFileAndHash(scannerIndexWithListOfFiles.m_FilesToScan);
+                for(const FileAndHash& fileForScanner: scannerIndexWithListOfFiles.m_FilesToScan)
+                {
+                    WriteCommonStringPtr(arraydata2_seg, str_seg, fileForScanner.m_Filename, &shared_strings, scratch);
+                    BinarySegmentWriteInt32(arraydata2_seg, fileForScanner.m_FilenameHash);
+                }
+                BufferDestroy(&scannerIndexWithListOfFiles.m_FilesToScan, heap);
+            }
+
+            BufferDestroy(&scannersWithListsOfFiles, heap);
+            BufferDestroy(&leafInputBuffer, heap);
             HashSetDestroy(&leafInputsCollector);
         }
     }
@@ -1030,20 +1099,7 @@ static bool CompileDag(const JsonObjectValue *root, BinaryWriter *writer, MemAll
     EmitFileSignatures(root, main_seg, aux_seg, str_seg);
     EmitGlobSignatures(root, main_seg, aux_seg, str_seg, heap, scratch);
 
-    if (directoriesCausingImplicitDependencies != nullptr)
-    {
-        BinarySegmentWriteInt32(main_seg, (int)directoriesCausingImplicitDependencies->m_Count);
-        BinarySegmentWritePointer(main_seg, BinarySegmentPosition(aux_seg));
-        for (size_t i = 0, count = directoriesCausingImplicitDependencies->m_Count; i < count; ++i)
-        {
-            const char* str = directoriesCausingImplicitDependencies->m_Values[i]->AsString()->m_String;
-            WriteStringPtr(aux_seg, str_seg, str);
-        }
-    } else
-    {
-        BinarySegmentWriteInt32(main_seg, 0);
-        BinarySegmentWriteNullPointer(main_seg);
-    }
+    WriteFileArray(main_seg, aux_seg, str_seg, directoriesCausingImplicitDependencies);
 
     if (scanner_ptrs == nullptr)
     {

@@ -152,7 +152,7 @@ struct Dag
     FrozenArray<DagGlobSignature> m_GlobSignatures;
 
     //we should remove this feature, and exluseively use the new .TargetDirectories that live on DagNode.
-    FrozenArray<FrozenString> m_DirectoriesCausingImplicitDependencies;
+    FrozenArray<FrozenFileAndHash> m_DirectoriesCausingImplicitDependencies;
 
     FrozenArray<FrozenPtr<ScannerData>> m_Scanners;
 
@@ -173,7 +173,12 @@ struct Dag
     uint32_t m_MagicNumberEnd;
 };
 
+
+struct ScannerIndexWithListOfFiles
 {
+    int32_t m_ScannerIndex;
+    FrozenArray<FrozenFileAndHash> m_FilesToScan;
+};
 
 struct DagDerived
 {
@@ -185,6 +190,8 @@ struct DagDerived
 
     FrozenArray<FrozenArray<uint32_t>> m_NodeBacklinks;
     FrozenArray<FrozenArray<FrozenFileAndHash>> m_NodeLeafInputs;
+
+    FrozenArray<FrozenArray<ScannerIndexWithListOfFiles>> m_Nodes_to_ScannersWithListsOfFiles;
     FrozenArray<HashDigest> m_LeafInputHash_Offline;
 
     uint32_t m_MagicNumberEnd;
