@@ -114,7 +114,9 @@ static void EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(BuildQueue *queue, R
 {
     int enqueue_count = 0;
 
-    for (int32_t link : node->m_DagNodeDerived->m_BackLinks)
+    const FrozenArray<int32_t>& backLinks = queue->m_Config.m_DagDerived->m_NodeBacklinks[node->m_DagNodeIndex].Values;
+
+    for (int32_t link : backLinks)
     {
         if (RuntimeNode *waiter = GetRuntimeNodeForDagNodeIndex(queue, link))
         {

@@ -280,6 +280,7 @@ static bool WriteNodes(
         const char *annotation = FindStringValue(node, "Annotation");
         const JsonArrayValue *deps = FindArrayValue(node, "Deps");
         const JsonArrayValue *inputs = FindArrayValue(node, "Inputs");
+        const JsonArrayValue *filesThatMightBeIncluded = FindArrayValue(node, "FilesThatMightBeIncluded");
         const JsonArrayValue *outputs = FindArrayValue(node, "Outputs");
         const JsonArrayValue *output_dirs = FindArrayValue(node, "TargetDirectories");
         const JsonArrayValue *aux_outputs = FindArrayValue(node, "AuxOutputs");
@@ -323,6 +324,7 @@ static bool WriteNodes(
         }
 
         WriteFileArray(node_data_seg, array2_seg, str_seg, inputs);
+        WriteFileArray(node_data_seg, array2_seg, str_seg, filesThatMightBeIncluded);
         WriteFileArray(node_data_seg, array2_seg, str_seg, outputs);
         WriteFileArray(node_data_seg, array2_seg, str_seg, output_dirs);
 
@@ -410,6 +412,13 @@ static bool WriteNodes(
         flags |= GetNodeFlag(node, "AllowUnexpectedOutput", Frozen::DagNode::kFlagAllowUnexpectedOutput, false);
         flags |= GetNodeFlag(node, "AllowUnwrittenOutputFiles", Frozen::DagNode::kFlagAllowUnwrittenOutputFiles, false);
         flags |= GetNodeFlag(node, "BanContentDigestForInputs", Frozen::DagNode::kFlagBanContentDigestForInputs, false);
+
+        const char* cachingMode = FindStringValue(node, "CachingMode");
+        if (cachingMode != nullptr)
+        {
+            if (0==strcmp(cachingMode, "ByLeafInputs"))
+                flags |= Frozen::DagNode::kFlagCacheableByLeafInputs;
+        }
 
         if (writetextfile_payload != nullptr)
             flags |= Frozen::DagNode::kFlagIsWriteTextFileAction;
@@ -728,61 +737,204 @@ struct BacklinkRec
 {
     Buffer<int32_t> m_Links;
 };
+
+static bool IsGeneratedFile(const FrozenFileAndHash& inputFile, const HashSet<kFlagPathStrings>& outputFiles, const Buffer<const char*>& allOutputDirectories)
+{
+    if (HashSetLookup(&outputFiles, inputFile.m_FilenameHash, inputFile.m_Filename.Get()))
+        return true;
+
+    for (auto& d : allOutputDirectories)
+        if (0 == strnicmp(inputFile.m_Filename.Get(), d, strlen(d)))
+            return true;
+
+    return false;
+}
+
+static void FindAllOutputDirectories(const Frozen::Dag* dag, MemAllocHeap* heap, Buffer<const char*>* output_buffer)
+{
+    int node_count = dag->m_NodeCount;
+    for (int32_t i = 0; i < node_count; ++i)
+    {
+        const Frozen::DagNode& node = dag->m_DagNodes[i];
+        for(auto& targetDir : node.m_OutputDirectories)
+            BufferAppendOne(output_buffer, heap, targetDir.m_Filename.Get());
+    }
+    for(auto& dir: dag->m_DirectoriesCausingImplicitDependencies)
+        BufferAppendOne(output_buffer, heap, dir.Get());
+}
+
 bool CompileDagDerived(const Frozen::Dag* dag, MemAllocHeap* heap, MemAllocLinear* scratch, const char* dagderived_filename)
 {
     BinaryWriter _writer;
     BinaryWriter* writer = &_writer;
     BinaryWriterInit(writer, heap);
 
+    HashTable<CommonStringRecord, kFlagCaseSensitive> shared_strings;
+    HashTableInit(&shared_strings, heap);
+
     BinarySegment *main_seg = BinaryWriterAddSegment(writer);
-    BinarySegment *node_seg = BinaryWriterAddSegment(writer);
+    BinarySegment *data_seg = BinaryWriterAddSegment(writer);
     BinarySegment *arraydata_seg = BinaryWriterAddSegment(writer);
     BinarySegment *str_seg = BinaryWriterAddSegment(writer);
+
     BinarySegmentWriteUint32(main_seg, Frozen::DagDerived::MagicNumber);
     int node_count = dag->m_NodeCount;
     BinarySegmentWriteUint32(main_seg, node_count);
-    BacklinkRec *links = HeapAllocateArrayZeroed<BacklinkRec>(heap, node_count);
-
-    for (int32_t i = 0; i < node_count; ++i)
-    {
-        for(int dep : dag->m_DagNodes[i].m_Dependencies)
-           BufferAppendOne(&links[dep].m_Links, heap, i);
-    }
-    BinarySegmentWritePointer(main_seg, BinarySegmentPosition(node_seg));
-    for (int32_t i = 0; i < node_count; ++i)
-    {
-        BinarySegmentWriteInt32(node_seg, links[i].m_Links.m_Size);
-        BinarySegmentWritePointer(node_seg, BinarySegmentPosition(arraydata_seg));
-        for(int32_t backLink : links[i].m_Links)
-            BinarySegmentWriteInt32(arraydata_seg, backLink);
-    }
 
     Buffer<const char*> allOutputDirectories;
     BufferInitWithCapacity(&allOutputDirectories, heap, 500);
+    FindAllOutputDirectories(dag, heap, &allOutputDirectories);
 
-    for (int32_t i = 0; i < node_count; ++i)
-    {
-        const Frozen::DagNode& node = dag->m_DagNodes[i];
-        for(auto& targetDir : node.m_OutputDirectories)
-            BufferAppendOne(&allOutputDirectories, heap, targetDir.m_Filename.Get());
+
+    {  //Write AllOutputDirectories
+        BinarySegmentWriteUint32(main_seg, allOutputDirectories.m_Size);
+        BinarySegmentWritePointer(main_seg, BinarySegmentPosition(arraydata_seg));
+        for (auto& dir: allOutputDirectories)
+            WriteStringPtr(arraydata_seg, str_seg, dir);
     }
-    for(auto& dir: dag->m_DirectoriesCausingImplicitDependencies)
-        BufferAppendOne(&allOutputDirectories, heap, dir.Get());
 
-    //write all output directories
-    BinarySegmentWriteUint32(main_seg, allOutputDirectories.m_Size);
-    BinarySegmentWritePointer(main_seg, BinarySegmentPosition(arraydata_seg));
-    for (auto& dir: allOutputDirectories)
-        WriteStringPtr(arraydata_seg, str_seg, dir);
+
+
+    {   //write backlinks array of arrays
+        BacklinkRec *links = HeapAllocateArrayZeroed<BacklinkRec>(heap, node_count);
+        for (int32_t i = 0; i < node_count; ++i)
+        {
+            for(int dep : dag->m_DagNodes[i].m_Dependencies)
+            BufferAppendOne(&links[dep].m_Links, heap, i);
+        }
+        BinarySegmentWriteUint32(main_seg, node_count);
+        BinarySegmentWritePointer(main_seg, BinarySegmentPosition(data_seg));
+        for (int32_t i = 0; i < node_count; ++i)
+        {
+            BinarySegmentWriteInt32(data_seg, links[i].m_Links.m_Size);
+            BinarySegmentWritePointer(data_seg, BinarySegmentPosition(arraydata_seg));
+            for(int32_t backLink : links[i].m_Links)
+                BinarySegmentWriteInt32(arraydata_seg, backLink);
+        }
+        for (size_t i = 0; i < node_count; ++i)
+            BufferDestroy(&links[i].m_Links, heap);
+        HeapFree(heap, links);
+    }
+
+
+    HashSet<kFlagPathStrings> outputFiles;
+    HashSetInit(&outputFiles, heap);
+    FindAllOutputFiles(dag, outputFiles);
+
+    Buffer<int32_t> all_dependent_nodes;
+    BufferInitWithCapacity(&all_dependent_nodes, heap, 1024);
+
+    {  //Write LeafInputs array
+        BinarySegmentWriteUint32(main_seg, node_count);
+        BinarySegmentWritePointer(main_seg, BinarySegmentPosition(data_seg));
+        for (int32_t i = 0; i < node_count; ++i)
+        {
+            const Frozen::DagNode& node = dag->m_DagNodes[i];
+            if (0 == (node.m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs))
+            {
+                BinarySegmentWriteInt32(data_seg, 0);
+                BinarySegmentWriteNullPointer(data_seg);
+                continue;
+            }
+
+            BufferClear(&all_dependent_nodes);
+            FindDependentNodesFromRootIndex(heap, dag, i, all_dependent_nodes);
+
+            HashSet<kFlagPathStrings> leafInputsCollector;
+            HashSetInit(&leafInputsCollector, heap);
+
+            for(int32_t childNodeIndex : all_dependent_nodes)
+            {
+                auto addToLeafInputs = [&](const FrozenFileAndHash& file)
+                {
+                    if (IsGeneratedFile(file, outputFiles, allOutputDirectories))
+                        return;
+
+                    if (!HashSetLookup(&leafInputsCollector, file.m_FilenameHash, file.m_Filename.Get()))
+                        HashSetInsert(&leafInputsCollector,file.m_FilenameHash, file.m_Filename.Get());
+                };
+
+                for (auto& inputFile: dag->m_DagNodes[childNodeIndex].m_InputFiles)
+                    addToLeafInputs(inputFile);
+                for (auto& fileThatMightBeIncluded: dag->m_DagNodes[childNodeIndex].m_FilesThatMightBeIncluded)
+                    addToLeafInputs(fileThatMightBeIncluded);
+            }
+
+            Buffer<const char*> sortBuffer;
+            BufferInitWithCapacity(&sortBuffer, heap, leafInputsCollector.m_RecordCount);
+            HashSetWalk(&leafInputsCollector, [&](uint32_t index, uint32_t hash, const char *str) {
+                BufferAppendOne(&sortBuffer, heap, str);
+            });
+            std::sort(sortBuffer.begin(), sortBuffer.end(), [](const char *a, const char *b) { return strcmp(a, b) < 0; });
+
+            BinarySegmentWriteInt32(data_seg, leafInputsCollector.m_RecordCount);
+            BinarySegmentWritePointer(data_seg, BinarySegmentPosition(arraydata_seg));
+            for(const char* s: sortBuffer)
+            {
+                WriteCommonStringPtr(arraydata_seg, str_seg, s, &shared_strings, scratch);
+                BinarySegmentWriteInt32(arraydata_seg, Djb2HashPath(s));
+            }
+            HashSetDestroy(&leafInputsCollector);
+        }
+    }
+
+
+
+    {  //Write m_LeafInputHash_OffLine
+        BinarySegmentWriteUint32(main_seg, node_count);
+        BinarySegmentWritePointer(main_seg, BinarySegmentPosition(data_seg));
+        for (int32_t i = 0; i < node_count; ++i)
+        {
+            HashDigest hashResult = {0};
+
+            const Frozen::DagNode& node = dag->m_DagNodes[i];
+            if (0 != (node.m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs))
+            {
+                BufferClear(&all_dependent_nodes);
+                FindDependentNodesFromRootIndex(heap, dag, i, all_dependent_nodes);
+
+                HashState hashState;
+                HashInit(&hashState);
+
+                for(int32_t childNodeIndex : all_dependent_nodes)
+                {
+                    auto& dagNode = dag->m_DagNodes[childNodeIndex];
+                    HashAddString(&hashState, dagNode.m_Action.Get());
+
+                    for(auto& env: dagNode.m_EnvVars)
+                    {
+                        HashAddString(&hashState, env.m_Name);
+                        HashAddString(&hashState, env.m_Value);
+                    }
+                    for (auto& s: dagNode.m_AllowedOutputSubstrings)
+                        HashAddString(&hashState, s);
+                    for (auto& f: dagNode.m_OutputFiles)
+                        HashAddString(&hashState, f.m_Filename.Get());
+
+                    int relevantFlags = dagNode.m_Flags & ~Frozen::DagNode::kFlagCacheableByLeafInputs;
+                    if (relevantFlags != (Frozen::DagNode::kFlagOverwriteOutputs | Frozen::DagNode::kFlagAllowUnexpectedOutput))
+                        HashAddInteger(&hashState, relevantFlags);
+                }
+                HashFinalize(&hashState, &hashResult);
+            }
+            BinarySegmentWrite(data_seg, (const char *)&hashResult, sizeof(HashDigest));
+        }
+    }
+
+
     BufferDestroy(&allOutputDirectories, heap);
+
     BinarySegmentWriteUint32(main_seg, Frozen::DagDerived::MagicNumber);
-    for (size_t i = 0; i < node_count; ++i)
-        BufferDestroy(&links[i].m_Links, heap);
-    HeapFree(heap, links);
+    BufferDestroy(&all_dependent_nodes, heap);
+    HashTableDestroy(&shared_strings);
+    HashSetDestroy(&outputFiles);
+
+
     bool result = BinaryWriterFlush(writer, dagderived_filename);
     BinaryWriterDestroy(writer);
     return result;
 }
+
 static bool CompileDag(const JsonObjectValue *root, BinaryWriter *writer, MemAllocHeap *heap, MemAllocLinear *scratch)
 {
     HashTable<CommonStringRecord, kFlagCaseSensitive> shared_strings;

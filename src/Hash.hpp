@@ -170,6 +170,12 @@ inline void HashAddString(HashState *self, const char *s)
     HashUpdate(self, s, strlen(s));
 }
 
+inline void HashAddString(FILE* debug_hash_fd, HashState* state, const char* label, const char* str)
+{
+    fprintf(debug_hash_fd, "%s: %s\n", label, str);
+    HashAddString(state, str);
+}
+
 void HashAddStringFoldCase(HashState *self, const char *path);
 
 inline void HashAddPath(HashState *self, const char *path)
@@ -201,3 +207,5 @@ void DigestToString(char (&buffer)[kDigestStringSize], const HashDigest &digest)
 
 // Quickie to generate a hash digest from a single string
 void HashSingleString(HashDigest *digest_out, const char *string);
+
+void HashAddInteger(FILE* debug_hash_fd, HashState* state, const char* label, int payload);

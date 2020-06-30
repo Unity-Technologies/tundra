@@ -1,5 +1,11 @@
 #include "DagData.hpp"
 #include "Buffer.hpp"
+#include "HashTable.hpp"
+
+void FindDependentNodesFromRootIndex(MemAllocHeap* heap, const Frozen::Dag* dag, int32_t rootIndex, Buffer<int32_t>& results)
+{
+    FindDependentNodesFromRootIndices(heap, dag, &rootIndex, 1, results);
+}
 
 void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* dag, int32_t* searchRootIndices, int32_t searchRootCount, Buffer<int32_t>& results)
 {
@@ -37,4 +43,12 @@ void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* da
 
     HeapFree(heap, node_visited_bits);
     node_visited_bits = nullptr;
+}
+
+void FindAllOutputFiles(const Frozen::Dag* dag, HashSet<kFlagPathStrings>& outputFiles)
+{
+    int node_count = dag->m_NodeCount;
+    for (int32_t i = 0; i < node_count; ++i)
+        for (auto& outputFile : dag->m_DagNodes[i].m_OutputFiles)
+            HashSetInsert(&outputFiles, outputFile.m_FilenameHash, outputFile.m_Filename.Get());
 }

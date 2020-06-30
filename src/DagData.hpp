@@ -5,6 +5,7 @@
 #include "Hash.hpp"
 #include "PathUtil.hpp"
 #include "Buffer.hpp"
+#include "HashTable.hpp"
 
 namespace Frozen
 {
@@ -95,13 +96,16 @@ struct DagNode
 
         kFlagIsWriteTextFileAction = 1 << 4,
         kFlagAllowUnwrittenOutputFiles = 1 << 5,
-        kFlagBanContentDigestForInputs = 1 << 6
+        kFlagBanContentDigestForInputs = 1 << 6,
+
+        kFlagCacheableByLeafInputs = 1 << 7
     };
 
     FrozenString m_Action;
     FrozenString m_Annotation;
     FrozenArray<int32_t> m_Dependencies;
     FrozenArray<FrozenFileAndHash> m_InputFiles;
+    FrozenArray<FrozenFileAndHash> m_FilesThatMightBeIncluded;
     FrozenArray<FrozenFileAndHash> m_OutputFiles;
     FrozenArray<FrozenFileAndHash> m_OutputDirectories;
     FrozenArray<FrozenFileAndHash> m_AuxOutputFiles;
@@ -115,6 +119,7 @@ struct DagNode
     uint32_t m_Flags;
     uint32_t m_OriginalIndex;
 };
+
 
 struct SharedResourceData
 {
@@ -164,24 +169,33 @@ struct Dag
     uint32_t m_MagicNumberEnd;
 };
 
-
-//the *Derived dag data is data that is stored in a separate file, can be calculated from the original dag data.
-//The reason it's in a separate file is that it's much faster to generate it from the binary dag than from the json dag.
-struct DagNodeDerived
+struct BackLinks
 {
-    FrozenArray<int32_t> m_BackLinks;
+    FrozenArray<int> Values;
 };
+
+struct LeafInputs
+{
+    FrozenArray<FrozenFileAndHash> Values;
+};
+
 struct DagDerived
 {
     static const uint32_t MagicNumber = 0x9dead123 ^ kTundraHashMagic;
 
     uint32_t m_MagicNumber;
-    int32_t m_NodeCount;
-    FrozenPtr<DagNodeDerived> m_NodesDerived;
+    uint32_t m_NodeCount;
     FrozenArray<FrozenString> m_AllOutputDirectories;
+
+    FrozenArray<BackLinks> m_NodeBacklinks;
+    FrozenArray<LeafInputs> m_NodeLeafInputs;
+    FrozenArray<HashDigest> m_LeafInputHash_Offline;
+
     uint32_t m_MagicNumberEnd;
 };
 
 }
 
+void FindDependentNodesFromRootIndex(MemAllocHeap* heap, const Frozen::Dag* dag, int32_t rootIndex, Buffer<int32_t>& results);
 void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* dag, int32_t* searchRootIndices, int32_t searchRootCount, Buffer<int32_t>& results);
+void FindAllOutputFiles(const Frozen::Dag* dag, HashSet<kFlagPathStrings>& outputFiles);

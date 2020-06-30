@@ -9,7 +9,6 @@
 #include <stdlib.h>
 #include <time.h>
 
-
 static void DumpDagDerived(const Frozen::DagDerived* data)
 {
     printf("magic number: 0x%08x\n", data->m_MagicNumber);
@@ -23,9 +22,16 @@ static void DumpDagDerived(const Frozen::DagDerived* data)
     {
         printf("node %d:\n", i);
         printf("  backlinks: ");
-        for (int32_t b : data->m_NodesDerived[i].m_BackLinks)
+        for (int32_t b : data->m_NodeBacklinks[i].Values)
             printf("%d,", b);
         printf("\n");
+        printf("  leafInputs: \n");
+        for (auto& leafInput : data->m_NodeLeafInputs[i].Values)
+            printf("    %s\n", leafInput.m_Filename.Get());
+
+        char tmp[kDigestStringSize];
+        DigestToString(tmp, data->m_LeafInputHash_Offline[i]);
+        printf("  leafInputsHash_OffLine: %s\n", tmp);
     }
 }
 

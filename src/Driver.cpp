@@ -689,7 +689,6 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
 
     const Frozen::Dag *dag = self->m_DagData;
     const Frozen::DagNode *dag_nodes = dag->m_DagNodes;
-    const Frozen::DagNodeDerived *derived_nodes = self->m_DagDerivedData->m_NodesDerived;
     const HashDigest *dag_node_guids = dag->m_NodeGuids;
     MemAllocHeap *heap = &self->m_Heap;
 
@@ -712,9 +711,8 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
     for (int i = 0; i < node_count; ++i)
     {
         const Frozen::DagNode *dag_node = dag_nodes + node_indices[i];
-        const Frozen::DagNodeDerived *node_derived = derived_nodes + node_indices[i];
         out_nodes[i].m_DagNode = dag_node;
-        out_nodes[i].m_DagNodeDerived = node_derived;
+        out_nodes[i].m_DagNodeIndex = node_indices[i];
 #if ENABLED(CHECKED_BUILD)
         out_nodes[i].m_DebugAnnotation = dag_node->m_Annotation.Get();
 #endif
@@ -836,6 +834,7 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count)
     queue_config.m_Flags = 0;
     queue_config.m_Heap = &self->m_Heap;
     queue_config.m_DagNodes = self->m_DagData->m_DagNodes;
+    queue_config.m_DagDerived = self->m_DagDerivedData;
     queue_config.m_RuntimeNodes = self->m_RuntimeNodes.m_Storage;
     queue_config.m_TotalRuntimeNodeCount = (int)self->m_RuntimeNodes.m_Size;
     queue_config.m_DagNodeIndexToRuntimeNodeIndex_Table = self->m_DagNodeIndexToRuntimeNodeIndex_Table.m_Storage;
