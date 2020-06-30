@@ -103,7 +103,8 @@ static void ScanFile(
     const char *filename,
     char *file_data,
     const ScanInput *input,
-    Buffer<const char *> *found_includes)
+    Buffer<const char *> *found_includes,
+    IncludeCallback* includeCallback = nullptr)
 {
     MemAllocHeap *heap = input->m_ScratchHeap;
     MemAllocLinear *scratch = input->m_ScratchAlloc;
@@ -130,7 +131,8 @@ static void ScanFile(
         PathBuffer path;
         char path_buf[kMaxPathLength];
 
-        if (FindFile(stat_cache, &path, path_buf, filename, scanner_config, include))
+        bool findFileResult = FindFile(stat_cache, &path, path_buf, filename, scanner_config, include);
+        if (findFileResult && !(includeCallback && includeCallback->Invoke(filename, path_buf)))
         {
             BufferAppendOne(found_includes, heap, StrDup(scratch, path_buf));
         }
@@ -139,7 +141,7 @@ static void ScanFile(
     }
 }
 
-bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput *output, IgnoreCallback* ignoreCallback)
+bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput *output, IncludeCallback* includeCallback)
 {
     MemAllocHeap *scratch_heap = input->m_ScratchHeap;
     MemAllocLinear *scratch_alloc = input->m_ScratchAlloc;
@@ -168,9 +170,6 @@ bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput 
         if (!info.Exists())
             continue;
 
-        if (ignoreCallback != nullptr && ignoreCallback->Invoke(fn))
-            continue;
-
         ComputeScanCacheKey(&scan_key, fn, scanner_config->m_ScannerGuid);
 
         ScanCacheLookupResult cache_result;
@@ -182,8 +181,6 @@ bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput 
 
             for (int i = 0; i < file_count; ++i)
             {
-                if (ignoreCallback != nullptr && ignoreCallback->Invoke(files[i].m_Filename))
-                    continue;
                 if (IncludeSetAddNoDuplicateString(&incset, files[i].m_Filename, files[i].m_FilenameHash))
                 {
                     // This was a new file, schedule it for scanning as well.
@@ -230,7 +227,7 @@ bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput 
                 if (file_size >= 3 && 0 == memcmp(scan_start, utf8_mark, sizeof utf8_mark))
                     scan_start += sizeof utf8_mark;
 
-                ScanFile(stat_cache, fn, scan_start, input, &found_includes);
+                ScanFile(stat_cache, fn, scan_start, input, &found_includes, includeCallback);
             }
 
             // Insert result into scan cache
@@ -238,9 +235,6 @@ bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput 
 
             for (const char *file : found_includes)
             {
-                if (ignoreCallback != nullptr && ignoreCallback->Invoke(file))
-                    continue;
-
                 if (IncludeSetAddDuplicateString(&incset, file, Djb2HashPath(file)))
                 {
                     // This was a new file, schedule it for scanning as well.

@@ -4,7 +4,6 @@
 #include "BuildQueue.hpp"
 #include "Hash.hpp"
 #include "Caching.hpp"
-#include "Buffer.hpp"
 #include "Driver.hpp"
 #include "FileSign.hpp"
 #include "MakeDirectories.hpp"
@@ -33,18 +32,45 @@ static void HashEntry(FILE* debug_hash_fd, HashState* state, const char* label, 
     HashAddInteger(state, payload);
 }
 
-static bool MyIgnoreFunc(void* userData, const char* filename)
+bool IsFileGenerated(const Frozen::Dag* dag, const char* filename)
 {
-    const Frozen::Dag* dag = static_cast<Frozen::Dag*>(userData);
-
-    for(auto& implicitdir: dag->m_DirectoriesCausingImplicitDependencies)
+     for(auto& implicitdir: dag->m_DirectoriesCausingImplicitDependencies)
     {
         bool match = strncmp(implicitdir.Get(), filename, strlen(implicitdir.Get()) ) == 0;
         if (match)
+        {
             return true;
+        }
     }
-
     return false;
+}
+
+static bool IgnoreGeneratedIncludes(void* _userData, const char* includingFile, const char* includedFile)
+{
+    return IsFileGenerated((const Frozen::Dag*)_userData, includedFile);
+}
+
+void AddIncludesForDagNode(StatCache* stat_cache, const Frozen::DagNode* dagNode, const FrozenString &filename, ScanInput *scan_input, IncludeCallback *callback, HashSet<kFlagPathStrings> *implicitDeps, MemAllocLinear *includeLinearAlloc)
+{
+    if (dagNode->m_Scanner != nullptr)
+    {
+        MemAllocLinearScope scratch_scope(scan_input->m_ScratchAlloc);
+
+        scan_input->m_ScannerConfig = dagNode->m_Scanner;
+        scan_input->m_FileName = filename;
+
+        ScanOutput scan_output;
+
+        if (ScanImplicitDeps(stat_cache, scan_input, &scan_output, callback))
+        {
+            for (int i = 0, count = scan_output.m_IncludedFileCount; i < count; ++i)
+            {
+                const FileAndHash &path = scan_output.m_IncludedFiles[i];
+                if (!HashSetLookup(implicitDeps, path.m_FilenameHash, path.m_Filename))
+                    HashSetInsert(implicitDeps, path.m_FilenameHash, StrDup(includeLinearAlloc, path.m_Filename));
+            }
+        }
+    }
 }
 
 HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, ThreadState* thread_state, const Frozen::DagNode* dagNode)
@@ -88,6 +114,15 @@ HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, ThreadState* thre
     MemAllocLinear includeLinearAlloc;
     LinearAllocInit(&includeLinearAlloc, &thread_state->m_LocalHeap, 1024*1024*16, "includes");
 
+    ScanInput scan_input;
+    scan_input.m_ScratchAlloc = &thread_state->m_ScratchAlloc;
+    scan_input.m_ScratchHeap = &thread_state->m_LocalHeap;
+    scan_input.m_ScanCache = config->m_ScanCache;
+
+    IncludeCallback mycallback;
+    mycallback.userData = (void*)&config->m_Dag;
+    mycallback.callback = &IgnoreGeneratedIncludes;
+
     for (int dependencyIndex: allDependencies)
     {
         auto& dependencyDagNode = config->m_DagNodes[dependencyIndex];
@@ -96,7 +131,6 @@ HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, ThreadState* thre
         {
             HashEntry(debug_hash_fd, &hashState, "outputFile", f.m_Filename.Get());
         }
-
 
         HashEntry(debug_hash_fd, &hashState, "action", dependencyDagNode.m_Action.Get());
         for (auto& e: dependencyDagNode.m_EnvVars)
@@ -111,6 +145,18 @@ HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, ThreadState* thre
         if (dependencyDagNode.m_Flags != (Frozen::DagNode::kFlagOverwriteOutputs | Frozen::DagNode::kFlagAllowUnexpectedOutput))
             HashEntry(debug_hash_fd, &hashState, "flags", dependencyDagNode.m_Flags);
 
+        // Todo: can roll this into deriveddag m_LeafInputFiles
+        for (auto& possibleInclude: dependencyDagNode.m_FilesThatMightBeIncluded)
+        {
+            if (IsFileGenerated(config->m_Dag, possibleInclude.m_Filename.Get()))
+                continue;
+
+            HashDigest digest = ComputeFileSignatureSha1(stat_cache, digest_cache, possibleInclude.m_Filename, possibleInclude.m_FilenameHash);
+            HashEntry(debug_hash_fd, &hashState, "possibleInclude: ", possibleInclude.m_Filename, digest);
+            
+            AddIncludesForDagNode(stat_cache, &dependencyDagNode, possibleInclude.m_Filename, &scan_input, &mycallback, &implicitDeps, &includeLinearAlloc);
+        }
+
         for (int leafInputIndex: dependencyDagNode.m_LeafInputFiles)
         {
             auto& inputFile = dependencyDagNode.m_InputFiles[leafInputIndex];
@@ -118,33 +164,7 @@ HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, ThreadState* thre
             HashDigest digest = ComputeFileSignatureSha1(stat_cache, digest_cache, inputFile.m_Filename, inputFile.m_FilenameHash);
             HashEntry(debug_hash_fd, &hashState, "leafInput: ", inputFile.m_Filename, digest);
 
-            if (dependencyDagNode.m_Scanner != nullptr)
-            {
-                MemAllocLinearScope scratch_scope(&thread_state->m_ScratchAlloc);
-
-                ScanInput scan_input;
-                scan_input.m_ScannerConfig = dependencyDagNode.m_Scanner;
-                scan_input.m_ScratchAlloc = &thread_state->m_ScratchAlloc;
-                scan_input.m_ScratchHeap = &thread_state->m_LocalHeap;
-                scan_input.m_FileName = inputFile.m_Filename;
-                scan_input.m_ScanCache = config->m_ScanCache;
-
-                ScanOutput scan_output;
-
-                IgnoreCallback mycallback;
-                mycallback.userData = (void*)config->m_Dag;
-                mycallback.callback = &MyIgnoreFunc;
-
-                if (ScanImplicitDeps(stat_cache, &scan_input, &scan_output, &mycallback))
-                {
-                    for (int i = 0, count = scan_output.m_IncludedFileCount; i < count; ++i)
-                    {
-                        const FileAndHash &path = scan_output.m_IncludedFiles[i];
-                        if (!HashSetLookup(&implicitDeps, path.m_FilenameHash, path.m_Filename))
-                            HashSetInsert(&implicitDeps, path.m_FilenameHash, StrDup(&includeLinearAlloc, path.m_Filename));
-                    }
-                }
-            }
+            AddIncludesForDagNode(stat_cache, &dependencyDagNode, inputFile.m_Filename, &scan_input, &mycallback, &implicitDeps, &includeLinearAlloc);
         }
 
         fprintf(debug_hash_fd,"\n\n");

@@ -889,6 +889,17 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count)
     }
 #endif
 
+    HashTableInit(&queue_config.m_OutputsToDagNodes, &self->m_Heap);
+    HashTableInit(&queue_config.m_OutputDirectoriesToDagNodes, &self->m_Heap);
+    for (int i = 0; i<queue_config.m_DagNodeCount; i++)
+    {
+        const Frozen::DagNode* node = queue_config.m_DagNodes + i;
+        for(auto &output: node->m_OutputFiles)
+            HashTableInsert(&queue_config.m_OutputsToDagNodes, output.m_FilenameHash, output.m_Filename.Get(), i);
+        for(auto &output: node->m_OutputDirectories)
+            HashTableInsert(&queue_config.m_OutputDirectoriesToDagNodes, output.m_FilenameHash, output.m_Filename.Get(), i);
+    }
+
     BuildQueue build_queue;
     BuildQueueInit(&build_queue, &queue_config);
 

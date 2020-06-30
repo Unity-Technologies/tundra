@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Common.hpp"
+#include "Buffer.hpp"
 
 // High-level include scanner
 
@@ -25,16 +26,16 @@ struct ScanOutput
     const FileAndHash *m_IncludedFiles;
 };
 
-typedef bool IgnoreFunc(void* userData, const char* filename);
-struct IgnoreCallback
+typedef bool IncludeFunc(void* userData, const char* includingFile, const char *includedFile);
+struct IncludeCallback
 {
     void* userData;
-    IgnoreFunc* callback;
+    IncludeFunc* callback;
 
-    bool Invoke(const char* filename)
+    bool Invoke(const char* includingFile, const char *includedFile)
     {
-        return callback(userData, filename);
+        return callback(userData, includingFile, includedFile);
     }
 };
 
-bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput *output, IgnoreCallback* ignoreCallback = nullptr);
+bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput *output, IncludeCallback* includeCallback = nullptr);

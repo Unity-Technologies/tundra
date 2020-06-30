@@ -20,6 +20,7 @@
 #include "SharedResources.hpp"
 #include "HumanActivityDetection.hpp"
 #include "Driver.hpp"
+#include "Caching.hpp"
 #include <stdarg.h>
 
 #include <stdio.h>
@@ -304,6 +305,47 @@ bool OutputFilesMissing(StatCache *stat_cache, RuntimeNode* node)
     return false;
 }
 
+static bool ValidateInclude(void* _userData, const char* includingFile, const char* includedFile)
+{
+    auto userData = (BuildQueueConfig*)_userData;
+    if (IsFileGenerated(userData->m_Dag, includingFile))
+        return false;
+
+    if (!IsFileGenerated(userData->m_Dag, includedFile))
+        return false;        
+
+    if (int* nodeIndex = HashTableLookup(&userData->m_OutputsToDagNodes, Djb2HashPath(includingFile), includingFile))
+    {
+        const Frozen::DagNode *node = userData->m_Dag->m_DagNodes.Get() + *nodeIndex;
+        for (auto& fileThatMightBeIncluded: node->m_FilesThatMightBeIncluded)
+        {
+            if (strcmp(includedFile, fileThatMightBeIncluded.m_Filename.Get()) == 0)
+                return false;
+        }
+    }            
+
+    PathBuffer includingFilePath;
+    PathInit(&includingFilePath, includingFile);
+
+    while (PathStripLast(&includingFilePath))
+    {
+        char path[kMaxPathLength];
+        PathFormat(path, &includingFilePath);
+        if (int* nodeIndex = HashTableLookup(&userData->m_OutputDirectoriesToDagNodes, Djb2HashPath(path), path))
+        {
+            const Frozen::DagNode *node = userData->m_Dag->m_DagNodes.Get() + *nodeIndex;
+            for (auto& fileThatMightBeIncluded: node->m_FilesThatMightBeIncluded)
+            {
+                if (strcmp(includedFile, fileThatMightBeIncluded.m_Filename.Get()) == 0)
+                    return false;
+            }
+        }          
+    }
+
+    printf("Illegal include %s -> %s\n", includingFile, includedFile);
+    return false;
+}
+
 static HashDigest CalculateInputSignature(BuildQueue* queue, ThreadState* thread_state, const Frozen::DagNode* dagnode)
 {
     ProfilerScope prof_scope("CheckInputSignature", thread_state->m_ProfilerThreadId, dagnode->m_Annotation);
@@ -366,7 +408,11 @@ static HashDigest CalculateInputSignature(BuildQueue* queue, ThreadState* thread
 
             ScanOutput scan_output;
 
-            if (ScanImplicitDeps(stat_cache, &scan_input, &scan_output))
+            IncludeCallback mycallback;
+            mycallback.userData = (void*)&queue->m_Config;
+            mycallback.callback = &ValidateInclude;
+            
+            if (ScanImplicitDeps(stat_cache, &scan_input, &scan_output, &mycallback))
             {
                 for (int i = 0, count = scan_output.m_IncludedFileCount; i < count; ++i)
                 {

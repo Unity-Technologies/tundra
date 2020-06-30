@@ -8,6 +8,7 @@
 #include "MemAllocHeap.hpp"
 #include "JsonWriter.hpp"
 #include "DagData.hpp"
+#include "HashTable.hpp"
 
 
 struct MemAllocHeap;
@@ -49,6 +50,8 @@ struct BuildQueueConfig
     const Frozen::SharedResourceData *m_SharedResources;
     int m_SharedResourcesCount;
     int32_t m_AmountOfRuntimeNodesSpecificallyRequested;
+    HashTable<int, kFlagPathStrings> m_OutputsToDagNodes;
+    HashTable<int, kFlagPathStrings> m_OutputDirectoriesToDagNodes;
 };
 
 struct BuildQueue;

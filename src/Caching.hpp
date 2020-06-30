@@ -6,6 +6,7 @@ struct RuntimeNode;
 struct ThreadState;
 
 HashDigest ComputeLeafInputSignature(BuildQueueConfig* config, ThreadState* thread_state, const Frozen::DagNode* dagNode);
+bool IsFileGenerated(const Frozen::Dag* dag, const char* filename);
 
 namespace CacheMode
 {
