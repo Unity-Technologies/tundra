@@ -25,4 +25,23 @@ struct ScanOutput
     const FileAndHash *m_IncludedFiles;
 };
 
-bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput *output);
+// This callback will be called for any newly discovered (ie, not loaded from cache)
+// includes found during scanning. 
+// `includingFile` is the file which contains the include statement
+// `includedFile` is the file being included.
+// The callback returns a bool, which tells the scanner if it should ignore this included file.
+// If the callback returns true, the included file will be ignored, which means it will not be added
+// to the list of found includes, and it will not be traversed for further scanning.
+typedef bool IncludeCallbackFunc(void* userData, const char* includingFile, const char *includedFile);
+struct IncludeCallback
+{
+    void* userData;
+    IncludeCallbackFunc* callback;
+
+    bool Invoke(const char* includingFile, const char *includedFile)
+    {
+        return callback(userData, includingFile, includedFile);
+    }
+};
+
+bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput *output, IncludeCallback* includeCallback = nullptr);

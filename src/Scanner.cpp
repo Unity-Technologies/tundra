@@ -139,7 +139,7 @@ static void ScanFile(
     }
 }
 
-bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput *output)
+bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput *output, IncludeCallback* includeCallback)
 {
     MemAllocHeap *scratch_heap = input->m_ScratchHeap;
     MemAllocLinear *scratch_alloc = input->m_ScratchAlloc;
@@ -179,6 +179,8 @@ bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput 
 
             for (int i = 0; i < file_count; ++i)
             {
+                if (!(includeCallback && includeCallback->Invoke(fn, files[i].m_Filename)))
+                    continue;
                 if (IncludeSetAddNoDuplicateString(&incset, files[i].m_Filename, files[i].m_FilenameHash))
                 {
                     // This was a new file, schedule it for scanning as well.
@@ -233,6 +235,8 @@ bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput 
 
             for (const char *file : found_includes)
             {
+                if (!(includeCallback && includeCallback->Invoke(fn, file)))
+                    continue;
                 if (IncludeSetAddDuplicateString(&incset, file, Djb2HashPath(file)))
                 {
                     // This was a new file, schedule it for scanning as well.

@@ -305,6 +305,40 @@ static bool OutputFilesMissing(StatCache *stat_cache, RuntimeNode* node)
     return false;
 }
 
+static bool ValidateInclude(void* _userData, const char* includingFile, const char* includedFile)
+{
+    // If a file is generated, it may only include 
+    // -other generated files
+    // -files specifically allowed by `fileThatMightBeIncluded`
+
+    auto dagRuntime = (DagRuntimeData*)_userData;
+    const Frozen::DagNode* includingFileNode;
+    bool includingFileIsGenerated = FindDagNodeForFile(dagRuntime, Djb2HashPath(includingFile), includingFile, &includingFileNode);
+
+    // The including file is not generated. We don't care about its includes.
+    if (!includingFileIsGenerated)
+        return false;
+
+    // The included file is generated. This is allowed
+    if (IsFileGenerated(dagRuntime, Djb2HashPath(includedFile), includedFile))
+        return false;
+
+    // The included file is not generated. Check `includingFileNode->m_FilesThatMightBeIncluded`
+    // to see if it is allowed.
+    if (includingFileNode != nullptr)
+    {
+        for (auto& fileThatMightBeIncluded: includingFileNode->m_FilesThatMightBeIncluded)
+        {
+            if (strcasecmp(includedFile, fileThatMightBeIncluded.m_Filename.Get()) == 0)
+                return false;
+        }
+    }
+
+    // Not allowed. Print warning message.
+    printf("Illegal include %s -> %s\n", includingFile, includedFile);
+    return false;
+}
+
 static HashDigest CalculateInputSignature(BuildQueue* queue, ThreadState* thread_state, const Frozen::DagNode* dagnode)
 {
     ProfilerScope prof_scope("CheckInputSignature", thread_state->m_ProfilerThreadId, dagnode->m_Annotation);
@@ -367,7 +401,11 @@ static HashDigest CalculateInputSignature(BuildQueue* queue, ThreadState* thread
 
             ScanOutput scan_output;
 
-            if (ScanImplicitDeps(stat_cache, &scan_input, &scan_output))
+            IncludeCallback validateCallback;
+            validateCallback.userData = (void*)&queue->m_Config.m_DagRuntimeData;
+            validateCallback.callback = &ValidateInclude;            
+
+            if (ScanImplicitDeps(stat_cache, &scan_input, &scan_output, &validateCallback))
             {
                 for (int i = 0, count = scan_output.m_IncludedFileCount; i < count; ++i)
                 {

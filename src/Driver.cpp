@@ -849,6 +849,7 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count)
     queue_config.m_SharedResources = dag->m_SharedResources.GetArray();
     queue_config.m_SharedResourcesCount = dag->m_SharedResources.GetCount();
     queue_config.m_AmountOfRuntimeNodesSpecificallyRequested = self->m_AmountOfRuntimeNodesSpecificallyRequested;
+    DagRuntimeDataInit(&queue_config.m_DagRuntimeData, self->m_DagData, &self->m_Heap);    
 
     if (self->m_Options.m_Verbose)
     {
@@ -896,6 +897,8 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count)
     }
 
     *out_finished_node_count = build_queue.m_FinishedNodeCount;
+
+    DagRuntimeDataDestroy(&queue_config.m_DagRuntimeData);    
 
     // Shut down build queue
     BuildQueueDestroy(&build_queue);

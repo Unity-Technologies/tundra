@@ -737,31 +737,6 @@ struct BacklinkRec
     Buffer<int32_t> m_Links;
 };
 
-static bool IsGeneratedFile(const FrozenFileAndHash& inputFile, const HashSet<kFlagPathStrings>& outputFiles, const Buffer<const char*>& allOutputDirectories)
-{
-    if (HashSetLookup(&outputFiles, inputFile.m_FilenameHash, inputFile.m_Filename.Get()))
-        return true;
-
-    for (auto& d : allOutputDirectories)
-        if (0 == strncasecmp(inputFile.m_Filename.Get(), d, strlen(d)))
-            return true;
-
-    return false;
-}
-
-static void FindAllOutputDirectories(const Frozen::Dag* dag, MemAllocHeap* heap, Buffer<const char*>* output_buffer)
-{
-    int node_count = dag->m_NodeCount;
-    for (int32_t i = 0; i < node_count; ++i)
-    {
-        const Frozen::DagNode& node = dag->m_DagNodes[i];
-        for(auto& targetDir : node.m_OutputDirectories)
-            BufferAppendOne(output_buffer, heap, targetDir.m_Filename.Get());
-    }
-    for(auto& dir: dag->m_DirectoriesCausingImplicitDependencies)
-        BufferAppendOne(output_buffer, heap, dir.m_Filename.Get());
-}
-
 static void SortBufferOfFileAndHash(Buffer<FileAndHash>& buffer)
 {
     std::sort(buffer.begin(), buffer.end(), [](const FileAndHash& a, const FileAndHash& b) { return strcmp(a.m_Filename, b.m_Filename) < 0; });
@@ -789,20 +764,6 @@ bool CompileDagDerived(const Frozen::Dag* dag, MemAllocHeap* heap, MemAllocLinea
     int node_count = dag->m_NodeCount;
     BinarySegmentWriteUint32(main_seg, node_count);
 
-    Buffer<const char*> allOutputDirectories;
-    BufferInitWithCapacity(&allOutputDirectories, heap, 500);
-    FindAllOutputDirectories(dag, heap, &allOutputDirectories);
-
-
-    {  //Write AllOutputDirectories
-        BinarySegmentWriteUint32(main_seg, allOutputDirectories.m_Size);
-        BinarySegmentWritePointer(main_seg, BinarySegmentPosition(arraydata_seg));
-        for (auto& dir: allOutputDirectories)
-            WriteStringPtr(arraydata_seg, str_seg, dir);
-    }
-
-
-
     {   //write backlinks array of arrays
         BacklinkRec *links = HeapAllocateArrayZeroed<BacklinkRec>(heap, node_count);
         for (int32_t i = 0; i < node_count; ++i)
@@ -824,10 +785,8 @@ bool CompileDagDerived(const Frozen::Dag* dag, MemAllocHeap* heap, MemAllocLinea
         HeapFree(heap, links);
     }
 
-
-    HashSet<kFlagPathStrings> outputFiles;
-    HashSetInit(&outputFiles, heap);
-    FindAllOutputFiles(dag, outputFiles);
+    DagRuntimeData dagRuntimeData;
+    DagRuntimeDataInit(&dagRuntimeData, dag, heap);
 
     Buffer<int32_t> all_dependent_nodes;
     BufferInitWithCapacity(&all_dependent_nodes, heap, 1024);
@@ -877,7 +836,7 @@ bool CompileDagDerived(const Frozen::Dag* dag, MemAllocHeap* heap, MemAllocLinea
 
                 auto addToLeafInputs = [&](const FrozenFileAndHash& file)
                 {
-                    if (IsGeneratedFile(file, outputFiles, allOutputDirectories))
+                    if (IsFileGenerated(&dagRuntimeData, file.m_FilenameHash, file.m_Filename.Get()))
                         return;
 
                     if (!HashSetLookup(&leafInputsCollector, file.m_FilenameHash, file.m_Filename.Get()))
@@ -947,6 +906,7 @@ bool CompileDagDerived(const Frozen::Dag* dag, MemAllocHeap* heap, MemAllocLinea
         }
     }
 
+    DagRuntimeDataDestroy(&dagRuntimeData);
 
 
     {  //Write m_LeafInputHash_OffLine
@@ -965,13 +925,9 @@ bool CompileDagDerived(const Frozen::Dag* dag, MemAllocHeap* heap, MemAllocLinea
         }
     }
 
-
-    BufferDestroy(&allOutputDirectories, heap);
-
     BinarySegmentWriteUint32(main_seg, Frozen::DagDerived::MagicNumber);
     BufferDestroy(&all_dependent_nodes, heap);
     HashTableDestroy(&shared_strings);
-    HashSetDestroy(&outputFiles);
 
 
     bool result = BinaryWriterFlush(writer, dagderived_filename);

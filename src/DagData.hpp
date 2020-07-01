@@ -187,7 +187,6 @@ struct DagDerived
 
     uint32_t m_MagicNumber;
     uint32_t m_NodeCount;
-    FrozenArray<FrozenString> m_AllOutputDirectories;
 
     FrozenArray<FrozenArray<uint32_t>> m_NodeBacklinks;
     FrozenArray<FrozenArray<FrozenFileAndHash>> m_NodeLeafInputs;
@@ -199,6 +198,19 @@ struct DagDerived
 };
 
 }
+
+struct DagRuntimeData
+{
+    HashTable<int, kFlagPathStrings> m_OutputsToDagNodes;
+    HashTable<int, kFlagPathStrings> m_OutputDirectoriesToDagNodes;
+    const Frozen::Dag *m_Dag;
+};
+
+void DagRuntimeDataInit(DagRuntimeData* data, const Frozen::Dag* dag, MemAllocHeap *heap);
+void DagRuntimeDataDestroy(DagRuntimeData* data);
+
+bool FindDagNodeForFile(const DagRuntimeData* data, uint32_t filenameHash, const char* filename, const Frozen::DagNode **result);
+bool IsFileGenerated(const DagRuntimeData* data, uint32_t filenameHash, const char* filename);
 
 void FindDependentNodesFromRootIndex(MemAllocHeap* heap, const Frozen::Dag* dag, int32_t rootIndex, Buffer<int32_t>& results);
 void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* dag, int32_t* searchRootIndices, int32_t searchRootCount, Buffer<int32_t>& results);

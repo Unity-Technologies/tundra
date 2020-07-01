@@ -167,6 +167,7 @@ static void AdvanceNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
         HashDigest digest = ComputeLeafInputSignature(
             queue->m_Config.m_Dag,
             queue->m_Config.m_DagDerived,
+            &queue->m_Config.m_DagRuntimeData,
             node->m_DagNode,
             &thread_state->m_LocalHeap,
             &thread_state->m_ScratchAlloc,

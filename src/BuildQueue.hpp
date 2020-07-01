@@ -36,6 +36,7 @@ struct BuildQueueConfig
     const Frozen::Dag* m_Dag;
     const Frozen::DagNode *m_DagNodes;
     const Frozen::DagDerived* m_DagDerived;
+    DagRuntimeData m_DagRuntimeData;
     RuntimeNode *m_RuntimeNodes;
     int m_TotalRuntimeNodeCount;
     const int32_t *m_DagNodeIndexToRuntimeNodeIndex_Table;
