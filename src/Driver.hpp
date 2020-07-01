@@ -29,6 +29,7 @@ struct DriverOptions
     bool m_SilenceIfPossible;
     bool m_DontReusePreviousResults;
     bool m_DebugSigning;
+    bool m_JustPrintLeafInputSignature;
     bool m_ThrottleOnHumanActivity;
     int m_ThrottleInactivityPeriod;
     int m_ThrottledThreadsAmount;
@@ -106,6 +107,7 @@ void DriverRemoveStaleOutputs(Driver *self);
 void DriverCleanOutputs(Driver *self);
 
 BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count);
+void DriverSelectNodes(const Frozen::Dag *dag, const char **targets, int target_count, Buffer<int32_t> *out_nodes, MemAllocHeap *heap);
 
 bool DriverInitData(Driver *self);
 

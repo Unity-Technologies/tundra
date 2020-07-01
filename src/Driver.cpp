@@ -75,6 +75,7 @@ void DriverOptionsInit(DriverOptions *self)
     self->m_SilenceIfPossible = false;
     self->m_DontReusePreviousResults = false;
     self->m_DebugSigning = false;
+    self->m_JustPrintLeafInputSignature = false;
     self->m_ThrottleOnHumanActivity = false;
     self->m_ThrottleInactivityPeriod = 30;
     self->m_ThrottledThreadsAmount = 0;
@@ -664,7 +665,7 @@ static void FindNodesByName(
     }
 }
 
-static void DriverSelectNodes(const Frozen::Dag *dag, const char **targets, int target_count, Buffer<int32_t> *out_nodes, MemAllocHeap *heap)
+void DriverSelectNodes(const Frozen::Dag *dag, const char **targets, int target_count, Buffer<int32_t> *out_nodes, MemAllocHeap *heap)
 {
     if (target_count > 0)
     {

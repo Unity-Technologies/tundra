@@ -173,7 +173,8 @@ static void AdvanceNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
             thread_state->m_ProfilerThreadId,
             queue->m_Config.m_StatCache,
             queue->m_Config.m_DigestCache,
-            queue->m_Config.m_ScanCache);
+            queue->m_Config.m_ScanCache,
+            nullptr);
         DigestToString(tmp, digest);
         printf("LeafInputSignature for %s is %s\n", node->m_DagNode->m_Annotation.Get(), tmp);
     }
