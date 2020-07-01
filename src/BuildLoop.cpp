@@ -25,6 +25,7 @@
 #include "RunAction.hpp"
 #include "BuildQueue.hpp"
 #include "Driver.hpp"
+#include "LeafInputSignature.hpp"
 #include <stdarg.h>
 #include <algorithm>
 #include <stdio.h>
@@ -159,6 +160,23 @@ static void AdvanceNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
     CHECK(!node->m_Finished);
     CHECK(RuntimeNodeIsActive(node));
     CHECK(!RuntimeNodeIsQueued(node));
+
+    if (0 != (node->m_DagNode->m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs))
+    {
+        char tmp[kDigestStringSize];
+        HashDigest digest = ComputeLeafInputSignature(
+            queue->m_Config.m_Dag,
+            queue->m_Config.m_DagDerived,
+            node->m_DagNode,
+            &thread_state->m_LocalHeap,
+            &thread_state->m_ScratchAlloc,
+            thread_state->m_ProfilerThreadId,
+            queue->m_Config.m_StatCache,
+            queue->m_Config.m_DigestCache,
+            queue->m_Config.m_ScanCache);
+        DigestToString(tmp, digest);
+        printf("LeafInputSignature for %s is %s\n", node->m_DagNode->m_Annotation.Get(), tmp);
+    }
 
     if (!AllDependenciesAreFinished(queue,node))
     {

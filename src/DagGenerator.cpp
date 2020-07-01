@@ -417,7 +417,12 @@ static bool WriteNodes(
             flags |= Frozen::DagNode::kFlagIsWriteTextFileAction;
 
         BinarySegmentWriteUint32(node_data_seg, flags);
+
+        //write m_OriginalIndex
         BinarySegmentWriteUint32(node_data_seg, reverse_remap[ni]);
+
+        //write dagNodeIndex
+        BinarySegmentWriteUint32(node_data_seg, ni);
     }
 
     HeapFree(heap, reverse_remap);

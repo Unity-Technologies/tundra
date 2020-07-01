@@ -120,6 +120,7 @@ struct DagNode
     FrozenArray<DagGlobSignature> m_GlobSignatures;
     uint32_t m_Flags;
     uint32_t m_OriginalIndex;
+    uint32_t m_DagNodeIndex;
 };
 
 
