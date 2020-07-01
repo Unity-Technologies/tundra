@@ -2,6 +2,7 @@
 
 #include "Common.hpp"
 #include <cstring>
+#include <stdio.h>
 
 struct MemAllocLinear;
 
@@ -172,7 +173,8 @@ inline void HashAddString(HashState *self, const char *s)
 
 inline void HashAddString(FILE* debug_hash_fd, HashState* state, const char* label, const char* str)
 {
-    fprintf(debug_hash_fd, "%s: %s\n", label, str);
+    if (debug_hash_fd)
+        fprintf(debug_hash_fd, "%s: %s\n", label, str);
     HashAddString(state, str);
 }
 

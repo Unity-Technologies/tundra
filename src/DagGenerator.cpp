@@ -11,6 +11,7 @@
 #include "HashTable.hpp"
 #include "FileSign.hpp"
 #include "BuildQueue.hpp"
+#include "LeafInputSignature.hpp"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -766,6 +767,7 @@ static void SortBufferOfFileAndHash(Buffer<FileAndHash>& buffer)
     std::sort(buffer.begin(), buffer.end(), [](const FileAndHash& a, const FileAndHash& b) { return strcmp(a.m_Filename, b.m_Filename) < 0; });
 }
 
+
 bool CompileDagDerived(const Frozen::Dag* dag, MemAllocHeap* heap, MemAllocLinear* scratch, const char* dagderived_filename)
 {
     BinaryWriter _writer;
@@ -957,32 +959,7 @@ bool CompileDagDerived(const Frozen::Dag* dag, MemAllocHeap* heap, MemAllocLinea
             const Frozen::DagNode& node = dag->m_DagNodes[i];
             if (0 != (node.m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs))
             {
-                BufferClear(&all_dependent_nodes);
-                FindDependentNodesFromRootIndex(heap, dag, i, all_dependent_nodes);
-
-                HashState hashState;
-                HashInit(&hashState);
-
-                for(int32_t childNodeIndex : all_dependent_nodes)
-                {
-                    auto& dagNode = dag->m_DagNodes[childNodeIndex];
-                    HashAddString(&hashState, dagNode.m_Action.Get());
-
-                    for(auto& env: dagNode.m_EnvVars)
-                    {
-                        HashAddString(&hashState, env.m_Name);
-                        HashAddString(&hashState, env.m_Value);
-                    }
-                    for (auto& s: dagNode.m_AllowedOutputSubstrings)
-                        HashAddString(&hashState, s);
-                    for (auto& f: dagNode.m_OutputFiles)
-                        HashAddString(&hashState, f.m_Filename.Get());
-
-                    int relevantFlags = dagNode.m_Flags & ~Frozen::DagNode::kFlagCacheableByLeafInputs;
-                    if (relevantFlags != (Frozen::DagNode::kFlagOverwriteOutputs | Frozen::DagNode::kFlagAllowUnexpectedOutput))
-                        HashAddInteger(&hashState, relevantFlags);
-                }
-                HashFinalize(&hashState, &hashResult);
+                hashResult = CalculateLeafInputHashOffline(dag, i, heap, &all_dependent_nodes);
             }
             BinarySegmentWrite(data_seg, (const char *)&hashResult, sizeof(HashDigest));
         }

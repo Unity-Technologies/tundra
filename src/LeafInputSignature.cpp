@@ -80,26 +80,92 @@ HashDigest ComputeLeafInputSignature(const Frozen::Dag* dag, const Frozen::DagDe
     return result;
 }
 
+//This function calculates the offline part of the signature, which we store in the dag-derived file
+static HashDigest CalculateLeafInputHashOffline(const Frozen::Dag* dag, int32_t nodeIndex, MemAllocHeap* heap, Buffer<int32_t>* preAllocatedWorkBuffer, FILE* ingredient_stream)
+{
+    HashDigest hashResult = {0};
+
+    Buffer<int32_t> ownBuffer;
+    if (preAllocatedWorkBuffer == nullptr)
+        BufferInit(&ownBuffer);
+
+    Buffer<int32_t>& all_dependent_nodes = preAllocatedWorkBuffer == nullptr ? ownBuffer : *preAllocatedWorkBuffer;
+
+    const Frozen::DagNode& node = dag->m_DagNodes[nodeIndex];
+
+    if (preAllocatedWorkBuffer)
+        BufferClear(preAllocatedWorkBuffer);
+
+    FindDependentNodesFromRootIndex(heap, dag, nodeIndex, all_dependent_nodes);
+
+    HashState hashState;
+    HashInit(&hashState);
+
+    for(int32_t childNodeIndex : all_dependent_nodes)
+    {
+        auto& dagNode = dag->m_DagNodes[childNodeIndex];
+
+        if (ingredient_stream)
+            fprintf(ingredient_stream, "\nannotation: %s\n", dagNode.m_Annotation.Get());
+
+        HashAddString(ingredient_stream, &hashState, "action", dagNode.m_Action.Get());
+
+        for(auto& env: dagNode.m_EnvVars)
+        {
+            HashAddString(ingredient_stream, &hashState, "env_name", env.m_Name);
+            HashAddString(ingredient_stream, &hashState, "env_value", env.m_Value);
+        }
+        for (auto& s: dagNode.m_AllowedOutputSubstrings)
+            HashAddString(ingredient_stream, &hashState, "allowed_outputstring", s);
+        for (auto& f: dagNode.m_OutputFiles)
+            HashAddString(ingredient_stream, &hashState, "output", f.m_Filename.Get());
+
+        int relevantFlags = dagNode.m_Flags & ~Frozen::DagNode::kFlagCacheableByLeafInputs;
+        if (relevantFlags != (Frozen::DagNode::kFlagOverwriteOutputs | Frozen::DagNode::kFlagAllowUnexpectedOutput))
+            HashAddInteger(ingredient_stream, &hashState, "flags", relevantFlags);
+    }
+    HashFinalize(&hashState, &hashResult);
+
+    if (preAllocatedWorkBuffer == nullptr)
+        BufferDestroy(&ownBuffer, heap);
+    return hashResult;
+};
+
+static HashDigest CalculateLeafInputHashOfflineWithIngredientStream(const Frozen::Dag* dag, int32_t nodeIndex, MemAllocHeap* heap, FILE* ingredient_stream)
+{
+    return CalculateLeafInputHashOffline(dag, nodeIndex, heap, nullptr, ingredient_stream);
+}
+
+HashDigest CalculateLeafInputHashOffline(const Frozen::Dag* dag, int32_t nodeIndex, MemAllocHeap* heap, Buffer<int32_t>* preAllocatedBuffer)
+{
+    return CalculateLeafInputHashOffline(dag, nodeIndex, heap, preAllocatedBuffer, nullptr);
+}
 
 
 void PrintLeafInputSignature(Driver* driver, const char **argv, int argc)
 {
     Buffer<int32_t> requestedNodes;
     BufferInit(&requestedNodes);
-    DriverSelectNodes(driver->m_DagData, argv, argc, &requestedNodes, &driver->m_Heap);
+    const Frozen::Dag* dag = driver->m_DagData;
+
+    DriverSelectNodes(dag, argv, argc, &requestedNodes, &driver->m_Heap);
     if (requestedNodes.m_Size == 0)
         Croak("Cannot find requested target");
     if (requestedNodes.m_Size > 1)
         Croak("You can only print the leaf input signature for a single node, but %d are requested", requestedNodes.m_Size);
 
     int32_t requestedNode = requestedNodes[0];
-    const Frozen::DagNode& dagNode = driver->m_DagData->m_DagNodes[requestedNode];
-    const Frozen::DagNode& dummyDagNode = driver->m_DagData->m_DagNodes[123];
+    const Frozen::DagNode& dagNode = dag->m_DagNodes[requestedNode];
 
     if (0 == (dagNode.m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs))
     {
         Croak("Requested node %s is not cacheable by leaf inputs\n", dagNode.m_Annotation.Get());
     }
+
+    printf("OffLine ingredients to the leaf input hash\n");
+    CalculateLeafInputHashOfflineWithIngredientStream(dag, requestedNode, &driver->m_Heap, stdout);
+
+    printf("\n\n\nRuntime ingredients to the leaf input hash\n");
     MemAllocLinear scratch;
     LinearAllocInit(&scratch, &driver->m_Heap, MB(16), "PrintLeafInputSignature");
     ComputeLeafInputSignature(
