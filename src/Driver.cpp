@@ -30,25 +30,6 @@
 #include <sstream>
 #include "stdarg.h"
 
-#if ENABLED(TUNDRA_CASE_INSENSITIVE_FILESYSTEM)
-#if defined(_MSC_VER) || defined(TUNDRA_WIN32_MINGW)
-#define PathCompareN _strnicmp
-#define PathCompare _stricmp
-#else
-#define PathCompareN strncasecmp
-#define PathCompare strcasecmp
-#endif
-#else
-#define PathCompareN strncmp
-#define PathCompare strcmp
-#endif
-
-#if defined(TUNDRA_WIN32)
-#define strncasecmp _strnicmp
-#endif
-
-
-
 TundraStats g_Stats;
 
 static const char *s_BuildFile;
@@ -849,7 +830,7 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count)
     queue_config.m_SharedResources = dag->m_SharedResources.GetArray();
     queue_config.m_SharedResourcesCount = dag->m_SharedResources.GetCount();
     queue_config.m_AmountOfRuntimeNodesSpecificallyRequested = self->m_AmountOfRuntimeNodesSpecificallyRequested;
-    DagRuntimeDataInit(&queue_config.m_DagRuntimeData, self->m_DagData, &self->m_Heap);    
+    DagRuntimeDataInit(&queue_config.m_DagRuntimeData, self->m_DagData, &self->m_Heap);
 
     if (self->m_Options.m_Verbose)
     {
@@ -898,7 +879,7 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count)
 
     *out_finished_node_count = build_queue.m_FinishedNodeCount;
 
-    DagRuntimeDataDestroy(&queue_config.m_DagRuntimeData);    
+    DagRuntimeDataDestroy(&queue_config.m_DagRuntimeData);
 
     // Shut down build queue
     BuildQueueDestroy(&build_queue);

@@ -307,7 +307,7 @@ static bool OutputFilesMissing(StatCache *stat_cache, RuntimeNode* node)
 
 static bool ValidateInclude(void* _userData, const char* includingFile, const char* includedFile)
 {
-    // If a file is generated, it may only include 
+    // If a file is generated, it may only include
     // -other generated files
     // -files specifically allowed by `fileThatMightBeIncluded`
 
@@ -329,7 +329,7 @@ static bool ValidateInclude(void* _userData, const char* includingFile, const ch
     {
         for (auto& fileThatMightBeIncluded: includingFileNode->m_FilesThatMightBeIncluded)
         {
-            if (strcasecmp(includedFile, fileThatMightBeIncluded.m_Filename.Get()) == 0)
+            if (PathCompare(includedFile, fileThatMightBeIncluded.m_Filename.Get()) == 0)
                 return false;
         }
     }
@@ -403,7 +403,7 @@ static HashDigest CalculateInputSignature(BuildQueue* queue, ThreadState* thread
 
             IncludeCallback validateCallback;
             validateCallback.userData = (void*)&queue->m_Config.m_DagRuntimeData;
-            validateCallback.callback = &ValidateInclude;            
+            validateCallback.callback = &ValidateInclude;
 
             if (ScanImplicitDeps(stat_cache, &scan_input, &scan_output, &validateCallback))
             {
