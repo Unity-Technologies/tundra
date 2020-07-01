@@ -459,7 +459,6 @@ int main(int argc, char *argv[])
     if (driver.m_Options.m_JustPrintLeafInputSignature)
     {
         PrintLeafInputSignature(&driver, (const char **)argv, argc);
-        printf("This is the leaf input signature!\n");
         build_result = BuildResult::kOk;
         goto leave;
     }

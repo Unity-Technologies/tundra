@@ -168,6 +168,17 @@ bool HashSetLookup(const HashSet<kFlags> *self, uint32_t hash, const char *strin
     return -1 != index;
 }
 
+template <uint32_t kFlags>
+bool HashSetInsertIfNotPresent(HashSet<kFlags> *self, uint32_t hash, const char *string)
+{
+    if (HashSetLookup(self, hash, string))
+        return false;
+
+    HashSetInsert(self, hash, string);
+    return true;
+}
+
+
 template <typename T, uint32_t kFlags>
 void HashTableGrow(HashTable<T, kFlags> *self)
 {

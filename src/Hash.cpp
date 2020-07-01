@@ -85,7 +85,8 @@ void HashAddInteger(HashState *self, uint64_t value)
 
 void HashAddInteger(FILE* debug_hash_fd, HashState* state, const char* label, int payload)
 {
-    fprintf(debug_hash_fd, "%s: %d\n", label, payload);
+    if (debug_hash_fd)
+        fprintf(debug_hash_fd, "%s: %d\n", label, payload);
     HashAddInteger(state, payload);
 }
 

@@ -8,9 +8,10 @@
 #include "Scanner.hpp"
 #include "Driver.hpp"
 
-static bool IgnoreGeneratedIncludes(void* _userData, const char* includingFile, const char* includedFile)
+static bool FilterOutGeneratedIncludedFiles(void* _userData, const char* includingFile, const char* includedFile)
 {
-    return IsFileGenerated((DagRuntimeData*)_userData, Djb2HashPath(includedFile), includedFile);  
+    //return true if we want to process the file, false if we want it to be skipped
+    return !IsFileGenerated((DagRuntimeData*)_userData, Djb2HashPath(includedFile), includedFile);
 }
 
 HashDigest ComputeLeafInputSignature(const Frozen::Dag* dag, const Frozen::DagDerived* dagDerived, const DagRuntimeData *dagRuntime, const Frozen::DagNode* dagNode, MemAllocHeap* heap, MemAllocLinear* scratch, int profilerThreadId, StatCache* stat_cache, DigestCache* digest_cache, ScanCache* scan_cache, FILE* ingredient_stream)
@@ -33,9 +34,9 @@ HashDigest ComputeLeafInputSignature(const Frozen::Dag* dag, const Frozen::DagDe
     scanInput.m_ScratchAlloc = scratch;
     scanInput.m_ScratchHeap = heap;
 
-    IncludeCallback ignoreCallback;
+    IncludeFilterCallback ignoreCallback;
     ignoreCallback.userData = (void*)dagRuntime;
-    ignoreCallback.callback = IgnoreGeneratedIncludes;
+    ignoreCallback.callback = FilterOutGeneratedIncludedFiles;
 
     for (const Frozen::ScannerIndexWithListOfFiles& scannerIndexWithListOfFiles : dagDerived->m_Nodes_to_ScannersWithListsOfFiles[dagNode->m_DagNodeIndex])
     {
@@ -65,13 +66,13 @@ HashDigest ComputeLeafInputSignature(const Frozen::Dag* dag, const Frozen::DagDe
 
         if (ingredient_stream)
         {
-            char temp[kDigestStringSize];
-            DigestToString(temp, digest);
+            char digestString[kDigestStringSize];
+            DigestToString(digestString, digest);
             char buffer[1000];
             strncpy(buffer, filename, sizeof(buffer));
             char*p = buffer;
             for ( ; *p; ++p) *p = tolower(*p);
-            fprintf(ingredient_stream, "%s: %s %s\n", label, temp, buffer);
+            fprintf(ingredient_stream, "%s: %s %s\n", label, digestString, buffer);
         }
         HashAddPath(&hashState, filename);
         HashUpdate(&hashState, &digest, sizeof(digest));

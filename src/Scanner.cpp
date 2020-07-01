@@ -139,8 +139,15 @@ static void ScanFile(
     }
 }
 
-bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput *output, IncludeCallback* includeCallback)
+bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput *output, IncludeFilterCallback* includeFilterCallback)
 {
+    auto invokeFilterCallback = [includeFilterCallback](const char* includingFile, const char* includedFile) -> bool
+    {
+        if (includeFilterCallback == nullptr)
+            return true;
+        return includeFilterCallback->Invoke(includingFile, includedFile);
+    };
+
     MemAllocHeap *scratch_heap = input->m_ScratchHeap;
     MemAllocLinear *scratch_alloc = input->m_ScratchAlloc;
     const Frozen::ScannerData *scanner_config = input->m_ScannerConfig;
@@ -179,12 +186,14 @@ bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput 
 
             for (int i = 0; i < file_count; ++i)
             {
-                if (!(includeCallback && includeCallback->Invoke(fn, files[i].m_Filename)))
-                    continue;
-                if (IncludeSetAddNoDuplicateString(&incset, files[i].m_Filename, files[i].m_FilenameHash))
+                //if filter returns true we will process it
+                if (invokeFilterCallback(fn, files[i].m_Filename))
                 {
-                    // This was a new file, schedule it for scanning as well.
-                    BufferAppendOne(&filename_stack, scratch_heap, files[i].m_Filename);
+                    if (IncludeSetAddNoDuplicateString(&incset, files[i].m_Filename, files[i].m_FilenameHash))
+                    {
+                        // This was a new file, schedule it for scanning as well.
+                        BufferAppendOne(&filename_stack, scratch_heap, files[i].m_Filename);
+                    }
                 }
             }
         }
@@ -235,12 +244,13 @@ bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput 
 
             for (const char *file : found_includes)
             {
-                if (!(includeCallback && includeCallback->Invoke(fn, file)))
-                    continue;
-                if (IncludeSetAddDuplicateString(&incset, file, Djb2HashPath(file)))
+                if (invokeFilterCallback(fn, file))
                 {
-                    // This was a new file, schedule it for scanning as well.
-                    BufferAppendOne(&filename_stack, scratch_heap, file);
+                    if (IncludeSetAddDuplicateString(&incset, file, Djb2HashPath(file)))
+                    {
+                        // This was a new file, schedule it for scanning as well.
+                        BufferAppendOne(&filename_stack, scratch_heap, file);
+                    }
                 }
             }
 
