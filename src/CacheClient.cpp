@@ -59,7 +59,7 @@ static bool Invoke_REAPI_Cache_Client(const HashDigest& digest, StatCache *stat_
     DigestToString(digestString, digest);
 
     const char* cmd = operation == kOperationRead ? "down" : "up";
-    totalWritten += snprintf(buffer, sizeof(buffer), "%s %s %s00000000000000000000000000000001", reapi, cmd, digestString);
+    totalWritten += snprintf(buffer, sizeof(buffer), "%s %s %s00000000000000000000000000000002", reapi, cmd, digestString);
 
     for (auto &it : outputFiles)
     {
@@ -76,7 +76,7 @@ static bool Invoke_REAPI_Cache_Client(const HashDigest& digest, StatCache *stat_
     slowCallbackData.build_queue = thread_state->m_Queue;
 
     Log(kDebug,"%s\n",buffer);
-    ExecResult result = ExecuteProcess(buffer, 0, nullptr, nullptr, thread_state->m_ThreadIndex, true, operation == kOperationRead ? SlowCallback_CacheRead : SlowCallback_CacheWrite , &slowCallbackData);
+    ExecResult result = ExecuteProcess(buffer, 0, nullptr, nullptr, thread_state->m_ThreadIndex, false, operation == kOperationRead ? SlowCallback_CacheRead : SlowCallback_CacheWrite , &slowCallbackData);
 
     if (operation == Operation::kOperationRead)
         for (auto &it : outputFiles)

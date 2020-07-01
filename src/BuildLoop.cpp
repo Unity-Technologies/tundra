@@ -190,7 +190,9 @@ static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, M
         uint64_t now = TimerGet();
         double duration = TimerDiffSeconds(time_exec_started, now);
 
+        MutexLock(&queue->m_Lock);
         PrintMessage(success ? MessageStatusLevel::Success : MessageStatusLevel::Warning, duration, "%s [CacheWrite]", node->m_DagNode->m_Annotation.Get());
+        MutexUnlock(&queue->m_Lock);
     }
 
     return runActionResult;

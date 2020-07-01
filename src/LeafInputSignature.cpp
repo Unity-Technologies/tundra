@@ -21,6 +21,8 @@ HashDigest ComputeLeafInputSignature(const Frozen::Dag* dag, const Frozen::DagDe
     HashState hashState;
     HashInit(&hashState);
 
+    HashUpdate(&hashState, &dagDerived->m_LeafInputHash_Offline, sizeof(HashDigest));
+
     const FrozenArray<FrozenFileAndHash>& leafInputs = dagDerived->m_NodeLeafInputs[dagNode->m_DagNodeIndex];
 
     HashSet<kFlagPathStrings> explicitLeafInputs, implicitLeafInputs;
