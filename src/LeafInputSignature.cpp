@@ -83,15 +83,13 @@ HashDigest ComputeLeafInputSignature(const Frozen::Dag* dag, const Frozen::DagDe
 //This function calculates the offline part of the signature, which we store in the dag-derived file
 static HashDigest CalculateLeafInputHashOffline(const Frozen::Dag* dag, int32_t nodeIndex, MemAllocHeap* heap, Buffer<int32_t>* preAllocatedWorkBuffer, FILE* ingredient_stream)
 {
-    HashDigest hashResult = {0};
+    HashDigest hashResult = {};
 
     Buffer<int32_t> ownBuffer;
     if (preAllocatedWorkBuffer == nullptr)
         BufferInit(&ownBuffer);
 
     Buffer<int32_t>& all_dependent_nodes = preAllocatedWorkBuffer == nullptr ? ownBuffer : *preAllocatedWorkBuffer;
-
-    const Frozen::DagNode& node = dag->m_DagNodes[nodeIndex];
 
     if (preAllocatedWorkBuffer)
         BufferClear(preAllocatedWorkBuffer);

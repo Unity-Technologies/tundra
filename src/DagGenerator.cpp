@@ -743,7 +743,7 @@ static bool IsGeneratedFile(const FrozenFileAndHash& inputFile, const HashSet<kF
         return true;
 
     for (auto& d : allOutputDirectories)
-        if (0 == strnicmp(inputFile.m_Filename.Get(), d, strlen(d)))
+        if (0 == strncasecmp(inputFile.m_Filename.Get(), d, strlen(d)))
             return true;
 
     return false;
@@ -954,7 +954,7 @@ bool CompileDagDerived(const Frozen::Dag* dag, MemAllocHeap* heap, MemAllocLinea
         BinarySegmentWritePointer(main_seg, BinarySegmentPosition(data_seg));
         for (int32_t i = 0; i < node_count; ++i)
         {
-            HashDigest hashResult = {0};
+            HashDigest hashResult = {};
 
             const Frozen::DagNode& node = dag->m_DagNodes[i];
             if (0 != (node.m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs))
