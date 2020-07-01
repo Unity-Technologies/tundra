@@ -5,6 +5,7 @@
 #include "Common.hpp"
 #include "DagData.hpp"
 #include "DagGenerator.hpp"
+#include "DagDerivedCompiler.hpp"
 #include "FileInfo.hpp"
 #include "MemAllocLinear.hpp"
 #include "MemoryMappedFile.hpp"

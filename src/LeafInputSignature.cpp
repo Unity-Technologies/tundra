@@ -91,18 +91,12 @@ HashDigest ComputeLeafInputSignature(const Frozen::Dag* dag, const Frozen::DagDe
 }
 
 //This function calculates the offline part of the signature, which we store in the dag-derived file
-static HashDigest CalculateLeafInputHashOffline(const Frozen::Dag* dag, int32_t nodeIndex, MemAllocHeap* heap, Buffer<int32_t>* preAllocatedWorkBuffer, FILE* ingredient_stream)
+static HashDigest CalculateLeafInputHashOffline(const Frozen::Dag* dag, int32_t nodeIndex, MemAllocHeap* heap, FILE* ingredient_stream)
 {
     HashDigest hashResult = {};
 
-    Buffer<int32_t> ownBuffer;
-    if (preAllocatedWorkBuffer == nullptr)
-        BufferInit(&ownBuffer);
-
-    Buffer<int32_t>& all_dependent_nodes = preAllocatedWorkBuffer == nullptr ? ownBuffer : *preAllocatedWorkBuffer;
-
-    if (preAllocatedWorkBuffer)
-        BufferClear(preAllocatedWorkBuffer);
+    Buffer<int32_t> all_dependent_nodes;
+    BufferInit(&all_dependent_nodes);
 
     FindDependentNodesFromRootIndex(heap, dag, nodeIndex, all_dependent_nodes);
 
@@ -134,19 +128,18 @@ static HashDigest CalculateLeafInputHashOffline(const Frozen::Dag* dag, int32_t 
     }
     HashFinalize(&hashState, &hashResult);
 
-    if (preAllocatedWorkBuffer == nullptr)
-        BufferDestroy(&ownBuffer, heap);
+    BufferDestroy(&all_dependent_nodes, heap);
     return hashResult;
 };
 
 static HashDigest CalculateLeafInputHashOfflineWithIngredientStream(const Frozen::Dag* dag, int32_t nodeIndex, MemAllocHeap* heap, FILE* ingredient_stream)
 {
-    return CalculateLeafInputHashOffline(dag, nodeIndex, heap, nullptr, ingredient_stream);
+    return CalculateLeafInputHashOffline(dag, nodeIndex, heap, ingredient_stream);
 }
 
-HashDigest CalculateLeafInputHashOffline(const Frozen::Dag* dag, int32_t nodeIndex, MemAllocHeap* heap, Buffer<int32_t>* preAllocatedBuffer)
+HashDigest CalculateLeafInputHashOffline(const Frozen::Dag* dag, int32_t nodeIndex, MemAllocHeap* heap)
 {
-    return CalculateLeafInputHashOffline(dag, nodeIndex, heap, preAllocatedBuffer, nullptr);
+    return CalculateLeafInputHashOffline(dag, nodeIndex, heap, nullptr);
 }
 
 

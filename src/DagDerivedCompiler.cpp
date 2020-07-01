@@ -1,0 +1,301 @@
+#include "DagGenerator.hpp"
+#include "Hash.hpp"
+#include "PathUtil.hpp"
+#include "Exec.hpp"
+#include "FileInfo.hpp"
+#include "MemAllocHeap.hpp"
+#include "MemAllocLinear.hpp"
+#include "JsonParse.hpp"
+#include "BinaryWriter.hpp"
+#include "DagData.hpp"
+#include "HashTable.hpp"
+#include "FileSign.hpp"
+#include "BuildQueue.hpp"
+#include "LeafInputSignature.hpp"
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <stdarg.h>
+#include <algorithm>
+
+static void SortBufferOfFileAndHash(Buffer<FileAndHash>& buffer)
+{
+    std::sort(buffer.begin(), buffer.end(), [](const FileAndHash& a, const FileAndHash& b) { return strcmp(a.m_Filename, b.m_Filename) < 0; });
+}
+
+struct CompileDagDerivedWorker
+{
+    BinaryWriter _writer;
+    BinaryWriter* writer;
+    HashTable<CommonStringRecord, kFlagCaseSensitive> shared_strings;
+
+    BinarySegment *main_seg;
+    BinarySegment *data_seg;
+    BinarySegment *arraydata_seg;
+    BinarySegment *arraydata2_seg;
+    BinarySegment *leafnodearray_seg;
+    BinarySegment *scannerindex_seg;
+    BinarySegment *str_seg;
+
+    DagRuntimeData dagRuntimeData;
+    const Frozen::Dag* dag;
+    MemAllocHeap*  heap;
+    MemAllocLinear* scratch;
+    int node_count;
+
+    void WriteFrozenArrayOfBackLinks()
+    {
+        Buffer<int32_t> *links = HeapAllocateArrayZeroed<Buffer<int32_t>>(heap, node_count);
+        for (int32_t i = 0; i < node_count; ++i)
+        {
+            for(int dep : dag->m_DagNodes[i].m_Dependencies)
+            BufferAppendOne(&links[dep], heap, i);
+        }
+        BinarySegmentWriteUint32(main_seg, node_count);
+        BinarySegmentWritePointer(main_seg, BinarySegmentPosition(data_seg));
+        for (int32_t i = 0; i < node_count; ++i)
+        {
+            BinarySegmentWriteInt32(data_seg, links[i].m_Size);
+            BinarySegmentWritePointer(data_seg, BinarySegmentPosition(arraydata_seg));
+            for(int32_t backLink : links[i])
+                BinarySegmentWriteInt32(arraydata_seg, backLink);
+        }
+        for (size_t i = 0; i < node_count; ++i)
+            BufferDestroy(&links[i], heap);
+        HeapFree(heap, links);
+    }
+
+    struct ScannerIndexWithListOfFiles
+    {
+        int32_t m_ScannerIndex;
+        Buffer<FileAndHash> m_FilesToScan;
+    };
+
+    struct PerNodeWorkerData
+    {
+        Buffer<FileAndHash> leafInputBuffer;
+        HashSet<kFlagPathStrings> m_AlreadyProcessedFiles;
+        Buffer<ScannerIndexWithListOfFiles> scannersWithListsOfFiles;
+        Buffer<int32_t> all_dependent_nodes;
+        const Frozen::DagNode* dagNode;
+    };
+
+    void PerNodeWorkerDataInit(PerNodeWorkerData* data)
+    {
+        BufferInit(&data->scannersWithListsOfFiles);
+        BufferInit(&data->leafInputBuffer);
+        BufferInit(&data->all_dependent_nodes);
+        HashSetInit(&data->m_AlreadyProcessedFiles, heap);
+    }
+
+    void PerNodeWorkerDataDestroy(PerNodeWorkerData* data)
+    {
+        BufferDestroy(&data->scannersWithListsOfFiles, heap);
+        BufferDestroy(&data->leafInputBuffer, heap);
+        BufferDestroy(&data->all_dependent_nodes, heap);
+        HashSetDestroy(&data->m_AlreadyProcessedFiles);
+    }
+
+    PerNodeWorkerData m_PerNodeWorkerData;
+
+    void PerNode_ProcessDiscoveredExplicitLeafInput(const FrozenFileAndHash& file, const Frozen::DagNode& childDagNode)
+    {
+        const Frozen::DagNode* fileGeneratingNode;
+        if (FindDagNodeForFile(&dagRuntimeData, file.m_FilenameHash, file.m_Filename.Get(), &fileGeneratingNode))
+        {
+            //ok, so this means it's a generated file.  we do not recurse into those, but we will add their FilesThatMightBeIncluded
+
+            if (fileGeneratingNode == nullptr)
+            {
+                //this can happen if we do know a file is generated, but we do not know which node made it. Only happens with DirectoriesCreatingImplicitDependencies,
+                //which we should remove.
+                return;
+            }
+
+            for(auto& f: fileGeneratingNode->m_FilesThatMightBeIncluded)
+                PerNode_ProcessDiscoveredExplicitLeafInput(f, *fileGeneratingNode);
+
+            return;
+        }
+
+        //ok, not a generated file, so this is a leaf input.
+
+        //maybe we already processed this one before?
+        if (!HashSetInsertIfNotPresent(&m_PerNodeWorkerData.m_AlreadyProcessedFiles, file.m_FilenameHash, file.m_Filename.Get()))
+        {
+            //yeah we did, we're done here.
+            return;
+        }
+
+        //so we will add the file to our list of found leaf input files.
+        FileAndHash leafInputFile;
+        leafInputFile.m_Filename = file.m_Filename.Get();
+        leafInputFile.m_FilenameHash = file.m_FilenameHash;
+        BufferAppendOne(&m_PerNodeWorkerData.leafInputBuffer, heap, leafInputFile);
+
+        //and if it doesn't have a scanner we are done here.
+        if (childDagNode.m_ScannerIndex == -1)
+            return;
+
+        //if it does have a scanner, we need to make this sure this file will get scanned with its scanner as part of runtime leaf input signature creation.
+        auto findOrMakeScannerWithListOfFilesFor = [&](int scannerIndex) -> ScannerIndexWithListOfFiles*
+        {
+            for (auto& s: m_PerNodeWorkerData.scannersWithListsOfFiles)
+                if (s.m_ScannerIndex == scannerIndex)
+                    return &s;
+            ScannerIndexWithListOfFiles* newEntry = BufferAlloc(&m_PerNodeWorkerData.scannersWithListsOfFiles, heap, 1);
+            newEntry->m_ScannerIndex = scannerIndex;
+            BufferInit(&newEntry->m_FilesToScan);
+            return newEntry;
+        };
+
+        //for each cacheable node, we keep a list of ScannerIndexWithListOfFiles. Let's see if there is already an entry for our scanner. if there isn't we make one.
+        ScannerIndexWithListOfFiles* scannerIndexWithListsOfFiles = findOrMakeScannerWithListOfFilesFor(childDagNode.m_ScannerIndex);
+
+        //and add this file to the list for that scanner.
+        BufferAppendOne(&scannerIndexWithListsOfFiles->m_FilesToScan, heap, leafInputFile);
+    }
+
+    void WriteLeafInputsAndScannerIndicesToFilesToScan_ForSingleNode(int nodeIndex)
+    {
+        const Frozen::DagNode& node = dag->m_DagNodes[nodeIndex];
+        if (0 == (node.m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs))
+        {
+            BinarySegmentWriteInt32(leafnodearray_seg, 0);
+            BinarySegmentWriteNullPointer(leafnodearray_seg);
+
+            BinarySegmentWriteInt32(scannerindex_seg, 0);
+            BinarySegmentWriteNullPointer(scannerindex_seg);
+            return;
+        }
+
+        PerNodeWorkerDataInit(&m_PerNodeWorkerData);
+
+        FindDependentNodesFromRootIndex(heap, dag, nodeIndex, m_PerNodeWorkerData.all_dependent_nodes);
+
+        for(int32_t childNodeIndex : m_PerNodeWorkerData.all_dependent_nodes)
+        {
+            const Frozen::DagNode& childDagNode = dag->m_DagNodes[childNodeIndex];
+
+            for (auto& inputFile: childDagNode.m_InputFiles)
+                PerNode_ProcessDiscoveredExplicitLeafInput(inputFile, childDagNode);
+            for (auto& fileThatMightBeIncluded: childDagNode.m_FilesThatMightBeIncluded)
+                PerNode_ProcessDiscoveredExplicitLeafInput(fileThatMightBeIncluded, childDagNode);
+        }
+
+        auto& leafInputBuffer = m_PerNodeWorkerData.leafInputBuffer;
+        SortBufferOfFileAndHash(leafInputBuffer);
+
+        BinarySegmentWriteInt32(leafnodearray_seg, leafInputBuffer.m_Size);
+        BinarySegmentWritePointer(leafnodearray_seg, BinarySegmentPosition(arraydata_seg));
+        for(const FileAndHash& leafInput: leafInputBuffer)
+        {
+            WriteCommonStringPtr(arraydata_seg, str_seg, leafInput.m_Filename, &shared_strings, scratch);
+            BinarySegmentWriteInt32(arraydata_seg, leafInput.m_FilenameHash);
+        }
+
+        BinarySegmentWriteInt32(scannerindex_seg, m_PerNodeWorkerData.scannersWithListsOfFiles.m_Size);
+        BinarySegmentWritePointer(scannerindex_seg, BinarySegmentPosition(arraydata_seg));
+        for(ScannerIndexWithListOfFiles& scannerIndexWithListOfFiles: m_PerNodeWorkerData.scannersWithListsOfFiles)
+        {
+            BinarySegmentWriteInt32(arraydata_seg, scannerIndexWithListOfFiles.m_ScannerIndex);
+            BinarySegmentWriteInt32(arraydata_seg, scannerIndexWithListOfFiles.m_FilesToScan.m_Size);
+            BinarySegmentWritePointer(arraydata_seg, BinarySegmentPosition(arraydata2_seg));
+
+            SortBufferOfFileAndHash(scannerIndexWithListOfFiles.m_FilesToScan);
+            for(const FileAndHash& fileForScanner: scannerIndexWithListOfFiles.m_FilesToScan)
+            {
+                WriteCommonStringPtr(arraydata2_seg, str_seg, fileForScanner.m_Filename, &shared_strings, scratch);
+                BinarySegmentWriteInt32(arraydata2_seg, fileForScanner.m_FilenameHash);
+            }
+            BufferDestroy(&scannerIndexWithListOfFiles.m_FilesToScan, heap);
+        }
+
+        PerNodeWorkerDataDestroy(&m_PerNodeWorkerData);
+    }
+
+
+    void WriteLeafInputsAndScannerIndicesToFilesToScan()
+    {
+        DagRuntimeDataInit(&dagRuntimeData, dag, heap);
+
+        //This function writes two arrays in parallel. we first write the headers for both, and make sure to
+        //make sure to use two different payload segments:
+
+        //Write LeafInputs array header
+        BinarySegmentWriteUint32(main_seg, node_count);
+        BinarySegmentWritePointer(main_seg, BinarySegmentPosition(leafnodearray_seg));
+
+        //Write m_ScannerIndices_To_Files_To_Scan header
+        BinarySegmentWriteUint32(main_seg, node_count);
+        BinarySegmentWritePointer(main_seg, BinarySegmentPosition(scannerindex_seg));
+
+        for (int32_t nodeIndex = 0; nodeIndex < node_count; ++nodeIndex)
+        {
+            WriteLeafInputsAndScannerIndicesToFilesToScan_ForSingleNode(nodeIndex);
+        }
+
+        DagRuntimeDataDestroy(&dagRuntimeData);
+    }
+
+    void WriteLeafInputHashOffline()
+    {
+        BinarySegmentWriteUint32(main_seg, node_count);
+        BinarySegmentWritePointer(main_seg, BinarySegmentPosition(data_seg));
+        for (int32_t i = 0; i < node_count; ++i)
+        {
+            HashDigest hashResult = {};
+
+            const Frozen::DagNode& node = dag->m_DagNodes[i];
+            if (0 != (node.m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs))
+            {
+                hashResult = CalculateLeafInputHashOffline(dag, i, heap);
+            }
+            BinarySegmentWrite(data_seg, (const char *)&hashResult, sizeof(HashDigest));
+        }
+    }
+
+    bool WriteStreams(const char* dagderived_filename)
+    {
+        BinarySegmentWriteUint32(main_seg, Frozen::DagDerived::MagicNumber);
+        BinarySegmentWriteUint32(main_seg, node_count);
+        WriteFrozenArrayOfBackLinks();
+        WriteLeafInputsAndScannerIndicesToFilesToScan();
+        WriteLeafInputHashOffline();
+        BinarySegmentWriteUint32(main_seg, Frozen::DagDerived::MagicNumber);
+        return BinaryWriterFlush(writer, dagderived_filename);
+    }
+};
+
+static void CompileDagDerivedWorkerInit(CompileDagDerivedWorker* data, const Frozen::Dag* dag, MemAllocHeap* heap, MemAllocLinear* scratch)
+{
+    data->heap = heap;
+    data->scratch = scratch;
+    data->dag = dag;
+    data->writer = &data->_writer;
+    BinaryWriterInit(data->writer, heap);
+    HashTableInit(&data->shared_strings, heap);
+    data->main_seg = BinaryWriterAddSegment(data->writer);
+    data->data_seg = BinaryWriterAddSegment(data->writer);
+    data->arraydata_seg = BinaryWriterAddSegment(data->writer);
+    data->arraydata2_seg = BinaryWriterAddSegment(data->writer);
+    data->leafnodearray_seg = BinaryWriterAddSegment(data->writer);
+    data->scannerindex_seg = BinaryWriterAddSegment(data->writer);
+    data->str_seg = BinaryWriterAddSegment(data->writer);
+    data->node_count = dag->m_NodeCount;
+}
+
+static void CompileDagDerivedWorkerDestroy(CompileDagDerivedWorker* data)
+{
+    HashTableDestroy(&data->shared_strings);
+    BinaryWriterDestroy(data->writer);
+}
+
+bool CompileDagDerived(const Frozen::Dag* dag, MemAllocHeap* heap, MemAllocLinear* scratch, const char* dagderived_filename)
+{
+    CompileDagDerivedWorker worker;
+    CompileDagDerivedWorkerInit(&worker,dag,heap,scratch);
+    bool result = worker.WriteStreams(dagderived_filename);
+    CompileDagDerivedWorkerDestroy(&worker);
+    return result;
+};
