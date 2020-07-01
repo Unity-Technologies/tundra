@@ -18,7 +18,7 @@ static int SlowCallback(void *user_data, const char* label)
     SlowCallbackData *data = (SlowCallbackData *)user_data;
     MutexLock(data->queue_lock);
     char buffer[1000];
-    snprintf(buffer,sizeof(buffer),"%s %s", label, data->node_data->m_Annotation.Get());
+    snprintf(buffer,sizeof(buffer),"%s %s", data->node_data->m_Annotation.Get(), label);
     int sendNextCallbackIn = PrintNodeInProgress(data->node_data, data->time_of_start, data->build_queue, buffer);
     MutexUnlock(data->queue_lock);
     return sendNextCallbackIn;
@@ -44,9 +44,14 @@ static bool Invoke_REAPI_Cache_Client(const HashDigest& digest, StatCache *stat_
 {
     ProfilerScope profiler_scope("InvokeCacheMe", thread_state->m_ProfilerThreadId, outputFiles[0].m_Filename);
 
-    const char* reapi = getenv(kENV_REAPI_CACHE_CLIENT);
-    if (reapi == nullptr)
+    const char* reapi_raw = getenv(kENV_REAPI_CACHE_CLIENT);
+    if (reapi_raw == nullptr)
         return false;
+
+    PathBuffer pathbuf;
+    PathInit(&pathbuf, reapi_raw);
+    char reapi[kMaxPathLength];
+    PathFormat(reapi, &pathbuf);
 
     char buffer[5000];
     int totalWritten = 0;
@@ -70,10 +75,10 @@ static bool Invoke_REAPI_Cache_Client(const HashDigest& digest, StatCache *stat_
     slowCallbackData.queue_lock = queue_lock;
     slowCallbackData.build_queue = thread_state->m_Queue;
 
-    printf("%s\n",buffer);
+    Log(kDebug,"%s\n",buffer);
     ExecResult result = ExecuteProcess(buffer, 0, nullptr, nullptr, thread_state->m_ThreadIndex, true, operation == kOperationRead ? SlowCallback_CacheRead : SlowCallback_CacheWrite , &slowCallbackData);
 
-    if (operation == Operation::kOperationWrite)
+    if (operation == Operation::kOperationRead)
         for (auto &it : outputFiles)
             StatCacheMarkDirty(stat_cache, it.m_Filename, it.m_FilenameHash);
 
@@ -116,5 +121,5 @@ void GetCachingBehaviourSettingsFromEnvironment(bool* attemptReads, bool* attemp
     if (0 == strcmp("W", behaviour))
         *attemptWrites = true;
 
-    printf("Caching enabled with %s=%s %s=%s and mode: %s%s\n", kENV_CACHE_SERVER_ADDRESS, server, kENV_REAPI_CACHE_CLIENT, reapi_cache_client, *attemptReads ? "R":"_", *attemptWrites ? "W":"_");
+    Log(kDebug, "Caching enabled with %s=%s %s=%s and mode: %s%s\n", kENV_CACHE_SERVER_ADDRESS, server, kENV_REAPI_CACHE_CLIENT, reapi_cache_client, *attemptReads ? "R":"_", *attemptWrites ? "W":"_");
 }

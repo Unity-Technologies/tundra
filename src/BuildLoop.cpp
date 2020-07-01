@@ -26,6 +26,7 @@
 #include "BuildQueue.hpp"
 #include "Driver.hpp"
 #include "LeafInputSignature.hpp"
+#include "CacheClient.hpp"
 #include <stdarg.h>
 #include <algorithm>
 #include <stdio.h>
@@ -122,7 +123,7 @@ static void EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(BuildQueue *queue, R
         if (RuntimeNode *waiter = GetRuntimeNodeForDagNodeIndex(queue, link))
         {
             // Did someone else get to the node first?
-            if (RuntimeNodeIsQueued(waiter) || RuntimeNodeIsActive(waiter))
+            if (RuntimeNodeIsQueued(waiter) || RuntimeNodeIsActive(waiter) || waiter->m_Finished)
                 continue;
 
             // If the node isn't ready, skip it.
@@ -153,86 +154,8 @@ static void SignalMainThreadToStartCleaningUp(BuildQueue *queue)
     MutexUnlock(&queue->m_BuildFinishedMutex);
 }
 
-static void AdvanceNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node, Mutex *queue_lock)
+static void FinishNode(BuildQueue* queue, RuntimeNode* node)
 {
-    Log(kSpam, "T=%d, Advancing %s\n", thread_state->m_ThreadIndex, node->m_DagNode->m_Annotation.Get());
-
-    CHECK(!node->m_Finished);
-    CHECK(RuntimeNodeIsActive(node));
-    CHECK(!RuntimeNodeIsQueued(node));
-
-    if (0 != (node->m_DagNode->m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs))
-    {
-        char tmp[kDigestStringSize];
-        HashDigest digest = ComputeLeafInputSignature(
-            queue->m_Config.m_Dag,
-            queue->m_Config.m_DagDerived,
-            &queue->m_Config.m_DagRuntimeData,
-            node->m_DagNode,
-            &thread_state->m_LocalHeap,
-            &thread_state->m_ScratchAlloc,
-            thread_state->m_ProfilerThreadId,
-            queue->m_Config.m_StatCache,
-            queue->m_Config.m_DigestCache,
-            queue->m_Config.m_ScanCache,
-            nullptr);
-        DigestToString(tmp, digest);
-        printf("LeafInputSignature for %s is %s\n", node->m_DagNode->m_Annotation.Get(), tmp);
-    }
-
-    if (!AllDependenciesAreFinished(queue,node))
-    {
-        int enqueue_count = 0;
-
-        for (int32_t depDagIndex : node->m_DagNode->m_Dependencies)
-        {
-            if (RuntimeNode *dependentNode = GetRuntimeNodeForDagNodeIndex(queue, depDagIndex))
-            {
-                // Did someone else get to the node first?
-                if (RuntimeNodeHasEverBeenQueued(dependentNode))
-                    continue;
-
-                Enqueue(queue, dependentNode);
-                ++enqueue_count;
-            }
-        }
-        if (enqueue_count > 1)
-            WakeWaiters(queue, enqueue_count-1);
-
-        RuntimeNodeFlagInactive(node);
-        return;
-    }
-
-    if (AllDependenciesAreSuccesful(queue, node))
-    {
-        MutexUnlock(queue_lock);
-        bool haveToRunAction = CheckInputSignatureToSeeNodeNeedsExecuting(queue, thread_state, node);
-        if (haveToRunAction)
-        {
-            NodeBuildResult::Enum runActionResult = RunAction(queue, thread_state, node, queue_lock);
-            MutexLock(queue_lock);
-            node->m_BuildResult = runActionResult;
-
-            switch (runActionResult)
-            {
-            case NodeBuildResult::kRanFailed:
-                queue->m_FinalBuildResult = BuildResult::kBuildError;
-                SignalMainThreadToStartCleaningUp(queue);
-                break;
-            case NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun:
-                if (queue->m_FinalBuildResult == BuildResult::kOk)
-                    queue->m_FinalBuildResult = BuildResult::kRequireFrontendRerun;
-                break;
-            default:
-                break;
-            }
-        }
-        else
-        {
-            MutexLock(queue_lock);
-            node->m_BuildResult = NodeBuildResult::kUpToDate;
-        }
-    }
     node->m_Finished = true;
     queue->m_FinishedNodeCount++;
 
@@ -244,6 +167,153 @@ static void AdvanceNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
         SignalMainThreadToStartCleaningUp(queue);
 
     EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(queue, node);
+}
+
+
+static bool IsNodeCacheableByLeafInputs(RuntimeNode* node)
+{
+    return 0 != (node->m_DagNode->m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs);
+}
+
+static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, Mutex *queue_lock, ThreadState* thread_state, StatCache* stat_cache)
+{
+    bool haveToRunAction = CheckInputSignatureToSeeNodeNeedsExecuting(queue, thread_state, node);
+    if (!haveToRunAction)
+        return NodeBuildResult::kUpToDate;
+
+    NodeBuildResult::Enum runActionResult = RunAction(queue, thread_state, node, queue_lock);
+
+    if (runActionResult == NodeBuildResult::kRanSuccesfully && queue->m_Config.m_AttemptCacheWrites && IsNodeCacheableByLeafInputs(node))
+    {
+        uint64_t time_exec_started = TimerGet();
+        bool success = CacheClient::AttemptWrite(node->m_DagNode, node->m_CurrentLeafInputSignature, stat_cache, queue_lock, thread_state);
+        uint64_t now = TimerGet();
+        double duration = TimerDiffSeconds(time_exec_started, now);
+
+        PrintMessage(success ? MessageStatusLevel::Success : MessageStatusLevel::Warning, duration, "%s [CacheWrite]", node->m_DagNode->m_Annotation.Get());
+    }
+
+    return runActionResult;
+}
+
+
+static HashDigest ComputeLeafInputSignature(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node)
+{
+    return ComputeLeafInputSignature(
+            queue->m_Config.m_Dag,
+            queue->m_Config.m_DagDerived,
+            &queue->m_Config.m_DagRuntimeData,
+            node->m_DagNode,
+            &thread_state->m_LocalHeap,
+            &thread_state->m_ScratchAlloc,
+            thread_state->m_ProfilerThreadId,
+            queue->m_Config.m_StatCache,
+            queue->m_Config.m_DigestCache,
+            queue->m_Config.m_ScanCache,
+            nullptr);
+}
+
+static bool AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(RuntimeNode* node, BuildQueue* queue, ThreadState* thread_state)
+{
+    if (RuntimeNodeHasAttemptedCacheLookup(node))
+        return false;
+
+    HashDigest currentLeafInputSignature = ComputeLeafInputSignature(queue, thread_state, node);
+    node->m_CurrentLeafInputSignature = currentLeafInputSignature;
+
+    if (node->m_BuiltNode)
+    {
+        if (node->m_BuiltNode->m_LeafInputSignature == currentLeafInputSignature && !OutputFilesMissingFor(node->m_BuiltNode, queue->m_Config.m_StatCache))
+        {
+            node->m_BuildResult = NodeBuildResult::kUpToDate;
+            FinishNode(queue, node);
+            return true;
+        }
+    }
+
+    RuntimeNodeSetAttemptedCacheLookup(node);
+
+    uint64_t time_exec_started = TimerGet();
+    MutexUnlock(&queue->m_Lock);
+    bool readSucceeded = CacheClient::AttemptRead(node->m_DagNode, currentLeafInputSignature, queue->m_Config.m_StatCache, &queue->m_Lock, thread_state);
+    MutexLock(&queue->m_Lock);
+
+    if (readSucceeded)
+    {
+        uint64_t now = TimerGet();
+        double duration = TimerDiffSeconds(time_exec_started, now);
+        PrintMessage(MessageStatusLevel::Success, duration, "%s [CacheHit]", node->m_DagNode->m_Annotation.Get());
+
+        node->m_BuildResult = NodeBuildResult::kRanSuccesfully;
+        FinishNode(queue, node);
+        return true;
+    }
+    return false;
+}
+
+static void EnqueueDependencies(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node)
+{
+    int enqueue_count = 0;
+
+    for (int32_t depDagIndex : node->m_DagNode->m_Dependencies)
+    {
+        if (RuntimeNode *dependentNode = GetRuntimeNodeForDagNodeIndex(queue, depDagIndex))
+        {
+            // Did someone else get to the node first?
+            if (RuntimeNodeHasEverBeenQueued(dependentNode))
+                continue;
+
+            Enqueue(queue, dependentNode);
+            ++enqueue_count;
+        }
+    }
+    if (enqueue_count > 1)
+        WakeWaiters(queue, enqueue_count-1);
+
+    RuntimeNodeFlagInactive(node);
+}
+
+static void ProcessNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node, Mutex *queue_lock)
+{
+    Log(kSpam, "T=%d, Advancing %s\n", thread_state->m_ThreadIndex, node->m_DagNode->m_Annotation.Get());
+
+    CHECK(!node->m_Finished);
+    CHECK(RuntimeNodeIsActive(node));
+    CHECK(!RuntimeNodeIsQueued(node));
+
+    if (IsNodeCacheableByLeafInputs(node) && queue->m_Config.m_AttemptCacheReads)
+    {
+        if (AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(node, queue, thread_state))
+            return;
+    }
+
+    if (!AllDependenciesAreFinished(queue,node))
+    {
+        EnqueueDependencies(queue,thread_state,node);
+        return;
+    }
+
+    if (AllDependenciesAreSuccesful(queue, node))
+    {
+        MutexUnlock(queue_lock);
+        NodeBuildResult::Enum nodeBuildResult = ExecuteNode(queue, node, queue_lock, thread_state, thread_state->m_Queue->m_Config.m_StatCache);
+        MutexLock(queue_lock);
+
+        switch (node->m_BuildResult = nodeBuildResult)
+        {
+            case NodeBuildResult::kRanFailed:
+                queue->m_FinalBuildResult = BuildResult::kBuildError;
+                SignalMainThreadToStartCleaningUp(queue);
+                break;
+            case NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun:
+                if (queue->m_FinalBuildResult == BuildResult::kOk)
+                    queue->m_FinalBuildResult = BuildResult::kRequireFrontendRerun;
+                break;
+            default:
+                break;
+        }
+    }
+    FinishNode(queue, node);
 }
 
 static RuntimeNode *NextNode(BuildQueue *queue)
@@ -317,7 +387,7 @@ void BuildLoop(ThreadState *thread_state)
                 ProfilerEnd(thread_state->m_ProfilerThreadId);
                 waitingForWork = false;
             }
-            AdvanceNode(queue, thread_state, node, mutex);
+            ProcessNode(queue, thread_state, node, mutex);
             continue;
         }
 

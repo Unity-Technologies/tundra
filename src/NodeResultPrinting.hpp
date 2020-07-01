@@ -41,7 +41,7 @@ void PrintNodeResult(
     ValidationResult validationResult,
     const bool *untouched_outputs,
     bool was_preparation_error);
-int PrintNodeInProgress(const Frozen::DagNode *node_data, uint64_t time_of_start, const BuildQueue *queue);
+int PrintNodeInProgress(const Frozen::DagNode *node_data, uint64_t time_of_start, const BuildQueue *queue, const char* message = nullptr);
 void PrintDeferredMessages(BuildQueue *queue);
 void PrintServiceMessage(MessageStatusLevel::Enum statusLevel, const char *formatString, ...);
 void StripAnsiColors(char *buffer);

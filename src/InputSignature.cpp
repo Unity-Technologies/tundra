@@ -439,7 +439,7 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
 {
     const Frozen::DagNode *dagnode = node->m_DagNode;
 
-    node->m_InputSignature = CalculateInputSignature(queue, thread_state, dagnode);
+    node->m_CurrentInputSignature = CalculateInputSignature(queue, thread_state, dagnode);
 
     // Figure out if we need to rebuild this node.
     const Frozen::BuiltNode *prev_builtnode = node->m_BuiltNode;
@@ -502,14 +502,14 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
     StatCache *stat_cache = config.m_StatCache;
     DigestCache *digest_cache = config.m_DigestCache;
 
-    if (prev_builtnode->m_InputSignature != node->m_InputSignature)
+    if (prev_builtnode->m_InputSignature != node->m_CurrentInputSignature)
     {
         // The input signature has changed (either direct inputs or includes)
         // We need to rebuild this node.
         char oldDigest[kDigestStringSize];
         char newDigest[kDigestStringSize];
         DigestToString(oldDigest, prev_builtnode->m_InputSignature);
-        DigestToString(newDigest, node->m_InputSignature);
+        DigestToString(newDigest, node->m_CurrentInputSignature);
 
         Log(kSpam, "T=%d: building %s - input signature changed. was:%s now:%s", thread_state->m_ThreadIndex, dagnode->m_Annotation.Get(), oldDigest, newDigest);
 
