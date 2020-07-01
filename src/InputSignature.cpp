@@ -292,19 +292,6 @@ static void ReportInputSignatureChanges(
     }
 }
 
-static bool OutputFilesMissing(StatCache *stat_cache, RuntimeNode* node)
-{
-    for (const FrozenFileAndHash &f : node->m_BuiltNode->m_OutputFiles)
-    {
-        FileInfo i = StatCacheStat(stat_cache, f.m_Filename, f.m_FilenameHash);
-
-        if (!i.Exists())
-            return true;
-    }
-
-    return false;
-}
-
 static bool ValidateInclude(void* _userData, const char* includingFile, const char* includedFile)
 {
     // If a file is generated, it may only include
@@ -585,7 +572,7 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
         return true;
     }
 
-    if (OutputFilesMissing(stat_cache, node))
+    if (OutputFilesMissingFor(node->m_BuiltNode, stat_cache))
     {
         // One or more output files are missing - need to rebuild.
         Log(kSpam, "T=%d: building %s - output files are missing", thread_state->m_ThreadIndex, dagnode->m_Annotation.Get());
