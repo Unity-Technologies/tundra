@@ -30,13 +30,7 @@
 #include <stdio.h>
 
 
-struct SlowCallbackData
-{
-    Mutex *queue_lock;
-    const Frozen::DagNode *node_data;
-    uint64_t time_of_start;
-    const BuildQueue *build_queue;
-};
+
 
 static int SlowCallback(void *user_data)
 {

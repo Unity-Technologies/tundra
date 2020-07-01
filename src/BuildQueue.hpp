@@ -50,6 +50,8 @@ struct BuildQueueConfig
     const Frozen::SharedResourceData *m_SharedResources;
     int m_SharedResourcesCount;
     int32_t m_AmountOfRuntimeNodesSpecificallyRequested;
+    bool m_AttemptCacheReads;
+    bool m_AttemptCacheWrites;
 };
 
 struct BuildQueue;
