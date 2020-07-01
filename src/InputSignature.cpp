@@ -322,7 +322,7 @@ static bool ValidateInclude(void* _userData, const char* includingFile, const ch
     }
 
     // Not allowed. Print warning message.
-    printf("Illegal include %s -> %s\n", includingFile, includedFile);
+    Log(kDebug, "Illegal include %s -> %s\n", includingFile, includedFile);
     return true;
 }
 
