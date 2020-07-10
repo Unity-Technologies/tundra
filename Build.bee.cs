@@ -1,23 +1,18 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net;
-using System.Text.RegularExpressions;
 using Bee.BuildTools;
 using Bee.Core;
-using Bee.NativeProgramSupport.Building;
-using Bee.NativeProgramSupport.Building.FluentSyntaxHelpers;
+using Bee.NativeProgramSupport;
 using Bee.ProjectGeneration.VisualStudio;
 using Bee.Toolchain.GNU;
 using Bee.Toolchain.VisualStudio;
 using Bee.Tools;
 using Bee.VisualStudioSolution;
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NiceIO;
-using Unity.BuildSystem.NativeProgramSupport;
-using Unity.BuildTools;
-using static Unity.BuildSystem.NativeProgramSupport.NativeProgramConfiguration;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.RegularExpressions;
+using static Bee.NativeProgramSupport.NativeProgramConfiguration;
 
 class Build
 {
