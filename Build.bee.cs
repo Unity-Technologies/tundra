@@ -81,8 +81,8 @@ class Build
     static void RegisterAlias(string name, NativeProgramConfiguration config, NPath file)
     {
         Backend.Current.AddAliasDependency(
-            $"{name}::{config.ToolChain.Platform.DisplayName.ToLower()}::{config.CodeGen.ToString().ToLower()}", file);
-        Backend.Current.AddAliasDependency($"{name}::{config.ToolChain.Platform.DisplayName.ToLower()}", file);
+            $"{name}::{config.ToolChain.LegacyPlatformIdentifier.ToLower()}::{config.CodeGen.ToString().ToLower()}", file);
+        Backend.Current.AddAliasDependency($"{name}::{config.ToolChain.LegacyPlatformIdentifier.ToLower()}", file);
         Backend.Current.AddAliasDependency($"{name}::{config.CodeGen.ToString().ToLower()}", file);
         Backend.Current.AddAliasDependency($"{name}", file);
     }
@@ -163,7 +163,8 @@ class Build
         // setup build targets
         var toolChains = new ToolChain[]
         {
-            ToolChain.Store.Mac().Sdk_10_13().x64("10.12"),
+            ToolChain.Store.Mac().Sdk_11_0().x64("10.12"),
+            ToolChain.Store.Mac().Sdk_11_0().ARM64("11.0"),
             ToolChain.Store.Windows().VS2019(new Version(16,4)).Sdk_17134().x64(),
             ToolChain.Store.Linux().Ubuntu_14_4().Gcc_4_8().x64(),
         }.Where(toolChain => toolChain.CanBuild).ToArray();

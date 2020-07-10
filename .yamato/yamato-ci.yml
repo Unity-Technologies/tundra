@@ -7,8 +7,8 @@ linux:
   commands:
     - git submodule init
     - git submodule update
-    - mono bee.exe tundra2::linux::master
-    - mono bee.exe tundra2-unittest-report::linux::master
+    - mono bee.exe tundra2::linux64::master
+    - mono bee.exe tundra2-unittest-report::linux64::master
     - mono bee.exe artifacts/for-stevedore/tundra-linux-x64.zip
     - curl -sSo StevedoreUpload.exe "$STEVEDORE_UPLOAD_TOOL_URL"
     - mono StevedoreUpload.exe --append-manifest=build/linux-x86_64/manifest.stevedore --version-len=12 --repo=public --version="$GIT_REVISION" artifacts/for-stevedore/*
@@ -17,8 +17,8 @@ linux:
       paths:
         - "build/**/*"
 
-mac:
-  name: "Build & Test - Mac"
+mac-x64:
+  name: "Build & Test - Mac x64"
   agent:
     type: Unity::VM::osx
     image: buildfarm/mac:stable
@@ -26,11 +26,29 @@ mac:
   commands:
     - git submodule init
     - git submodule update
-    - mono bee.exe tundra2::mac::master
-    - mono bee.exe tundra2-unittest-report::mac::master
+    - mono bee.exe tundra2::macos_x64::master
+    - mono bee.exe tundra2-unittest-report::macos_x64::master
     - mono bee.exe artifacts/for-stevedore/tundra-mac-x64.zip
     - curl -sSo StevedoreUpload.exe "$STEVEDORE_UPLOAD_TOOL_URL"
     - mono StevedoreUpload.exe --append-manifest=build/osx-x86_64/manifest.stevedore --version-len=12 --repo=public --version="$GIT_REVISION" artifacts/for-stevedore/*
+  artifacts:
+    artifacts:
+      paths:
+        - "build/**/*"
+
+mac-arm64:
+  name: "Build Mac - ARM64"
+  agent:
+    type: Unity::VM::osx
+    image: buildfarm/mac:stable
+    flavor: m1.mac
+  commands:
+    - git submodule init
+    - git submodule update
+    - mono bee.exe tundra2::macos_arm64::master
+    - mono bee.exe artifacts/for-stevedore/tundra-mac-arm64.zip
+    - curl -sSo StevedoreUpload.exe "$STEVEDORE_UPLOAD_TOOL_URL"
+    - mono StevedoreUpload.exe --append-manifest=build/osx-aarch64/manifest.stevedore --version-len=12 --repo=public --version="$GIT_REVISION" artifacts/for-stevedore/*
   artifacts:
     artifacts:
       paths:
@@ -45,8 +63,8 @@ windows:
   commands:
     - git submodule init
     - git submodule update
-    - bee.exe tundra2::win::master
-    - bee.exe tundra2-unittest-report::win::master
+    - bee.exe tundra2::win64::master
+    - bee.exe tundra2-unittest-report::win64::master
     - bee.exe artifacts/for-stevedore/tundra-win-x64.zip artifacts/for-stevedore/tundra-win-x64-debug.7z
     - curl -sSo StevedoreUpload.exe "%STEVEDORE_UPLOAD_TOOL_URL%"
     - StevedoreUpload.exe --append-manifest=build/windows-x86_64/manifest.stevedore --version-len=12 --repo=public --version="%GIT_REVISION%" artifacts/for-stevedore/*
@@ -77,5 +95,6 @@ package:
       - "/.*/"
   dependencies:
     - .yamato/yamato-ci.yml#linux
-    - .yamato/yamato-ci.yml#mac
+    - .yamato/yamato-ci.yml#mac-x64
+    - .yamato/yamato-ci.yml#mac-arm64
     - .yamato/yamato-ci.yml#windows
