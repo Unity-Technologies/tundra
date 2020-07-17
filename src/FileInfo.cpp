@@ -66,10 +66,11 @@ FileInfo GetFileInfo(const char *path)
 
     if (strlen(path) >= MAX_PATH)
     {
-        // To work around maximum path length limitations on Windows, we have to use the wide-character version of the API, with a special prefix
-        const int widePathLength = LongPathToPrefixedWidePath(path, NULL, 0);
-        wchar_t* widePath = static_cast<wchar_t*>(alloca(sizeof(wchar_t) * widePathLength));
-        LongPathToPrefixedWidePath(path, widePath, widePathLength);
+        //// To work around maximum path length limitations on Windows, we have to use the wide-character version of the API, with a special prefix
+        errno_t err;
+        wchar_t* widePath = ConvertToLongPath(path, err);
+        if (err != ERROR_SUCCESS)
+            goto Failure;
 
         if (0 != _wstat64(widePath, &stbuf))
             goto Failure;

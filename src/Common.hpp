@@ -41,7 +41,7 @@
 #define TD_ALIGN(v, alignment) (((v) + (alignment)-1) & ~((alignment)-1))
 
 #if TUNDRA_WIN32
-int LongPathToPrefixedWidePath(const char* path, wchar_t* buffer, int bufferSize);
+wchar_t* ConvertToLongPath(char const* path, errno_t & err);
 #endif
 
 

@@ -366,41 +366,124 @@ double TimerDiffSeconds(uint64_t start, uint64_t end)
 }
 
 #if defined(TUNDRA_WIN32)
-int LongPathToPrefixedWidePath(const char* path, wchar_t* buffer, int bufferSize)
-{
-    const int longPathPrefixLength = 4;
-    const wchar_t longPathPrefix[longPathPrefixLength] = { L'\\', L'\\', L'?', L'\\' };
 
-    const int wideStringLength = MultiByteToWideChar(CP_UTF8, 0, path, -1, NULL, 0);
-    bool isAbsolute = path[1] == ':' && (path[2] == '\\' || path[2] == '/');
+#define MAX2(a, b) ((a) > (b) ? (a) : (b))
+void ResolvePrefixPath(char* buf, wchar_t** prefix, bool* resolveFullPath) {
+    *resolveFullPath = true;
 
-    if (bufferSize > longPathPrefixLength)
-    {
-        memcpy(buffer, longPathPrefix, sizeof(wchar_t) * longPathPrefixLength);
-        buffer += longPathPrefixLength;
+    if (::isalpha(buf[0]) && !::IsDBCSLeadByte(buf[0]) && buf[1] == ':' && buf[2] == '\\') {
+        *prefix = const_cast<wchar_t*>(L"\\\\?\\");
+    }
+    else if (buf[0] == '\\' && buf[1] == '\\') {
+        if (buf[2] == '?' && buf[3] == '\\') {
+            *prefix = const_cast<wchar_t*>(L"");
+            *resolveFullPath = false;
+        }
+    }
+    else {
+        *prefix = const_cast<wchar_t*>(L"\\\\?\\");
+    }
+}
+
+errno_t ConvertToUnicode(char const* path, wchar_t** widePath) {
+    // Get required buffer size to convert to Unicode
+    int wideLen = MultiByteToWideChar(CP_ACP,
+        MB_ERR_INVALID_CHARS,
+        path, -1,
+        NULL, 0);
+    if (wideLen == 0) {
+        return EINVAL;
     }
 
-    if (!isAbsolute)
-    {
-        // We cannot use Win32 API methods for converting the path from relative to absolute because those methods do not handle long paths
-        const DWORD currentDirectorySize = GetCurrentDirectoryW(0, NULL);
+    *widePath = static_cast<wchar_t*>(::malloc(wideLen * sizeof(wchar_t)));
 
-        int requiredBufferSize = longPathPrefixLength + currentDirectorySize + wideStringLength;
-        if (buffer == nullptr || bufferSize < requiredBufferSize)
-            return requiredBufferSize;
+    int result = MultiByteToWideChar(CP_ACP,
+        MB_ERR_INVALID_CHARS,
+        path, -1,
+        *widePath, wideLen);
 
-        GetCurrentDirectoryW(currentDirectorySize, buffer);
-        buffer[currentDirectorySize - 1] = '\\';
-        buffer += currentDirectorySize;
+    return ERROR_SUCCESS;
+}
+
+errno_t ResolveFullPath(wchar_t* widePath, wchar_t** resolvedPath) {
+    // Get required buffer size to convert to full path. The return
+    // value INCLUDES the terminating null character.
+    DWORD resolvedLen = GetFullPathNameW(widePath, 0, NULL, NULL);
+    if (resolvedLen == 0) {
+        return EINVAL;
     }
-    else
-    {
-        if (bufferSize < longPathPrefixLength + wideStringLength)
-            return longPathPrefixLength + wideStringLength;
+
+    *resolvedPath = static_cast<wchar_t*>(::malloc(resolvedLen * sizeof(wchar_t)));
+
+    // When the buffer has sufficient size, the return value EXCLUDES the
+    // terminating null character
+    DWORD result = GetFullPathNameW(widePath, resolvedLen, *resolvedPath, NULL);
+
+    return ERROR_SUCCESS;
+}
+
+// Proper Long Path support is hard :( and requires some extra care
+// and love. To allow windows to support Long Paths you are required
+// to provide a prefix to the path "//?/" this prefix lets the underlying
+// Win32 API calls know that is can skip the validation checks against
+// MAX_PATH, but this also causes issues where if there is a ".." in the
+// path (including paths that have the drive letter attached e.g D:\Foo\..\Thing)
+// windows doesn't properly collapse the path, and the underlying kernal call doesn't
+// know how to resolve the ".." properly and functions such as CreateDirectoryW
+// will fail with "ERROR_INVALID_NAME" which in this case will cause tundra to fail
+// when it tries to copy over files that are relative and long paths.
+// See https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file#maximum-path-length-limitation
+// Also this code could be way less gross if we could use std::wstring
+wchar_t* ConvertToLongPath(char const* path, errno_t& err) {
+    if ((path == NULL) || (path[0] == '\0')) {
+        err = ENOENT;
+        return NULL;
     }
 
-    MultiByteToWideChar(CP_UTF8, 0, path, -1, buffer, wideStringLength);
-    return 0;
+    size_t buffLen = 1 + MAX2((size_t)3, strlen(path));
+    char* buf = static_cast<char*>(::malloc(buffLen * sizeof(char)));
+    strncpy(buf, path, buffLen);
+
+    wchar_t* prefix = NULL;
+    bool resolveFullPath = true;
+    ResolvePrefixPath(buf, &prefix, &resolveFullPath);
+
+    wchar_t* widePath = NULL;
+    err = ConvertToUnicode(buf, &widePath);
+    free(buf);
+    if (err != ERROR_SUCCESS) {
+        return NULL;
+    }
+
+    wchar_t* fullResolvedPath = NULL;
+    if (resolveFullPath) {
+        err = ResolveFullPath(widePath, &fullResolvedPath);
+    }
+    else {
+        fullResolvedPath = widePath;
+    }
+
+    wchar_t* result = NULL;
+    if (fullResolvedPath != NULL) {
+        size_t prefixLen = wcslen(prefix);
+        size_t resultLen = prefixLen + wcslen(fullResolvedPath) + 1;
+        result = static_cast<wchar_t*>(::malloc(resultLen * sizeof(wchar_t)));
+        _snwprintf(result, resultLen, L"%s%s", prefix, &fullResolvedPath[0]);
+
+        // Remove trailing pathsep (not for \\?\<DRIVE>:\, since it would make it relative)
+        resultLen = wcslen(result);
+        if ((result[resultLen - 1] == L'\\') &&
+            !(::iswalpha(result[4]) && result[5] == L':' && resultLen == 7)) {
+            result[resultLen - 1] = L'\0';
+        }
+    }
+
+    if (fullResolvedPath != widePath) {
+        free(fullResolvedPath);
+    }
+    free(widePath);
+
+    return static_cast<wchar_t*>(result);
 }
 #endif
 
@@ -417,9 +500,10 @@ bool MakeDirectory(const char *path)
     if (isalpha(path[0]) && 0 == memcmp(&path[1], ":\\\0", 3))
         return true;
 
-    const int wideStringLength = LongPathToPrefixedWidePath(path, NULL, 0);
-    wchar_t* widePath = static_cast<wchar_t*>(alloca(sizeof(wchar_t) * wideStringLength));
-    LongPathToPrefixedWidePath(path, widePath, wideStringLength);
+    errno_t err;
+    wchar_t* widePath = ConvertToLongPath(path, err);
+    if (err != ERROR_SUCCESS)
+        return false;
 
     if (!CreateDirectoryW(widePath, NULL))
     {
