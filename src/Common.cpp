@@ -387,7 +387,7 @@ void ResolvePrefixPath(char* buf, wchar_t** prefix, bool* resolveFullPath) {
 
 errno_t ConvertToUnicode(char const* path, wchar_t** widePath) {
     // Get required buffer size to convert to Unicode
-    int wideLen = MultiByteToWideChar(CP_ACP,
+    int wideLen = MultiByteToWideChar(CP_UTF8,
         MB_ERR_INVALID_CHARS,
         path, -1,
         NULL, 0);
@@ -397,7 +397,7 @@ errno_t ConvertToUnicode(char const* path, wchar_t** widePath) {
 
     *widePath = static_cast<wchar_t*>(::malloc(wideLen * sizeof(wchar_t)));
 
-    int result = MultiByteToWideChar(CP_ACP,
+    int result = MultiByteToWideChar(CP_UTF8,
         MB_ERR_INVALID_CHARS,
         path, -1,
         *widePath, wideLen);
@@ -428,12 +428,12 @@ errno_t ResolveFullPath(wchar_t* widePath, wchar_t** resolvedPath) {
 // Win32 API calls know that is can skip the validation checks against
 // MAX_PATH, but this also causes issues where if there is a ".." in the
 // path (including paths that have the drive letter attached e.g D:\Foo\..\Thing)
-// windows doesn't properly collapse the path, and the underlying kernal call doesn't
+// windows doesn't properly collapse the path, and the underlying kernel call doesn't
 // know how to resolve the ".." properly and functions such as CreateDirectoryW
 // will fail with "ERROR_INVALID_NAME" which in this case will cause tundra to fail
 // when it tries to copy over files that are relative and long paths.
 // See https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file#maximum-path-length-limitation
-// Also this code could be way less gross if we could use std::wstring
+// Also this code could be way less gross if we could use std::wstring (andrews)
 wchar_t* ConvertToLongPath(char const* path, errno_t& err) {
     if ((path == NULL) || (path[0] == '\0')) {
         err = ENOENT;
