@@ -367,123 +367,80 @@ double TimerDiffSeconds(uint64_t start, uint64_t end)
 
 #if defined(TUNDRA_WIN32)
 
-#define MAX2(a, b) ((a) > (b) ? (a) : (b))
-void ResolvePrefixPath(char* buf, wchar_t** prefix, bool* resolveFullPath) {
-    *resolveFullPath = true;
+const std::wstring  ExtendedPrefix = L"\\\\?\\";
+const std::wstring  DevicePathPrefix = L"\\\\.\\";
+const std::wstring  UNCExtendedPathPrefix = L"\\\\?\\UNC\\";
+const std::wstring  UNCPathPrefix = L"\\\\";
 
-    if (::isalpha(buf[0]) && !::IsDBCSLeadByte(buf[0]) && buf[1] == ':' && buf[2] == '\\') {
-        *prefix = const_cast<wchar_t*>(L"\\\\?\\");
-    }
-    else if (buf[0] == '\\' && buf[1] == '\\') {
-        if (buf[2] == '?' && buf[3] == '\\') {
-            *prefix = const_cast<wchar_t*>(L"");
-            *resolveFullPath = false;
-        }
-    }
-    else {
-        *prefix = const_cast<wchar_t*>(L"\\\\?\\");
-    }
+bool IsExtended(const std::wstring& path)
+{
+    return path.compare(0, ExtendedPrefix.length(), ExtendedPrefix) == 0;
 }
 
-errno_t ConvertToUnicode(char const* path, wchar_t** widePath) {
-    // Get required buffer size to convert to Unicode
-    int wideLen = MultiByteToWideChar(CP_UTF8,
-        MB_ERR_INVALID_CHARS,
-        path, -1,
-        NULL, 0);
-    if (wideLen == 0) {
-        return EINVAL;
-    }
-
-    *widePath = static_cast<wchar_t*>(::malloc(wideLen * sizeof(wchar_t)));
-
-    int result = MultiByteToWideChar(CP_UTF8,
-        MB_ERR_INVALID_CHARS,
-        path, -1,
-        *widePath, wideLen);
-
-    return ERROR_SUCCESS;
+bool IsUNCExtended(const std::wstring& path)
+{
+    return path.compare(0, UNCExtendedPathPrefix.length(), UNCExtendedPathPrefix) == 0;
 }
 
-errno_t ResolveFullPath(wchar_t* widePath, wchar_t** resolvedPath) {
-    // Get required buffer size to convert to full path. The return
-    // value INCLUDES the terminating null character.
-    DWORD resolvedLen = GetFullPathNameW(widePath, 0, NULL, NULL);
-    if (resolvedLen == 0) {
-        return EINVAL;
-    }
-
-    *resolvedPath = static_cast<wchar_t*>(::malloc(resolvedLen * sizeof(wchar_t)));
-
-    // When the buffer has sufficient size, the return value EXCLUDES the
-    // terminating null character
-    DWORD result = GetFullPathNameW(widePath, resolvedLen, *resolvedPath, NULL);
-
-    return ERROR_SUCCESS;
+bool IsDevice(const std::wstring& path)
+{
+    return path.compare(0, DevicePathPrefix.length(), DevicePathPrefix) == 0;
 }
 
-// Proper Long Path support is hard :( and requires some extra care
-// and love. To allow windows to support Long Paths you are required
-// to provide a prefix to the path "//?/" this prefix lets the underlying
-// Win32 API calls know that is can skip the validation checks against
-// MAX_PATH, but this also causes issues where if there is a ".." in the
-// path (including paths that have the drive letter attached e.g D:\Foo\..\Thing)
-// windows doesn't properly collapse the path, and the underlying kernel call doesn't
-// know how to resolve the ".." properly and functions such as CreateDirectoryW
-// will fail with "ERROR_INVALID_NAME" which in this case will cause tundra to fail
-// when it tries to copy over files that are relative and long paths.
-// See https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file#maximum-path-length-limitation
-// Also this code could be way less gross if we could use std::wstring (andrews)
-wchar_t* ConvertToLongPath(char const* path, errno_t& err) {
-    if ((path == NULL) || (path[0] == '\0')) {
-        err = ENOENT;
-        return NULL;
-    }
+bool IsNormalized(const std::wstring& path)
+{
+    return path.empty() || IsDevice(path) || IsExtended(path) || IsUNCExtended(path);
+}
 
-    size_t buffLen = 1 + MAX2((size_t)3, strlen(path));
-    char* buf = static_cast<char*>(::malloc(buffLen * sizeof(char)));
-    strncpy(buf, path, buffLen);
-
-    wchar_t* prefix = NULL;
-    bool resolveFullPath = true;
-    ResolvePrefixPath(buf, &prefix, &resolveFullPath);
-
-    wchar_t* widePath = NULL;
-    err = ConvertToUnicode(buf, &widePath);
-    free(buf);
-    if (err != ERROR_SUCCESS) {
-        return NULL;
-    }
-
-    wchar_t* fullResolvedPath = NULL;
-    if (resolveFullPath) {
-        err = ResolveFullPath(widePath, &fullResolvedPath);
-    }
-    else {
-        fullResolvedPath = widePath;
-    }
-
-    wchar_t* result = NULL;
-    if (fullResolvedPath != NULL) {
-        size_t prefixLen = wcslen(prefix);
-        size_t resultLen = prefixLen + wcslen(fullResolvedPath) + 1;
-        result = static_cast<wchar_t*>(::malloc(resultLen * sizeof(wchar_t)));
-        _snwprintf(result, resultLen, L"%s%s", prefix, &fullResolvedPath[0]);
-
-        // Remove trailing pathsep (not for \\?\<DRIVE>:\, since it would make it relative)
-        resultLen = wcslen(result);
-        if ((result[resultLen - 1] == L'\\') &&
-            !(::iswalpha(result[4]) && result[5] == L':' && resultLen == 7)) {
-            result[resultLen - 1] = L'\0';
+bool ConvertToLongPath(std::wstring* path) {
+    if (IsNormalized(*path))
+    {
+        WIN32_FILE_ATTRIBUTE_DATA data;
+        if (path->empty() // An empty path doesn't exist
+            || GetFileAttributesExW(path->c_str(), GetFileExInfoStandard, &data) != 0)
+        {
+            return true;
         }
     }
 
-    if (fullResolvedPath != widePath) {
-        free(fullResolvedPath);
-    }
-    free(widePath);
+    wchar_t buf[MAX_PATH];
+    auto size = ::GetFullPathNameW(path->c_str(), MAX_PATH, buf, nullptr);
 
-    return static_cast<wchar_t*>(result);
+    if (size == 0)
+    {
+        return false;
+    }
+
+    std::wstring str;
+    if (size < MAX_PATH)
+    {
+        str.assign(buf);
+    }
+    else
+    {
+        str.resize(size + UNCExtendedPathPrefix.length(), 0);
+        size = ::GetFullPathNameW(path->c_str(), size, (LPWSTR)str.data(), nullptr);
+
+        if (size == 0)
+        {
+            return false;
+        }
+
+        const std::wstring* prefix = &ExtendedPrefix;
+        if (str.compare(0, UNCPathPrefix.length(), UNCPathPrefix) == 0)
+        {
+            prefix = &UNCExtendedPathPrefix;
+            str.erase(0, UNCPathPrefix.length());
+            size = size - UNCPathPrefix.length();
+        }
+
+        str.insert(0, *prefix);
+        str.resize(size + prefix->length());
+        str.shrink_to_fit();
+    }
+
+    *path = str;
+    return true;
 }
 #endif
 
@@ -499,18 +456,17 @@ bool MakeDirectory(const char *path)
     /* pretend we can always create device roots */
     if (isalpha(path[0]) && 0 == memcmp(&path[1], ":\\\0", 3))
         return true;
+    std::wstring widePath(ToWideString(path));
 
-    errno_t err;
-    wchar_t* widePath = ConvertToLongPath(path, err);
-    if (err != ERROR_SUCCESS)
+    if (!ConvertToLongPath(&widePath))
         return false;
 
-    if (!CreateDirectoryW(widePath, NULL))
+    if (!CreateDirectoryW(widePath.c_str(), NULL))
     {
         switch (GetLastError())
         {
         case ERROR_ALREADY_EXISTS:
-            return PathIsDirectoryA(path);
+            return PathIsDirectoryW(widePath.c_str());
         default:
             return false;
         }
