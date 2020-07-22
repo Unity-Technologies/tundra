@@ -367,24 +367,24 @@ double TimerDiffSeconds(uint64_t start, uint64_t end)
 
 #if defined(TUNDRA_WIN32)
 
-const std::wstring  ExtendedPrefix = L"\\\\?\\";
-const std::wstring  DevicePathPrefix = L"\\\\.\\";
-const std::wstring  UNCExtendedPathPrefix = L"\\\\?\\UNC\\";
-const std::wstring  UNCPathPrefix = L"\\\\";
+const wchar_t  ExtendedPrefix[] = L"\\\\?\\";
+const wchar_t  DevicePathPrefix[] = L"\\\\.\\";
+const wchar_t  UNCExtendedPathPrefix[] = L"\\\\?\\UNC\\";
+const wchar_t  UNCPathPrefix[] = L"\\\\";
 
 bool IsExtended(const std::wstring& path)
 {
-    return path.compare(0, ExtendedPrefix.length(), ExtendedPrefix) == 0;
+    return path.compare(0, wcslen(ExtendedPrefix), ExtendedPrefix) == 0;
 }
 
 bool IsUNCExtended(const std::wstring& path)
 {
-    return path.compare(0, UNCExtendedPathPrefix.length(), UNCExtendedPathPrefix) == 0;
+    return path.compare(0, wcslen(UNCExtendedPathPrefix), UNCExtendedPathPrefix) == 0;
 }
 
 bool IsDevice(const std::wstring& path)
 {
-    return path.compare(0, DevicePathPrefix.length(), DevicePathPrefix) == 0;
+    return path.compare(0, wcslen(DevicePathPrefix), DevicePathPrefix) == 0;
 }
 
 bool IsNormalized(const std::wstring& path)
@@ -392,7 +392,16 @@ bool IsNormalized(const std::wstring& path)
     return path.empty() || IsDevice(path) || IsExtended(path) || IsUNCExtended(path);
 }
 
-bool ConvertToLongPath(std::wstring* path) {
+std::wstring ToWideString(const char* input)
+{
+    int size = MultiByteToWideChar(CP_UTF8, 0, input, strlen(input), 0, 0);
+    std::wstring result(size, L'\0');
+    if (size) MultiByteToWideChar(CP_UTF8, 0, input, strlen(input), &result[0], size);
+    return result;
+}
+
+bool ConvertToLongPath(std::wstring* path)
+{
     if (IsNormalized(*path))
     {
         WIN32_FILE_ATTRIBUTE_DATA data;
@@ -418,24 +427,24 @@ bool ConvertToLongPath(std::wstring* path) {
     }
     else
     {
-        str.resize(size + UNCExtendedPathPrefix.length(), 0);
-        size = ::GetFullPathNameW(path->c_str(), size, (LPWSTR)str.data(), nullptr);
+        str.resize(size + wcslen(UNCExtendedPathPrefix), 0);
+        size = ::GetFullPathNameW(path->c_str(), size, const_cast<LPWSTR>(str.data()), nullptr);
 
         if (size == 0)
         {
             return false;
         }
 
-        const std::wstring* prefix = &ExtendedPrefix;
-        if (str.compare(0, UNCPathPrefix.length(), UNCPathPrefix) == 0)
+        std::wstring prefix(ExtendedPrefix);
+        if (str.compare(0, wcslen(UNCPathPrefix), UNCPathPrefix) == 0)
         {
-            prefix = &UNCExtendedPathPrefix;
-            str.erase(0, UNCPathPrefix.length());
-            size = size - UNCPathPrefix.length();
+            prefix.assign(UNCExtendedPathPrefix);
+            str.erase(0, wcslen(UNCPathPrefix));
+            size = size - wcslen(UNCPathPrefix);
         }
 
-        str.insert(0, *prefix);
-        str.resize(size + prefix->length());
+        str.insert(0, prefix);
+        str.resize(size + prefix.length());
         str.shrink_to_fit();
     }
 
@@ -456,8 +465,8 @@ bool MakeDirectory(const char *path)
     /* pretend we can always create device roots */
     if (isalpha(path[0]) && 0 == memcmp(&path[1], ":\\\0", 3))
         return true;
-    std::wstring widePath(ToWideString(path));
 
+    std::wstring widePath(ToWideString(path));
     if (!ConvertToLongPath(&widePath))
         return false;
 

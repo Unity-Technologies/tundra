@@ -43,16 +43,7 @@
 #define TD_ALIGN(v, alignment) (((v) + (alignment)-1) & ~((alignment)-1))
 
 #if TUNDRA_WIN32
-#include <codecvt>
-#include <locale>
-
-using convert_t = std::codecvt_utf8<wchar_t>;
-inline std::wstring ToWideString(std::string str)
-{
-    std::wstring_convert<convert_t, wchar_t> strconverter;
-    return strconverter.from_bytes(str);
-}
-
+std::wstring ToWideString(const char* input);
 bool ConvertToLongPath(std::wstring* path);
 #endif
 
