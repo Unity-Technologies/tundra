@@ -61,12 +61,24 @@ static bool Invoke_REAPI_Cache_Client(const HashDigest& digest, StatCache *stat_
     const char* cmd = operation == kOperationRead ? "down" : "up";
     totalWritten += snprintf(buffer, sizeof(buffer), "%s %s %s00000000000000000000000000000002", reapi, cmd, digestString);
 
+    //when we start caching nodes with tons of outputs, we should move the filelist to a separate file. for now this will do,
     for (auto &it : outputFiles)
     {
         PathBuffer output;
         PathInit(&output, it.m_Filename);
         MakeDirectoriesForFile(stat_cache, output);
-        totalWritten += snprintf(buffer+totalWritten, sizeof(buffer)-totalWritten, " \"%s\" ", it.m_Filename.Get());
+        int remainingBudget = sizeof(buffer)-totalWritten;
+
+        //headsup: requiredSpace return value does _not_ include length of the 0 terminator.
+        int requiredSpace = snprintf(buffer+totalWritten, remainingBudget, " \"%s\" ", it.m_Filename.Get());
+
+        if (requiredSpace >= remainingBudget)
+        {
+            Log(kError, "Building CacheClient string exceeded buffer length");
+            return false;
+        }
+
+        totalWritten += requiredSpace;
     }
 
     SlowCallbackData slowCallbackData;
@@ -111,15 +123,23 @@ void GetCachingBehaviourSettingsFromEnvironment(bool* attemptReads, bool* attemp
     if (behaviour == nullptr)
         Croak("%s is set, but %s is not.", kENV_CACHE_SERVER_ADDRESS,kENV_BEE_CACHE_BEHAVIOUR);
 
-    if (0 == strcmp("RW", behaviour))
+    for (const char* c_ptr = behaviour; ; c_ptr++)
+    {
+        char c = *c_ptr;
+        if (c == 0)
+            break;
+        if (c == 'R')
     {
         *attemptReads = true;
-        *attemptWrites = true;
+            continue;
     }
-    if (0 == strcmp("R", behaviour))
-        *attemptReads = true;
-    if (0 == strcmp("W", behaviour))
+        if (c == 'W')
+        {
         *attemptWrites = true;
+            continue;
+        }
+        Croak("The cache behaviour string provided: %s contains a character that is not R or W", behaviour);
+    }
 
-    Log(kDebug, "Caching enabled with %s=%s %s=%s and mode: %s%s\n", kENV_CACHE_SERVER_ADDRESS, server, kENV_REAPI_CACHE_CLIENT, reapi_cache_client, *attemptReads ? "R":"_", *attemptWrites ? "W":"_");
+    Log(kDebug, "Caching enabled with %s=%s %s=%s and mode: %s%s%s\n", kENV_CACHE_SERVER_ADDRESS, server, kENV_REAPI_CACHE_CLIENT, reapi_cache_client, *attemptReads ? "R":"_", *attemptWrites ? "W":"_");
 }

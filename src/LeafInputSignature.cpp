@@ -70,7 +70,7 @@ HashDigest ComputeLeafInputSignature(const Frozen::Dag* dag, const Frozen::DagDe
         {
             char digestString[kDigestStringSize];
             DigestToString(digestString, digest);
-            char buffer[1000];
+            char buffer[kMaxPathLength];
             strncpy(buffer, filename, sizeof(buffer));
             char*p = buffer;
             for ( ; *p; ++p) *p = tolower(*p);
@@ -125,6 +125,9 @@ static HashDigest CalculateLeafInputHashOffline(const Frozen::Dag* dag, int32_t 
             HashAddString(ingredient_stream, &hashState, "output", f.m_Filename.Get());
 
         int relevantFlags = dagNode.m_Flags & ~Frozen::DagNode::kFlagCacheableByLeafInputs;
+
+        //if our flags are completely default, let's not add them to the stream, it makes the ingredient stream easier
+        //to parse/compare for a human.
         if (relevantFlags != (Frozen::DagNode::kFlagOverwriteOutputs | Frozen::DagNode::kFlagAllowUnexpectedOutput))
             HashAddInteger(ingredient_stream, &hashState, "flags", relevantFlags);
     }
