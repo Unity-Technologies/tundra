@@ -49,7 +49,6 @@ FileInfo GetFileInfo(const char *path)
 #endif
 
     uint32_t flags = 0;
-    uint64_t mtime;
 
 #if defined(TUNDRA_UNIX)
     if (0 != lstat(path, &stbuf))
@@ -100,15 +99,9 @@ FileInfo GetFileInfo(const char *path)
     else if ((stbuf.st_mode & S_IFMT) == S_IFREG)
         flags |= FileInfo::kFlagFile;
 
-    mtime = stbuf.st_mtime;
-#if defined(TUNDRA_UNIX)
-    // Use nanosecond resolution
-    mtime = mtime * 1000000000ul + stbuf.st_mtim.tv_nsec;
-#endif
-
     result.m_Flags = flags;
     // Do not allow directories to expose real timestamps, as it's not reliable behaviour across platforms
-    result.m_Timestamp = (flags & FileInfo::kFlagDirectory) ? kDirectoryTimestamp : mtime;
+    result.m_Timestamp = (flags & FileInfo::kFlagDirectory) ? kDirectoryTimestamp : stbuf.st_mtime;
     result.m_Size = stbuf.st_size;
 
     return result;
