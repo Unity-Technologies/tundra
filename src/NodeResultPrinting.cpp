@@ -21,7 +21,7 @@ struct NodeResultPrintData
     const Frozen::DagNode *node_data;
     const char *cmd_line;
     bool verbose;
-    int duration;
+    double duration;
     ValidationResult validation_result;
     const bool *untouched_outputs;
     const char *output_buffer;
@@ -247,7 +247,7 @@ static void EmitBracketColor(MessageStatusLevel::Enum status_level)
         EmitColorForLevel(status_level);
 }
 
-static void PrintMessageMaster(MessageStatusLevel::Enum status_level, int dividend, int divisor, int duration, const char* message, va_list args)
+static void PrintMessageMaster(MessageStatusLevel::Enum status_level, int dividend, int divisor, double duration, const char* message, va_list args)
 {
     EmitBracketColor(status_level);
     printf("[");
@@ -266,9 +266,18 @@ static void PrintMessageMaster(MessageStatusLevel::Enum status_level, int divide
         printf(" ");
 
     if (duration >= 0)
-        printf("%2ds", duration);
+    {
+        if (duration < 1)
+        {
+            printf("%3dms", (int)(duration * 1000));
+        }
+        else
+        {
+            printf("%3ds ", (int)duration);
+        }
+    }
     else
-        printf("   ");
+        printf("     ");
 
 
     EmitBracketColor(status_level);
@@ -293,7 +302,7 @@ void PrintMessage(MessageStatusLevel::Enum status_level, const char* message, ..
     PrintMessageMaster(status_level, -1, -1, -1, message, args);
     va_end(args);
 }
-void PrintMessage(MessageStatusLevel::Enum status_level, int dividend, int divisor, int duration, const char* message, ...)
+void PrintMessage(MessageStatusLevel::Enum status_level, int dividend, int divisor, double duration, const char* message, ...)
 {
     va_list args;
     va_start(args,message);
@@ -432,7 +441,7 @@ void PrintNodeResult(
     bool failed = result->m_ReturnCode != 0 || result->m_WasSignalled || validationResult >= ValidationResult::UnexpectedConsoleOutputFail;
     bool verbose = (failed && !result->m_WasAborted) || always_verbose;
 
-    int duration = TimerDiffSeconds(time_exec_started, TimerGet());
+    double duration = TimerDiffSeconds(time_exec_started, TimerGet());
 
     NodeResultPrintData data = {};
     data.node_data = node_data;
