@@ -377,13 +377,6 @@ template<size_t N> static bool StartsWith(const wchar_t* str, size_t length, con
     return length >= (N - 1) && memcmp(str, prefix, (N - 1) * sizeof(wchar_t)) == 0;
 }
 
-template<size_t N> static size_t Insert(wchar_t* dst, size_t existing_length, const wchar_t (&prefix)[N])
-{
-    memmove(dst + N - 1, dst, existing_length * sizeof(wchar_t));
-    memcpy(dst, prefix,  sizeof(wchar_t) * (N-1));
-    return existing_length + N - 1;
-}
-
 bool NeedsLongPathConversion(const wchar_t* path, size_t length)
 {
     if (length == 0)
