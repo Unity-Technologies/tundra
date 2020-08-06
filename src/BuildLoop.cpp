@@ -281,18 +281,24 @@ static bool AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(RuntimeNode* 
     bool readSucceeded = CacheClient::AttemptRead(node->m_DagNode, currentLeafInputSignature, queue->m_Config.m_StatCache, &queue->m_Lock, thread_state);
     MutexLock(&queue->m_Lock);
 
+    uint64_t now = TimerGet();
+    double duration = TimerDiffSeconds(time_exec_started, now);
+    char digestString[kDigestStringSize];
+    DigestToString(digestString, currentLeafInputSignature);        
+    PrintMessage(readSucceeded ? MessageStatusLevel::Success : MessageStatusLevel::Info
+                , duration
+                , "%s [%s %s]"
+                , node->m_DagNode->m_Annotation.Get()
+                , readSucceeded ? "CacheHit" : "CacheMiss"
+                , digestString);
+
     if (readSucceeded)
     {
-        uint64_t now = TimerGet();
-        double duration = TimerDiffSeconds(time_exec_started, now);
-        char digestString[kDigestStringSize];
-        DigestToString(digestString, currentLeafInputSignature);        
-        PrintMessage(MessageStatusLevel::Success, duration, "%s [CacheHit %s]", node->m_DagNode->m_Annotation.Get(), digestString);
-
         node->m_BuildResult = NodeBuildResult::kRanSuccesfully;
         FinishNode(queue, node);
         return true;
     }
+
     return false;
 }
 
