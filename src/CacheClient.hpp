@@ -13,3 +13,5 @@ struct CacheClient
 };
 
 void GetCachingBehaviourSettingsFromEnvironment(bool* attemptReads, bool* attemptWrites);
+
+#define kCacheSignaturesDirectory "artifacts/signatures"

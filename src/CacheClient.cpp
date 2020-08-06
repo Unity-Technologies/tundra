@@ -40,6 +40,22 @@ enum Operation
     kOperationWrite
 };
 
+static int AppendFileToCommandLine(int totalWritten, char* buffer, int bufferSize, const char* fileName)
+{
+    int remainingBudget = bufferSize - totalWritten;
+
+    //headsup: requiredSpace return value does _not_ include length of the 0 terminator.
+    int requiredSpace = snprintf(buffer+totalWritten, remainingBudget, " \"%s\" ", fileName);
+
+    if (requiredSpace >= remainingBudget)
+    {
+        Log(kError, "Building CacheClient string exceeded buffer length");
+        return 0;
+    }
+
+    return totalWritten + requiredSpace;
+}
+
 static bool Invoke_REAPI_Cache_Client(const HashDigest& digest, StatCache *stat_cache, const FrozenArray<FrozenFileAndHash>& outputFiles, ThreadState* thread_state, Operation operation, const Frozen::DagNode* dagNode, Mutex* queue_lock)
 {
     ProfilerScope profiler_scope("InvokeCacheMe", thread_state->m_ProfilerThreadId, outputFiles[0].m_Filename);
@@ -67,18 +83,17 @@ static bool Invoke_REAPI_Cache_Client(const HashDigest& digest, StatCache *stat_
         PathBuffer output;
         PathInit(&output, it.m_Filename);
         MakeDirectoriesForFile(stat_cache, output);
-        int remainingBudget = sizeof(buffer)-totalWritten;
 
-        //headsup: requiredSpace return value does _not_ include length of the 0 terminator.
-        int requiredSpace = snprintf(buffer+totalWritten, remainingBudget, " \"%s\" ", it.m_Filename.Get());
-
-        if (requiredSpace >= remainingBudget)
-        {
-            Log(kError, "Building CacheClient string exceeded buffer length");
+        if ((totalWritten = AppendFileToCommandLine(totalWritten, buffer, sizeof(buffer), it.m_Filename.Get())) == 0)
             return false;
-        }
+    }
 
-        totalWritten += requiredSpace;
+    if (operation == kOperationWrite)
+    {
+        char path[kMaxPathLength];
+        snprintf(path, sizeof(path), kCacheSignaturesDirectory "/%s", digestString);
+        if ((totalWritten = AppendFileToCommandLine(totalWritten, buffer, sizeof(buffer), path)) == 0)
+            return false;
     }
 
     SlowCallbackData slowCallbackData;

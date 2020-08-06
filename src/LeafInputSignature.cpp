@@ -93,7 +93,7 @@ HashDigest ComputeLeafInputSignature(const Frozen::Dag* dag, const Frozen::DagDe
 }
 
 //This function calculates the offline part of the signature, which we store in the dag-derived file
-static HashDigest CalculateLeafInputHashOffline(const Frozen::Dag* dag, int32_t nodeIndex, MemAllocHeap* heap, FILE* ingredient_stream)
+HashDigest CalculateLeafInputHashOffline(const Frozen::Dag* dag, int32_t nodeIndex, MemAllocHeap* heap, FILE* ingredient_stream)
 {
     HashDigest hashResult = {};
 
@@ -137,17 +137,6 @@ static HashDigest CalculateLeafInputHashOffline(const Frozen::Dag* dag, int32_t 
     return hashResult;
 };
 
-static HashDigest CalculateLeafInputHashOfflineWithIngredientStream(const Frozen::Dag* dag, int32_t nodeIndex, MemAllocHeap* heap, FILE* ingredient_stream)
-{
-    return CalculateLeafInputHashOffline(dag, nodeIndex, heap, ingredient_stream);
-}
-
-HashDigest CalculateLeafInputHashOffline(const Frozen::Dag* dag, int32_t nodeIndex, MemAllocHeap* heap)
-{
-    return CalculateLeafInputHashOffline(dag, nodeIndex, heap, nullptr);
-}
-
-
 void PrintLeafInputSignature(Driver* driver, const char **argv, int argc)
 {
     Buffer<int32_t> requestedNodes;
@@ -169,7 +158,7 @@ void PrintLeafInputSignature(Driver* driver, const char **argv, int argc)
     }
 
     printf("OffLine ingredients to the leaf input hash\n");
-    CalculateLeafInputHashOfflineWithIngredientStream(dag, requestedNode, &driver->m_Heap, stdout);
+    CalculateLeafInputHashOffline(dag, requestedNode, &driver->m_Heap, stdout);
 
     printf("\n\n\nRuntime ingredients to the leaf input hash\n");
     MemAllocLinear scratch;

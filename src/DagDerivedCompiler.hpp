@@ -6,5 +6,6 @@ namespace Frozen
 }
 struct MemAllocHeap;
 struct MemAllocLinear;
+struct StatCache;
 
-bool CompileDagDerived(const Frozen::Dag* dag, MemAllocHeap* heap, MemAllocLinear* scratch, const char* dagderived_filename);
+bool CompileDagDerived(const Frozen::Dag* dag, MemAllocHeap* heap, MemAllocLinear* scratch, StatCache *stat_cache, const char* dagderived_filename);

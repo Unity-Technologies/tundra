@@ -393,7 +393,7 @@ static bool DriverPrepareDag(Driver *self, const char *dag_fn)
 
     if (!dagderived_info.Exists() || frozeDag)
     {
-        if (!CompileDagDerived(self->m_DagData, &self->m_Heap, &self->m_Allocator, dagderived_filename))
+        if (!CompileDagDerived(self->m_DagData, &self->m_Heap, &self->m_Allocator, &self->m_StatCache, dagderived_filename))
             return ExitRequestingFrontendRun("failed to create derived dag file %s", dagderived_filename);
     }
 

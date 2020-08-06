@@ -201,7 +201,28 @@ static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, M
 
 static HashDigest ComputeLeafInputSignature(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node)
 {
-    return ComputeLeafInputSignature(
+    char path[kMaxPathLength];
+    snprintf(path, sizeof(path), kCacheSignaturesDirectory "/tmp-%d", node->m_DagNodeIndex);
+
+    char offlinePath[kMaxPathLength];
+    snprintf(offlinePath, sizeof(offlinePath), kCacheSignaturesDirectory "/offline-%d", node->m_DagNodeIndex);
+
+    FILE *sig = fopen(path, "w");
+    fprintf(sig, "Cold hash ingredients:\n");
+    FILE *sigoffline = fopen(offlinePath, "r");
+
+    char            buffer[1024];
+    size_t          n;
+
+    while ((n = fread(buffer, sizeof(char), sizeof(buffer), sigoffline)) > 0)
+    {
+        if (fwrite(buffer, sizeof(char), n, sig) != n)
+            ; // error
+    }
+    fclose(sigoffline);
+
+    fprintf(sig, "Hot hash ingredients:\n");
+    HashDigest res = ComputeLeafInputSignature(
             queue->m_Config.m_Dag,
             queue->m_Config.m_DagDerived,
             &queue->m_Config.m_DagRuntimeData,
@@ -212,7 +233,17 @@ static HashDigest ComputeLeafInputSignature(BuildQueue* queue, ThreadState* thre
             queue->m_Config.m_StatCache,
             queue->m_Config.m_DigestCache,
             queue->m_Config.m_ScanCache,
-            nullptr);
+            sig);
+    fclose(sig);
+
+    char digestString[kDigestStringSize];
+    DigestToString(digestString, res);
+
+    char new_path[kMaxPathLength];
+    snprintf(new_path, sizeof(path), kCacheSignaturesDirectory "/%s", digestString);
+    RenameFile(path, new_path); // check result -> error
+
+    return res;
 }
 
 static bool AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(RuntimeNode* node, BuildQueue* queue, ThreadState* thread_state)

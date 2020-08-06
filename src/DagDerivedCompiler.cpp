@@ -12,6 +12,9 @@
 #include "FileSign.hpp"
 #include "BuildQueue.hpp"
 #include "LeafInputSignature.hpp"
+#include "CacheClient.hpp"
+#include "MakeDirectories.hpp"
+#include "StatCache.hpp"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -42,6 +45,7 @@ struct CompileDagDerivedWorker
     MemAllocHeap*  heap;
     MemAllocLinear* scratch;
     int node_count;
+    StatCache *stat_cache;
 
     void WriteFrozenArrayOfBackLinks()
     {
@@ -249,7 +253,15 @@ struct CompileDagDerivedWorker
             const Frozen::DagNode& node = dag->m_DagNodes[i];
             if (0 != (node.m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs))
             {
-                hashResult = CalculateLeafInputHashOffline(dag, i, heap);
+                char path[kMaxPathLength];
+                snprintf(path, sizeof(path), kCacheSignaturesDirectory "/offline-%d", i);
+                PathBuffer output;
+                PathInit(&output, path);
+                MakeDirectoriesForFile(stat_cache, output);
+
+                FILE *sig = fopen(path, "w");
+                hashResult = CalculateLeafInputHashOffline(dag, i, heap, sig);
+                fclose(sig);
             }
             BinarySegmentWrite(data_seg, (const char *)&hashResult, sizeof(HashDigest));
         }
@@ -267,7 +279,7 @@ struct CompileDagDerivedWorker
     }
 };
 
-static void CompileDagDerivedWorkerInit(CompileDagDerivedWorker* data, const Frozen::Dag* dag, MemAllocHeap* heap, MemAllocLinear* scratch)
+static void CompileDagDerivedWorkerInit(CompileDagDerivedWorker* data, const Frozen::Dag* dag, MemAllocHeap* heap, MemAllocLinear* scratch, StatCache *stat_cache)
 {
     data->heap = heap;
     data->scratch = scratch;
@@ -283,6 +295,7 @@ static void CompileDagDerivedWorkerInit(CompileDagDerivedWorker* data, const Fro
     data->scannerindex_seg = BinaryWriterAddSegment(data->writer);
     data->str_seg = BinaryWriterAddSegment(data->writer);
     data->node_count = dag->m_NodeCount;
+    data->stat_cache = stat_cache;
 }
 
 static void CompileDagDerivedWorkerDestroy(CompileDagDerivedWorker* data)
@@ -291,10 +304,10 @@ static void CompileDagDerivedWorkerDestroy(CompileDagDerivedWorker* data)
     BinaryWriterDestroy(data->writer);
 }
 
-bool CompileDagDerived(const Frozen::Dag* dag, MemAllocHeap* heap, MemAllocLinear* scratch, const char* dagderived_filename)
+bool CompileDagDerived(const Frozen::Dag* dag, MemAllocHeap* heap, MemAllocLinear* scratch, StatCache *stat_cache, const char* dagderived_filename)
 {
     CompileDagDerivedWorker worker;
-    CompileDagDerivedWorkerInit(&worker,dag,heap,scratch);
+    CompileDagDerivedWorkerInit(&worker,dag,heap,scratch,stat_cache);
     bool result = worker.WriteStreams(dagderived_filename);
     CompileDagDerivedWorkerDestroy(&worker);
     return result;
