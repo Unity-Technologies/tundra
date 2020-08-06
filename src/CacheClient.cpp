@@ -88,7 +88,7 @@ static bool Invoke_REAPI_Cache_Client(const HashDigest& digest, StatCache *stat_
     slowCallbackData.build_queue = thread_state->m_Queue;
 
     Log(kDebug,"%s\n",buffer);
-    ExecResult result = ExecuteProcess(buffer, 0, nullptr, nullptr, thread_state->m_ThreadIndex, false, operation == kOperationRead ? SlowCallback_CacheRead : SlowCallback_CacheWrite , &slowCallbackData);
+    ExecResult result = ExecuteProcess(buffer, 0, nullptr, &thread_state->m_LocalHeap, thread_state->m_ThreadIndex, false, operation == kOperationRead ? SlowCallback_CacheRead : SlowCallback_CacheWrite , &slowCallbackData);
 
     if (operation == Operation::kOperationRead)
         for (auto &it : outputFiles)
