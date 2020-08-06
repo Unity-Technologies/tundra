@@ -45,9 +45,9 @@
 #if TUNDRA_WIN32
 
 // Convert a string to a wide string. This is done as a macro so that we can use alloca() to allocate temporary memory for
-// the converted string.
+// the converted string. dstLength will be set to the length of the string in characters, including null terminator.
 #define CONVERT_TO_WIDE_PATH_ON_STACK(src, dst, dstLength) do { \
-	const size_t mbcount = strlen(src); \
+	const size_t mbcount = strlen(src) + 1; \
 	dstLength = MultiByteToWideChar(CP_UTF8, 0, src, mbcount, NULL, 0); \
 	dst = static_cast<wchar_t*>(_alloca(dstLength * sizeof(wchar_t))); \
 	MultiByteToWideChar(CP_UTF8, 0, src, mbcount, dst, dstLength); \

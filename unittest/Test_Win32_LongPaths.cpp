@@ -4,6 +4,17 @@
 #if defined(TUNDRA_WIN32)
 #include <Windows.h>
 
+TEST(Win32_LongPaths, ConvertToWidePathOnStack_IsCorrectLength)
+{
+    const char* str = "123456789";
+    wchar_t* wstr;
+    size_t wstrlength;
+    CONVERT_TO_WIDE_PATH_ON_STACK(str, wstr, wstrlength);
+
+    ASSERT_EQ(wcslen(wstr), strlen(str));
+    ASSERT_EQ(wstrlength, wcslen(wstr) + 1);
+}
+
 TEST(Win32_LongPaths, ShortAbsolutePath_IsReferencedDirectly)
 {
     wchar_t srcPath[] = L"C:\\src\\path";
