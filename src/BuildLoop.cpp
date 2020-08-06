@@ -191,7 +191,9 @@ static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, M
         double duration = TimerDiffSeconds(time_exec_started, now);
 
         MutexLock(&queue->m_Lock);
-        PrintMessage(success ? MessageStatusLevel::Success : MessageStatusLevel::Warning, duration, "%s [CacheWrite]", node->m_DagNode->m_Annotation.Get());
+        char digestString[kDigestStringSize];
+        DigestToString(digestString, node->m_CurrentLeafInputSignature);        
+        PrintMessage(success ? MessageStatusLevel::Success : MessageStatusLevel::Warning, duration, "%s [CacheWrite %s]", node->m_DagNode->m_Annotation.Get(), digestString);
         MutexUnlock(&queue->m_Lock);
     }
 
@@ -275,7 +277,9 @@ static bool AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(RuntimeNode* 
     {
         uint64_t now = TimerGet();
         double duration = TimerDiffSeconds(time_exec_started, now);
-        PrintMessage(MessageStatusLevel::Success, duration, "%s [CacheHit]", node->m_DagNode->m_Annotation.Get());
+        char digestString[kDigestStringSize];
+        DigestToString(digestString, currentLeafInputSignature);        
+        PrintMessage(MessageStatusLevel::Success, duration, "%s [CacheHit %s]", node->m_DagNode->m_Annotation.Get(), digestString);
 
         node->m_BuildResult = NodeBuildResult::kRanSuccesfully;
         FinishNode(queue, node);
