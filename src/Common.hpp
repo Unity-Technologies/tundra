@@ -49,9 +49,9 @@
 #define CONVERT_TO_WIDE_PATH_ON_STACK(src, dst, dstLength) do { \
 	const size_t mbcount = strlen(src); \
 	dstLength = MultiByteToWideChar(CP_UTF8, 0, src, mbcount, NULL, 0); \
-	dst = static_cast<wchar_t*>(alloca(dstLength * sizeof(wchar_t))); \
+	dst = static_cast<wchar_t*>(_alloca(dstLength * sizeof(wchar_t))); \
 	MultiByteToWideChar(CP_UTF8, 0, src, mbcount, dst, dstLength); \
-	} while (0)
+} while (0)
 
 // Convert a path to a long path, with appropriate special prefixes, if needed.
 // Parameters:

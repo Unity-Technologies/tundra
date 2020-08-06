@@ -43,7 +43,7 @@ TEST(Win32_LongPaths, LongAbsolutePath_FailsWithRequestForCorrectBufferSize_Then
     ASSERT_EQ(dstPath, nullptr);
     ASSERT_GT(dstLength, srcLength);
 
-    dstPath = (wchar_t*)alloca(sizeof(wchar_t) * dstLength);
+    dstPath = static_cast<wchar_t*>(_alloca(sizeof(wchar_t) * dstLength));
     ASSERT_TRUE(ConvertToLongPath(srcPath, srcLength, &dstPath, &dstLength));
     ASSERT_STREQ(dstPath, L"\\\\?\\C:\\long\\path\\abcdefghijklmnopqrstuvwxyz\\abcdefghijklmnopqrstuvwxyz\\abcdefghijklmnopqrstuvwxyz\\abcdefghijklmnopqrstuvwxyz\\abcdefghijklmnopqrstuvwxyz\\abcdefghijklmnopqrstuvwxyz\\abcdefghijklmnopqrstuvwxyz\\abcdefghijklmnopqrstuvwxyz\\abcdefghijklmnopqrstuvwxyz\\abcdefghijklmnopqrstuvwxyz");
     ASSERT_EQ(dstLength, wcslen(dstPath));
@@ -62,7 +62,7 @@ TEST(Win32_LongPaths, LongUNCPath_FailsWithRequestForCorrectBufferSize_ThenWorks
     ASSERT_EQ(dstPath, nullptr);
     ASSERT_GT(dstLength, srcLength);
 
-    dstPath = (wchar_t*)alloca(sizeof(wchar_t) * dstLength);
+    dstPath = static_cast<wchar_t*>(_alloca(sizeof(wchar_t) * dstLength));
     ASSERT_TRUE(ConvertToLongPath(srcPath, srcLength, &dstPath, &dstLength));
     ASSERT_STREQ(dstPath, L"\\\\?\\UNC\\MYMACHINE\\C\\long\\path\\abcdefghijklmnopqrstuvwxyz\\abcdefghijklmnopqrstuvwxyz\\abcdefghijklmnopqrstuvwxyz\\abcdefghijklmnopqrstuvwxyz\\abcdefghijklmnopqrstuvwxyz\\abcdefghijklmnopqrstuvwxyz\\abcdefghijklmnopqrstuvwxyz\\abcdefghijklmnopqrstuvwxyz\\abcdefghijklmnopqrstuvwxyz\\abcdefghijklmnopqrstuvwxyz");
     ASSERT_EQ(dstLength, wcslen(dstPath));

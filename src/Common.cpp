@@ -367,14 +367,17 @@ double TimerDiffSeconds(uint64_t start, uint64_t end)
 
 #if defined(TUNDRA_WIN32)
 
+template<size_t N> static constexpr size_t ConstWcslen(const wchar_t(&)[N]) { return N - 1; }
+
 const wchar_t  ExtendedPrefix[] = L"\\\\?\\";
 const wchar_t  DevicePathPrefix[] = L"\\\\.\\";
 const wchar_t  UNCExtendedPathPrefix[] = L"\\\\?\\UNC\\";
 const wchar_t  UNCPathPrefix[] = L"\\\\";
+const int MaxPrefixLength = ConstWcslen(UNCExtendedPathPrefix);
 
 template<size_t N> static bool StartsWith(const wchar_t* str, size_t length, const wchar_t (&prefix)[N])
 {
-    return length >= (N - 1) && memcmp(str, prefix, (N - 1) * sizeof(wchar_t)) == 0;
+    return length >= ConstWcslen(prefix) && memcmp(str, prefix, ConstWcslen(prefix) * sizeof(wchar_t)) == 0;
 }
 
 bool NeedsLongPathConversion(const wchar_t* path, size_t length)
@@ -405,10 +408,10 @@ bool ConvertToLongPath(wchar_t* input, const size_t inputLength, wchar_t** outpu
         return true;
     }
 
-    // The user may or may not have provided a buffer; if they have we will populate it. We offset by the longer prefix length
-    // so that when we prepend the prefix afterwards we don't have to move anything
-    wchar_t* offsetOutput = *output ? (*output + ARRAY_SIZE(UNCExtendedPathPrefix) - 1) : nullptr;
-    size_t size = ::GetFullPathNameW(input, offsetOutput ? (*outputLength - ARRAY_SIZE(UNCExtendedPathPrefix) + 1) : 0, offsetOutput, nullptr);
+    // The user may or may not have provided a buffer; if they have we will populate it now.
+    // We offset the buffer so that when we prepend the prefix afterwards we don't have to move anything.
+    wchar_t* offsetOutput = *output ? (*output + MaxPrefixLength) : nullptr;
+    size_t size = ::GetFullPathNameW(input, offsetOutput ? (*outputLength - MaxPrefixLength) : 0, offsetOutput, nullptr);
     if (size < MAX_PATH)
     {
         // Simplest to ignore any buffer the user provided
@@ -419,7 +422,7 @@ bool ConvertToLongPath(wchar_t* input, const size_t inputLength, wchar_t** outpu
 
     // Increase size to account for the longer prefix - we might not need all of it. We can't figure out
     // which prefix it will actually be without having allocated a buffer big enough already.
-    size_t requiredSize = size + ARRAY_SIZE(UNCExtendedPathPrefix) - 1;
+    size_t requiredSize = size + MaxPrefixLength;
     if (output == nullptr || *outputLength < requiredSize)
     {
         *outputLength = requiredSize;
@@ -431,16 +434,16 @@ bool ConvertToLongPath(wchar_t* input, const size_t inputLength, wchar_t** outpu
     if (StartsWith(offsetOutput, size, UNCPathPrefix))
     {
         prefix = UNCExtendedPathPrefix;
-        prefix_length = ARRAY_SIZE(UNCExtendedPathPrefix) - 1;
+        prefix_length = ConstWcslen(UNCExtendedPathPrefix);
 
         // Strip off the UNCPathPrefix by pushing the offsetOutput pointer forward to cut it off
-        offsetOutput += ARRAY_SIZE(UNCPathPrefix) - 1;
-        size -= ARRAY_SIZE(UNCPathPrefix) - 1;
+        offsetOutput += ConstWcslen(UNCPathPrefix);
+        size -= ConstWcslen(UNCPathPrefix);
     }
     else
     {
         prefix = ExtendedPrefix;
-        prefix_length = ARRAY_SIZE(ExtendedPrefix) - 1;
+        prefix_length = ConstWcslen(ExtendedPrefix);
     }
 
     *output = offsetOutput - prefix_length;
@@ -475,7 +478,7 @@ bool MakeDirectory(const char *path)
         if (longPathLength == 0)
             return false;
 
-        longPath = static_cast<wchar_t*>(alloca(longPathLength * sizeof(wchar_t)));
+        longPath = static_cast<wchar_t*>(_alloca(longPathLength * sizeof(wchar_t)));
         ConvertToLongPath(widePath, widePathLength, &longPath, &longPathLength);
         widePath = longPath;
     }

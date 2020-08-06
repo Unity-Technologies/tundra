@@ -77,7 +77,7 @@ FileInfo GetFileInfo(const char *path)
         if (longPathLength == 0)
             goto Failure;
 
-        longPath = (wchar_t*)alloca(longPathLength * sizeof(wchar_t));
+        longPath = static_cast<wchar_t*>(_alloca(longPathLength * sizeof(wchar_t)));
         ConvertToLongPath(widePath, widePathLength, &longPath, &longPathLength);
         widePath = longPath;
     }
