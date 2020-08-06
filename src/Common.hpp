@@ -43,8 +43,35 @@
 #define TD_ALIGN(v, alignment) (((v) + (alignment)-1) & ~((alignment)-1))
 
 #if TUNDRA_WIN32
-std::wstring ToWideString(const char* input);
-bool ConvertToLongPath(std::wstring* path);
+
+// Convert a string to a wide string. This is done as a macro so that we can use alloca() to allocate temporary memory for
+// the converted string.
+#define CONVERT_TO_WIDE_PATH_ON_STACK(src, dst, dstLength) do { \
+	const size_t mbcount = strlen(src); \
+	dstLength = MultiByteToWideChar(CP_UTF8, 0, src, mbcount, NULL, 0); \
+	dst = static_cast<wchar_t*>(alloca(dstLength * sizeof(wchar_t))); \
+	MultiByteToWideChar(CP_UTF8, 0, src, mbcount, dst, dstLength); \
+	} while (0)
+
+// Convert a path to a long path, with appropriate special prefixes, if needed.
+// Parameters:
+// * input: the input string
+// * inputLength: the length of the input string in characters, including the null terminator.
+// * output: a pointer to a pointer to a buffer for storing the converted string. This should not be NULL,
+//           but the pointer it points to can be NULL, in which case this function will
+//             a) attempt to just assign the input to the output, if it believes the string is short enough, or
+//             b) calculate the size of buffer required.
+// * outputLength: a pointer to the length of the output buffer, in characters, including space for the null terminator.
+//                 This should not be NULL. If the output buffer was NULL, or the size of the buffer is too small to hold
+//                 the output, then when the function returns the variable this points to will have been updated to give
+//                 the actual buffer size required. Note that the final string may be slightly smaller than the buffer.
+// Returns:
+// * true, if the path was converted successfully (or no conversion was needed); the buffer pointed to by output
+//         is a valid string to use; outputLength is the length of the string (NOT including null terminator).
+// * false, if no output buffer was provided or the buffer was too small, or there was an error. If outputLength
+//          is zero in this situation it means there was an error; otherwise, allocate a buffer of the given size
+//          and try again.
+bool ConvertToLongPath(wchar_t* input, const size_t inputLength, wchar_t** output, size_t* outputLength);
 #endif
 
 

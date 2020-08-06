@@ -372,83 +372,88 @@ const wchar_t  DevicePathPrefix[] = L"\\\\.\\";
 const wchar_t  UNCExtendedPathPrefix[] = L"\\\\?\\UNC\\";
 const wchar_t  UNCPathPrefix[] = L"\\\\";
 
-bool IsExtended(const std::wstring& path)
+template<size_t N> static bool StartsWith(const wchar_t* str, size_t length, const wchar_t (&prefix)[N])
 {
-    return path.compare(0, wcslen(ExtendedPrefix), ExtendedPrefix) == 0;
+    return length >= (N - 1) && memcmp(str, prefix, (N - 1) * sizeof(wchar_t)) == 0;
 }
 
-bool IsUNCExtended(const std::wstring& path)
+template<size_t N> static size_t Insert(wchar_t* dst, size_t existing_length, const wchar_t (&prefix)[N])
 {
-    return path.compare(0, wcslen(UNCExtendedPathPrefix), UNCExtendedPathPrefix) == 0;
+    memmove(dst + N - 1, dst, existing_length * sizeof(wchar_t));
+    memcpy(dst, prefix,  sizeof(wchar_t) * (N-1));
+    return existing_length + N - 1;
 }
 
-bool IsDevice(const std::wstring& path)
+bool NeedsLongPathConversion(const wchar_t* path, size_t length)
 {
-    return path.compare(0, wcslen(DevicePathPrefix), DevicePathPrefix) == 0;
-}
+    if (length == 0)
+        return false;
 
-bool IsNormalized(const std::wstring& path)
-{
-    return path.empty() || IsDevice(path) || IsExtended(path) || IsUNCExtended(path);
-}
-
-std::wstring ToWideString(const char* input)
-{
-    int size = MultiByteToWideChar(CP_UTF8, 0, input, strlen(input), 0, 0);
-    std::wstring result(size, L'\0');
-    if (size) MultiByteToWideChar(CP_UTF8, 0, input, strlen(input), &result[0], size);
-    return result;
-}
-
-bool ConvertToLongPath(std::wstring* path)
-{
-    if (IsNormalized(*path))
+    if (StartsWith(path, length, DevicePathPrefix)
+     || StartsWith(path, length, UNCExtendedPathPrefix)
+     || StartsWith(path, length, ExtendedPrefix))
     {
         WIN32_FILE_ATTRIBUTE_DATA data;
-        if (path->empty() // An empty path doesn't exist
-            || GetFileAttributesExW(path->c_str(), GetFileExInfoStandard, &data) != 0)
-        {
-            return true;
-        }
-    }
-
-    wchar_t buf[MAX_PATH];
-    auto size = ::GetFullPathNameW(path->c_str(), MAX_PATH, buf, nullptr);
-
-    if (size == 0)
-    {
-        return false;
-    }
-
-    std::wstring str;
-    if (size < MAX_PATH)
-    {
-        str.assign(buf);
-    }
-    else
-    {
-        str.resize(size + wcslen(UNCExtendedPathPrefix), 0);
-        size = ::GetFullPathNameW(path->c_str(), size, const_cast<LPWSTR>(str.data()), nullptr);
-
-        if (size == 0)
+        if (GetFileAttributesExW(path, GetFileExInfoStandard, &data) != 0)
         {
             return false;
         }
-
-        std::wstring prefix(ExtendedPrefix);
-        if (str.compare(0, wcslen(UNCPathPrefix), UNCPathPrefix) == 0)
-        {
-            prefix.assign(UNCExtendedPathPrefix);
-            str.erase(0, wcslen(UNCPathPrefix));
-            size = size - wcslen(UNCPathPrefix);
-        }
-
-        str.insert(0, prefix);
-        str.resize(size + prefix.length());
-        str.shrink_to_fit();
     }
 
-    *path = str;
+    return true;
+}
+
+bool ConvertToLongPath(wchar_t* input, const size_t inputLength, wchar_t** output, size_t* outputLength)
+{
+    if (!NeedsLongPathConversion(input, inputLength))
+    {
+        *output = input;
+        *outputLength = inputLength;
+        return true;
+    }
+
+    // The user may or may not have provided a buffer; if they have we will populate it. We offset by the longer prefix length
+    // so that when we prepend the prefix afterwards we don't have to move anything
+    wchar_t* offsetOutput = *output ? (*output + ARRAY_SIZE(UNCExtendedPathPrefix) - 1) : nullptr;
+    size_t size = ::GetFullPathNameW(input, offsetOutput ? (*outputLength - ARRAY_SIZE(UNCExtendedPathPrefix) + 1) : 0, offsetOutput, nullptr);
+    if (size < MAX_PATH)
+    {
+        // Simplest to ignore any buffer the user provided
+        *output = input;
+        *outputLength = inputLength;
+        return true;
+    }
+
+    // Increase size to account for the longer prefix - we might not need all of it. We can't figure out
+    // which prefix it will actually be without having allocated a buffer big enough already.
+    size_t requiredSize = size + ARRAY_SIZE(UNCExtendedPathPrefix) - 1;
+    if (output == nullptr || *outputLength < requiredSize)
+    {
+        *outputLength = requiredSize;
+        return false;
+    }
+
+    const wchar_t* prefix;
+    size_t prefix_length;
+    if (StartsWith(offsetOutput, size, UNCPathPrefix))
+    {
+        prefix = UNCExtendedPathPrefix;
+        prefix_length = ARRAY_SIZE(UNCExtendedPathPrefix) - 1;
+
+        // Strip off the UNCPathPrefix by pushing the offsetOutput pointer forward to cut it off
+        offsetOutput += ARRAY_SIZE(UNCPathPrefix) - 1;
+        size -= ARRAY_SIZE(UNCPathPrefix) - 1;
+    }
+    else
+    {
+        prefix = ExtendedPrefix;
+        prefix_length = ARRAY_SIZE(ExtendedPrefix) - 1;
+    }
+
+    *output = offsetOutput - prefix_length;
+    *outputLength = size + prefix_length;
+    memcpy(*output, prefix, prefix_length * sizeof(wchar_t));
+
     return true;
 }
 #endif
@@ -466,16 +471,28 @@ bool MakeDirectory(const char *path)
     if (isalpha(path[0]) && 0 == memcmp(&path[1], ":\\\0", 3))
         return true;
 
-    std::wstring widePath(ToWideString(path));
-    if (!ConvertToLongPath(&widePath))
-        return false;
+    WCHAR* widePath;
+    size_t widePathLength;
+    CONVERT_TO_WIDE_PATH_ON_STACK(path, widePath, widePathLength);
 
-    if (!CreateDirectoryW(widePath.c_str(), NULL))
+    WCHAR* longPath = nullptr;
+    size_t longPathLength = 0;
+    if (!ConvertToLongPath(widePath, widePathLength, &longPath, &longPathLength))
+    {
+        if (longPathLength == 0)
+            return false;
+
+        longPath = static_cast<wchar_t*>(alloca(longPathLength * sizeof(wchar_t)));
+        ConvertToLongPath(widePath, widePathLength, &longPath, &longPathLength);
+        widePath = longPath;
+    }
+
+    if (!CreateDirectoryW(widePath, NULL))
     {
         switch (GetLastError())
         {
         case ERROR_ALREADY_EXISTS:
-            return PathIsDirectoryW(widePath.c_str());
+            return PathIsDirectoryW(widePath);
         default:
             return false;
         }

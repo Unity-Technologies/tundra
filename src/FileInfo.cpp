@@ -64,29 +64,31 @@ FileInfo GetFileInfo(const char *path)
 
     DWORD attrs;
 
-    if (strlen(path) >= MAX_PATH)
+    //// To work around maximum path length limitations on Windows, we have to use the wide-character version of the API, with a special prefix
+
+    WCHAR* widePath;
+    size_t widePathLength;
+    CONVERT_TO_WIDE_PATH_ON_STACK(path, widePath, widePathLength);
+
+    WCHAR* longPath = nullptr;
+    size_t longPathLength = 0;
+    if (!ConvertToLongPath(widePath, widePathLength, &longPath, &longPathLength))
     {
-        //// To work around maximum path length limitations on Windows, we have to use the wide-character version of the API, with a special prefix
-        std::wstring widePath(ToWideString(path));
-        if (!ConvertToLongPath(&widePath))
+        if (longPathLength == 0)
             goto Failure;
 
-        if (0 != _wstat64(widePath.c_str(), &stbuf))
-            goto Failure;
-
-        attrs = GetFileAttributesW(widePath.c_str());
-        if (attrs == INVALID_FILE_ATTRIBUTES)
-            goto Failure;
+        longPath = (wchar_t*)alloca(longPathLength * sizeof(wchar_t));
+        ConvertToLongPath(widePath, widePathLength, &longPath, &longPathLength);
+        widePath = longPath;
     }
-    else
-    {
-        if (0 != _stat64(path, &stbuf))
-            goto Failure;
 
-        attrs = GetFileAttributesA(path);
-        if (attrs == INVALID_FILE_ATTRIBUTES)
-            goto Failure;
-    }
+    if (0 != _wstat64(widePath, &stbuf))
+        goto Failure;
+
+    attrs = GetFileAttributesW(widePath);
+    if (attrs == INVALID_FILE_ATTRIBUTES)
+        goto Failure;
+
 
     if ((attrs & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
         flags |= FileInfo::kFlagSymlink;
