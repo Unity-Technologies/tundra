@@ -260,6 +260,9 @@ struct CompileDagDerivedWorker
                 MakeDirectoriesForFile(stat_cache, output);
 
                 FILE *sig = fopen(path, "w");
+                if (sig == NULL)
+                    CroakErrno("Failed opening offline signature ingredients for writing.");
+
                 hashResult = CalculateLeafInputHashOffline(dag, i, heap, sig);
                 fclose(sig);
             }

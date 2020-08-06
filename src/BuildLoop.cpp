@@ -210,8 +210,15 @@ static HashDigest ComputeLeafInputSignature(BuildQueue* queue, ThreadState* thre
     snprintf(offlinePath, sizeof(offlinePath), kCacheSignaturesDirectory "/offline-%d", node->m_DagNodeIndex);
 
     FILE *sig = fopen(path, "w");
-    fprintf(sig, "Cold hash ingredients:\n");
     FILE *sigoffline = fopen(offlinePath, "r");
+
+    if (sig == NULL)
+        CroakErrno("Failed opening signature ingredients for writing.");
+
+    if (sigoffline == NULL)
+        CroakErrno("Failed opening offline signature ingredients for reading.");
+
+    fprintf(sig, "Cold hash ingredients:\n");
 
     char            buffer[1024];
     size_t          n;
@@ -219,7 +226,7 @@ static HashDigest ComputeLeafInputSignature(BuildQueue* queue, ThreadState* thre
     while ((n = fread(buffer, sizeof(char), sizeof(buffer), sigoffline)) > 0)
     {
         if (fwrite(buffer, sizeof(char), n, sig) != n)
-            ; // error
+            CroakErrno("Failed writing cold signature ingredients.");
     }
     fclose(sigoffline);
 
@@ -243,7 +250,8 @@ static HashDigest ComputeLeafInputSignature(BuildQueue* queue, ThreadState* thre
 
     char new_path[kMaxPathLength];
     snprintf(new_path, sizeof(path), kCacheSignaturesDirectory "/%s", digestString);
-    RenameFile(path, new_path); // check result -> error
+    if (!RenameFile(path, new_path))
+        CroakErrno("Failed moving signature ingredients file.");
 
     return res;
 }
