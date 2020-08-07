@@ -56,7 +56,7 @@ static int AppendFileToCommandLine(int totalWritten, char* buffer, int bufferSiz
     return totalWritten + requiredSpace;
 }
 
-static bool Invoke_REAPI_Cache_Client(const HashDigest& digest, StatCache *stat_cache, const FrozenArray<FrozenFileAndHash>& outputFiles, ThreadState* thread_state, Operation operation, const Frozen::DagNode* dagNode, Mutex* queue_lock)
+static bool Invoke_REAPI_Cache_Client(const HashDigest& digest, StatCache *stat_cache, const FrozenArray<FrozenFileAndHash>& outputFiles, ThreadState* thread_state, Operation operation, const Frozen::Dag* dag, const Frozen::DagNode* dagNode, Mutex* queue_lock)
 {
     ProfilerScope profiler_scope("InvokeCacheMe", thread_state->m_ProfilerThreadId, outputFiles[0].m_Filename);
 
@@ -91,7 +91,7 @@ static bool Invoke_REAPI_Cache_Client(const HashDigest& digest, StatCache *stat_
     if (operation == kOperationWrite)
     {
         char path[kMaxPathLength];
-        snprintf(path, sizeof(path), kCacheSignaturesDirectory "/%s", digestString);
+        snprintf(path, sizeof(path), "%s/%s", dag->m_CacheSignatureDirectoryName.Get(), digestString);
         if ((totalWritten = AppendFileToCommandLine(totalWritten, buffer, sizeof(buffer), path)) == 0)
             return false;
     }
@@ -112,13 +112,13 @@ static bool Invoke_REAPI_Cache_Client(const HashDigest& digest, StatCache *stat_
     return result.m_ReturnCode == 0;
 }
 
-bool CacheClient::AttemptRead(const Frozen::DagNode* dagNode, HashDigest signature, StatCache* stat_cache, Mutex* queue_lock, ThreadState* thread_state)
+bool CacheClient::AttemptRead(const Frozen::Dag* dag, const Frozen::DagNode* dagNode, HashDigest signature, StatCache* stat_cache, Mutex* queue_lock, ThreadState* thread_state)
 {
-    return Invoke_REAPI_Cache_Client(signature, stat_cache, dagNode->m_OutputFiles, thread_state, Operation::kOperationRead, dagNode, queue_lock );
+    return Invoke_REAPI_Cache_Client(signature, stat_cache, dagNode->m_OutputFiles, thread_state, Operation::kOperationRead, dag, dagNode, queue_lock );
 }
-bool CacheClient::AttemptWrite(const Frozen::DagNode* dagNode, HashDigest signature, StatCache* stat_cache, Mutex* queue_lock, ThreadState* thread_state)
+bool CacheClient::AttemptWrite(const Frozen::Dag* dag, const Frozen::DagNode* dagNode, HashDigest signature, StatCache* stat_cache, Mutex* queue_lock, ThreadState* thread_state)
 {
-    return Invoke_REAPI_Cache_Client(signature, stat_cache, dagNode->m_OutputFiles, thread_state, Operation::kOperationWrite, dagNode, queue_lock );
+    return Invoke_REAPI_Cache_Client(signature, stat_cache, dagNode->m_OutputFiles, thread_state, Operation::kOperationWrite, dag, dagNode, queue_lock );
 }
 
 void GetCachingBehaviourSettingsFromEnvironment(bool* attemptReads, bool* attemptWrites)

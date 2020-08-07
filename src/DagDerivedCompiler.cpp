@@ -254,7 +254,7 @@ struct CompileDagDerivedWorker
             if (0 != (node.m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs))
             {
                 char path[kMaxPathLength];
-                snprintf(path, sizeof(path), kCacheSignaturesDirectory "/offline-%d", i);
+                snprintf(path, sizeof(path), "%s/offline-%d", dag->m_CacheSignatureDirectoryName.Get(), i);
                 PathBuffer output;
                 PathInit(&output, path);
                 MakeDirectoriesForFile(stat_cache, output);

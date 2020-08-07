@@ -160,6 +160,7 @@ static void DumpDag(const Frozen::Dag *data)
     for (const FrozenFileAndHash& directoryCausingImplicitDependencies: data->m_DirectoriesCausingImplicitDependencies)
         printf("directoryCausingImplicitDependencies: %s\n", directoryCausingImplicitDependencies.m_Filename.Get());
 
+    printf("m_CacheSignatureDirectoryName : %s\n", data->m_CacheSignatureDirectoryName.Get());
     printf("m_StateFileName : %s\n", data->m_StateFileName.Get());
     printf("m_StateFileNameTmp : %s\n", data->m_StateFileNameTmp.Get());
     printf("m_ScanCacheFileName : %s\n", data->m_ScanCacheFileName.Get());
