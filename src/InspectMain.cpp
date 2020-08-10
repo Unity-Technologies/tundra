@@ -64,7 +64,7 @@ static void DumpDag(const Frozen::Dag *data)
         printf("  annotation: %s\n", node.m_Annotation.Get());
 
         printf("  dependencies consumed during build:");
-        for (int32_t dep : node.m_Dependencies)
+        for (int32_t dep : node.m_OriginalDependencies)
             printf(" %u", dep);
         printf("\n");
 
