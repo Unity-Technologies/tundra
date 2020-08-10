@@ -279,7 +279,8 @@ static bool WriteNodes(
 
         const char *action = FindStringValue(node, "Action");
         const char *annotation = FindStringValue(node, "Annotation");
-        const JsonArrayValue *deps = FindArrayValue(node, "Deps");
+        const JsonArrayValue *dependencies = FindArrayValue(node, "Dependencies");
+        const JsonArrayValue *dependenciesConsumedDuringUsageOnly = FindArrayValue(node, "DependenciesConsumedDuringUsageOnly");
         const JsonArrayValue *inputs = FindArrayValue(node, "Inputs");
         const JsonArrayValue *filesThatMightBeIncluded = FindArrayValue(node, "FilesThatMightBeIncluded");
         const JsonArrayValue *outputs = FindArrayValue(node, "Outputs");
@@ -299,30 +300,34 @@ static bool WriteNodes(
 
         WriteStringPtr(node_data_seg, str_seg, annotation);
 
-        if (deps)
-        {
-            BinarySegmentAlign(array2_seg, 4);
-            BinarySegmentWriteInt32(node_data_seg, (int)deps->m_Count);
-            BinarySegmentWritePointer(node_data_seg, BinarySegmentPosition(array2_seg));
-            for (size_t i = 0, count = deps->m_Count; i < count; ++i)
+        auto writeDependencyIndexList = [=](const JsonArrayValue* deps)->void{
+            if (deps)
             {
-                if (const JsonNumberValue *dep_index = deps->m_Values[i]->AsNumber())
+                BinarySegmentAlign(array2_seg, 4);
+                BinarySegmentWriteInt32(node_data_seg, (int)deps->m_Count);
+                BinarySegmentWritePointer(node_data_seg, BinarySegmentPosition(array2_seg));
+                for (size_t i = 0, count = deps->m_Count; i < count; ++i)
                 {
-                    int index = (int)dep_index->m_Number;
-                    int remapped_index = remap_table[index];
-                    BinarySegmentWriteInt32(array2_seg, remapped_index);
-                }
-                else
-                {
-                    return false;
+                    if (const JsonNumberValue *dep_index = deps->m_Values[i]->AsNumber())
+                    {
+                        int index = (int)dep_index->m_Number;
+                        int remapped_index = remap_table[index];
+                        BinarySegmentWriteInt32(array2_seg, remapped_index);
+                    }
+                    else
+                    {
+                        Croak("dependency node index out of range for node %s.", annotation);
+                    }
                 }
             }
-        }
-        else
-        {
-            BinarySegmentWriteInt32(node_data_seg, 0);
-            BinarySegmentWriteNullPointer(node_data_seg);
-        }
+            else
+            {
+                BinarySegmentWriteInt32(node_data_seg, 0);
+                BinarySegmentWriteNullPointer(node_data_seg);
+            }
+        };
+        writeDependencyIndexList(dependencies);
+        writeDependencyIndexList(dependenciesConsumedDuringUsageOnly);
 
         WriteFileArray(node_data_seg, array2_seg, str_seg, inputs);
         WriteFileArray(node_data_seg, array2_seg, str_seg, filesThatMightBeIncluded);

@@ -6,6 +6,7 @@
 #include "PathUtil.hpp"
 #include "Buffer.hpp"
 #include "HashTable.hpp"
+#include <functional>
 
 namespace Frozen
 {
@@ -103,7 +104,8 @@ struct DagNode
 
     FrozenString m_Action;
     FrozenString m_Annotation;
-    FrozenArray<int32_t> m_Dependencies;
+    FrozenArray<int32_t> m_OriginalDependencies;
+    FrozenArray<int32_t> m_DependenciesConsumedDuringUsageOnly;
     FrozenArray<FrozenFileAndHash> m_InputFiles;
     FrozenArray<FrozenFileAndHash> m_FilesThatMightBeIncluded;
     FrozenArray<FrozenFileAndHash> m_OutputFiles;
@@ -189,6 +191,7 @@ struct DagDerived
     uint32_t m_MagicNumber;
     uint32_t m_NodeCount;
 
+    FrozenArray<FrozenArray<int32_t>> m_Dependencies;
     FrozenArray<FrozenArray<uint32_t>> m_NodeBacklinks;
     FrozenArray<FrozenArray<FrozenFileAndHash>> m_NodeLeafInputs;
 
@@ -213,6 +216,7 @@ void DagRuntimeDataDestroy(DagRuntimeData* data);
 bool FindDagNodeForFile(const DagRuntimeData* data, uint32_t filenameHash, const char* filename, const Frozen::DagNode **result);
 bool IsFileGenerated(const DagRuntimeData* data, uint32_t filenameHash, const char* filename);
 
-void FindDependentNodesFromRootIndex(MemAllocHeap* heap, const Frozen::Dag* dag, int32_t rootIndex, Buffer<int32_t>& results);
-void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* dag, int32_t* searchRootIndices, int32_t searchRootCount, Buffer<int32_t>& results);
+void FindDependentNodesFromRootIndex(MemAllocHeap* heap, const Frozen::Dag* dag, const Frozen::DagDerived* dagDerived, int32_t rootIndex, Buffer<int32_t>& results);
+void FindDependentNodesFromRootIndex(MemAllocHeap* heap, const Frozen::Dag* dag, std::function<const int32_t*(int)>& arrayAccess, std::function<size_t(int)>& sizeAccess, int32_t rootIndex, Buffer<int32_t>& results);
+void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* dag, const Frozen::DagDerived* dagDerived, int32_t* searchRootIndices, int32_t searchRootCount, Buffer<int32_t>& results);
 void FindAllOutputFiles(const Frozen::Dag* dag, HashSet<kFlagPathStrings>& outputFiles);

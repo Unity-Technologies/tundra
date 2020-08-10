@@ -90,7 +90,7 @@ static void Enqueue(BuildQueue *queue, RuntimeNode *runtime_node)
 
 static bool AllDependenciesAreFinished(BuildQueue *queue, RuntimeNode *runtime_node)
 {
-    for (int32_t dep_index : runtime_node->m_DagNode->m_Dependencies)
+    for (int32_t dep_index : queue->m_Config.m_DagDerived->m_Dependencies[runtime_node->m_DagNodeIndex])
     {
         RuntimeNode *runtime_node = GetRuntimeNodeForDagNodeIndex(queue, dep_index);
         if (!runtime_node->m_Finished)
@@ -101,7 +101,7 @@ static bool AllDependenciesAreFinished(BuildQueue *queue, RuntimeNode *runtime_n
 
 static bool AllDependenciesAreSuccesful(BuildQueue *queue, RuntimeNode *runtime_node)
 {
-    for (int32_t dep_index : runtime_node->m_DagNode->m_Dependencies)
+    for (int32_t dep_index : queue->m_Config.m_DagDerived->m_Dependencies[runtime_node->m_DagNodeIndex])
     {
         RuntimeNode *runtime_node = GetRuntimeNodeForDagNodeIndex(queue, dep_index);
         CHECK(runtime_node->m_Finished);
@@ -317,7 +317,7 @@ static void EnqueueDependencies(BuildQueue *queue, ThreadState *thread_state, Ru
 {
     int enqueue_count = 0;
 
-    for (int32_t depDagIndex : node->m_DagNode->m_Dependencies)
+    for (int32_t depDagIndex : queue->m_Config.m_DagDerived->m_Dependencies[node->m_DagNodeIndex])
     {
         if (RuntimeNode *dependentNode = GetRuntimeNodeForDagNodeIndex(queue, depDagIndex))
         {

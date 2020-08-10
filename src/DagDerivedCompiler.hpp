@@ -2,7 +2,7 @@
 
 namespace Frozen
 {
-    struct Dat;
+    struct Dag;
 }
 struct MemAllocHeap;
 struct MemAllocLinear;

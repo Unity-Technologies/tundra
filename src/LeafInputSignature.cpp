@@ -93,14 +93,14 @@ HashDigest ComputeLeafInputSignature(const Frozen::Dag* dag, const Frozen::DagDe
 }
 
 //This function calculates the offline part of the signature, which we store in the dag-derived file
-HashDigest CalculateLeafInputHashOffline(const Frozen::Dag* dag, int32_t nodeIndex, MemAllocHeap* heap, FILE* ingredient_stream)
+HashDigest CalculateLeafInputHashOffline(const Frozen::Dag* dag, std::function<const int32_t*(int)>& arrayAccess, std::function<size_t(int)>& sizeAccess, int32_t nodeIndex, MemAllocHeap* heap, FILE* ingredient_stream)
 {
     HashDigest hashResult = {};
 
     Buffer<int32_t> all_dependent_nodes;
     BufferInit(&all_dependent_nodes);
 
-    FindDependentNodesFromRootIndex(heap, dag, nodeIndex, all_dependent_nodes);
+    FindDependentNodesFromRootIndex(heap, dag, arrayAccess, sizeAccess, nodeIndex, all_dependent_nodes);
 
     HashState hashState;
     HashInit(&hashState);
@@ -158,7 +158,9 @@ void PrintLeafInputSignature(Driver* driver, const char **argv, int argc)
     }
 
     printf("OffLine ingredients to the leaf input hash\n");
-    CalculateLeafInputHashOffline(dag, requestedNode, &driver->m_Heap, stdout);
+    std::function<const int32_t*(int)> arrayAccess = [=](int index){return driver->m_DagDerivedData->m_Dependencies[index].GetArray();};
+    std::function<size_t(int)> sizeAccess = [=](int index){return driver->m_DagDerivedData->m_Dependencies[index].GetCount();};
+    CalculateLeafInputHashOffline(dag, arrayAccess, sizeAccess, requestedNode, &driver->m_Heap, stdout);
 
     printf("\n\n\nRuntime ingredients to the leaf input hash\n");
     MemAllocLinear scratch;

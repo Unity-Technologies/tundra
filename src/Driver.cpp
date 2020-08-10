@@ -682,11 +682,18 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
 
     DriverSelectNodes(dag, targets, target_count, &node_stack, heap);
 
+    for (int i = 0; i < node_stack.m_Size; ++i)
+    {
+        const Frozen::DagNode *dag_node = dag_nodes + node_stack[i];
+        for (auto usageDep : dag_node->m_DependenciesConsumedDuringUsageOnly)
+            BufferAppendOne(&node_stack, heap, usageDep);
+    }
+
     self->m_AmountOfRuntimeNodesSpecificallyRequested = node_stack.m_Size;
 
     Buffer<int32_t> node_indices;
     BufferInitWithCapacity(&node_indices, heap, 1024);
-    FindDependentNodesFromRootIndices(heap, dag, &node_stack[0], node_stack.m_Size, node_indices);
+    FindDependentNodesFromRootIndices(heap, dag, self->m_DagDerivedData, &node_stack[0], node_stack.m_Size, node_indices);
 
     int node_count = node_indices.m_Size;
     // Allocate space for nodes

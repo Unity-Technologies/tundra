@@ -2,20 +2,13 @@
 #include "Buffer.hpp"
 #include "HashTable.hpp"
 
-void FindDependentNodesFromRootIndex(MemAllocHeap* heap, const Frozen::Dag* dag, int32_t rootIndex, Buffer<int32_t>& results)
-{
-    FindDependentNodesFromRootIndices(heap, dag, &rootIndex, 1, results);
-}
-
-void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* dag, int32_t* searchRootIndices, int32_t searchRootCount, Buffer<int32_t>& results)
+void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* dag, std::function<const int32_t*(int)>& arrayAccess, std::function<size_t(int)>& sizeAccess, int32_t* searchRootIndices, int32_t searchRootCount, Buffer<int32_t>& results)
 {
     Buffer<int32_t> node_stack;
     BufferInitWithCapacity(&node_stack, heap, 1024);
     BufferAppend(&node_stack, heap, searchRootIndices, searchRootCount);
 
     int node_count = 0;
-    const Frozen::DagNode *src_nodes = dag->m_DagNodes;
-
     const size_t node_word_count = (dag->m_NodeCount + 31) / 32;
     uint32_t *node_visited_bits = HeapAllocateArrayZeroed<uint32_t>(heap, node_word_count);
 
@@ -27,8 +20,6 @@ void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* da
 
         if (0 == (node_visited_bits[dag_word] & dag_bit))
         {
-            const Frozen::DagNode *node = src_nodes + dag_index;
-
             BufferAppendOne(&results, heap, dag_index);
 
             node_visited_bits[dag_word] |= dag_bit;
@@ -37,12 +28,30 @@ void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* da
             ++node_count;
 
             // Stash node dependencies on the work queue to keep iterating
-            BufferAppend(&node_stack, heap, node->m_Dependencies.GetArray(), node->m_Dependencies.GetCount());
+            
+            BufferAppend(&node_stack, heap, arrayAccess(dag_index), sizeAccess(dag_index));
         }
     }
 
     HeapFree(heap, node_visited_bits);
     node_visited_bits = nullptr;
+}
+
+void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* dag, const Frozen::DagDerived* dagDerived, int32_t* searchRootIndices, int32_t searchRootCount, Buffer<int32_t>& results)
+{
+    std::function<const int32_t*(int)> arrayAccess = [=](int index){return dagDerived->m_Dependencies[index].GetArray();};
+    std::function<size_t(int)> sizeAccess = [=](int index){return dagDerived->m_Dependencies[index].GetCount();};
+    FindDependentNodesFromRootIndices(heap, dag, arrayAccess, sizeAccess, searchRootIndices, searchRootCount, results);
+}
+
+void FindDependentNodesFromRootIndex(MemAllocHeap* heap, const Frozen::Dag* dag, std::function<const int32_t*(int)>& arrayAccess, std::function<size_t(int)>& sizeAccess, int32_t rootIndex, Buffer<int32_t>& results)
+{
+    FindDependentNodesFromRootIndices(heap, dag, arrayAccess, sizeAccess, &rootIndex, 1, results);
+}
+
+void FindDependentNodesFromRootIndex(MemAllocHeap* heap, const Frozen::Dag* dag, const Frozen::DagDerived* dagDerived, int32_t rootIndex, Buffer<int32_t>& results)
+{
+    FindDependentNodesFromRootIndices(heap, dag, dagDerived, &rootIndex, 1, results);
 }
 
 void FindAllOutputFiles(const Frozen::Dag* dag, HashSet<kFlagPathStrings>& outputFiles)

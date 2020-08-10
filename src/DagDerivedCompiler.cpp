@@ -47,12 +47,15 @@ struct CompileDagDerivedWorker
     int node_count;
     StatCache *stat_cache;
 
+    Buffer<int32_t> *deps;
+    Buffer<int32_t> *links;
+
     void WriteFrozenArrayOfBackLinks()
     {
         Buffer<int32_t> *links = HeapAllocateArrayZeroed<Buffer<int32_t>>(heap, node_count);
         for (int32_t i = 0; i < node_count; ++i)
         {
-            for(int dep : dag->m_DagNodes[i].m_Dependencies)
+            for(int dep : dag->m_DagNodes[i].m_OriginalDependencies)
             BufferAppendOne(&links[dep], heap, i);
         }
         BinarySegmentWriteUint32(main_seg, node_count);
@@ -67,6 +70,41 @@ struct CompileDagDerivedWorker
         for (size_t i = 0; i < node_count; ++i)
             BufferDestroy(&links[i], heap);
         HeapFree(heap, links);
+    }
+
+    void WriteFrozenArrayOfDependenciesAndBackLinks()
+    {
+        deps = HeapAllocateArrayZeroed<Buffer<int32_t>>(heap, node_count);
+        for (int32_t i = 0; i < node_count; ++i)
+        {
+            for(int dep : dag->m_DagNodes[i].m_OriginalDependencies)
+            {
+                BufferAppendOne(&deps[i], heap, dep);
+                for(int dep2 : dag->m_DagNodes[dep].m_DependenciesConsumedDuringUsageOnly)
+                    BufferAppendOne(&deps[i], heap, dep2);
+            }
+        }
+
+        links = HeapAllocateArrayZeroed<Buffer<int32_t>>(heap, node_count);
+        for (int32_t i = 0; i < node_count; ++i)
+        {
+            for(int dep : deps[i])
+                BufferAppendOne(&links[dep], heap, i);
+        }
+
+        auto writeArray = [=](Buffer<int32_t>* array)->void{
+            BinarySegmentWriteUint32(main_seg, node_count);
+            BinarySegmentWritePointer(main_seg, BinarySegmentPosition(data_seg));
+            for (int32_t i = 0; i < node_count; ++i)
+            {
+                BinarySegmentWriteInt32(data_seg, array[i].m_Size);
+                BinarySegmentWritePointer(data_seg, BinarySegmentPosition(arraydata_seg));
+                for(int32_t dep : array[i])
+                    BinarySegmentWriteInt32(arraydata_seg, dep);
+            }
+        };
+        writeArray(deps);
+        writeArray(links);
     }
 
     struct ScannerIndexWithListOfFiles
@@ -175,7 +213,10 @@ struct CompileDagDerivedWorker
 
         PerNodeWorkerDataInit(&m_PerNodeWorkerData);
 
-        FindDependentNodesFromRootIndex(heap, dag, nodeIndex, m_PerNodeWorkerData.all_dependent_nodes);
+        std::function<const int32_t*(int)> arrayAccess = [=](int index){return deps[index].begin();};
+        std::function<size_t(int)> sizeAccess = [=](int index){return deps[index].m_Size;};
+
+        FindDependentNodesFromRootIndex(heap, dag, arrayAccess, sizeAccess, nodeIndex, m_PerNodeWorkerData.all_dependent_nodes);
 
         for(int32_t childNodeIndex : m_PerNodeWorkerData.all_dependent_nodes)
         {
@@ -263,7 +304,9 @@ struct CompileDagDerivedWorker
                 if (sig == NULL)
                     CroakErrno("Failed opening offline signature ingredients for writing.");
 
-                hashResult = CalculateLeafInputHashOffline(dag, i, heap, sig);
+                std::function<const int32_t*(int)> arrayAccess = [=](int index){return deps[index].begin();};
+                std::function<size_t(int)> sizeAccess = [=](int index){return deps[index].m_Size;};
+                hashResult = CalculateLeafInputHashOffline(dag, arrayAccess, sizeAccess, i, heap, sig);
                 fclose(sig);
             }
             BinarySegmentWrite(data_seg, (const char *)&hashResult, sizeof(HashDigest));
@@ -274,7 +317,7 @@ struct CompileDagDerivedWorker
     {
         BinarySegmentWriteUint32(main_seg, Frozen::DagDerived::MagicNumber);
         BinarySegmentWriteUint32(main_seg, node_count);
-        WriteFrozenArrayOfBackLinks();
+        WriteFrozenArrayOfDependenciesAndBackLinks();
         WriteLeafInputsAndScannerIndicesToFilesToScan();
         WriteLeafInputHashOffline();
         BinarySegmentWriteUint32(main_seg, Frozen::DagDerived::MagicNumber);
@@ -305,6 +348,14 @@ static void CompileDagDerivedWorkerDestroy(CompileDagDerivedWorker* data)
 {
     HashTableDestroy(&data->shared_strings);
     BinaryWriterDestroy(data->writer);
+
+    for (size_t i = 0; i < data->node_count; ++i)
+    {        
+        BufferDestroy(&data->links[i], data->heap);
+        BufferDestroy(&data->deps[i], data->heap);
+    }
+    HeapFree(data->heap, data->links);    
+    HeapFree(data->heap, data->deps);    
 }
 
 bool CompileDagDerived(const Frozen::Dag* dag, MemAllocHeap* heap, MemAllocLinear* scratch, StatCache *stat_cache, const char* dagderived_filename)
