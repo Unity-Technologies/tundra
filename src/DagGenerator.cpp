@@ -279,8 +279,10 @@ static bool WriteNodes(
 
         const char *action = FindStringValue(node, "Action");
         const char *annotation = FindStringValue(node, "Annotation");
-        const JsonArrayValue *dependencies = FindArrayValue(node, "Dependencies");
-        const JsonArrayValue *dependenciesConsumedDuringUsageOnly = FindArrayValue(node, "DependenciesConsumedDuringUsageOnly");
+        const JsonArrayValue *toBuildDependencies = FindArrayValue(node, "ToBuildDependencies");
+        if (toBuildDependencies == nullptr)
+            toBuildDependencies = FindArrayValue(node, "Deps");
+        const JsonArrayValue *toUseDependencies = FindArrayValue(node, "ToUseDependencies");
         const JsonArrayValue *inputs = FindArrayValue(node, "Inputs");
         const JsonArrayValue *filesThatMightBeIncluded = FindArrayValue(node, "FilesThatMightBeIncluded");
         const JsonArrayValue *outputs = FindArrayValue(node, "Outputs");
@@ -326,8 +328,9 @@ static bool WriteNodes(
                 BinarySegmentWriteNullPointer(node_data_seg);
             }
         };
-        writeDependencyIndexList(dependencies);
-        writeDependencyIndexList(dependenciesConsumedDuringUsageOnly);
+
+        writeDependencyIndexList(toBuildDependencies);
+        writeDependencyIndexList(toUseDependencies);
 
         WriteFileArray(node_data_seg, array2_seg, str_seg, inputs);
         WriteFileArray(node_data_seg, array2_seg, str_seg, filesThatMightBeIncluded);
