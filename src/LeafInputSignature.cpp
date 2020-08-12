@@ -105,7 +105,7 @@ HashDigest CalculateLeafInputHashOffline(const Frozen::Dag* dag, std::function<c
     HashState hashState;
     HashInit(&hashState);
 
-    std::sort(all_dependent_nodes.begin(), all_dependent_nodes.end(), [dag](int& a, int& b) { return strcmp(dag->m_DagNodes[a].m_Annotation.Get(), dag->m_DagNodes[b].m_Annotation.Get()) < 0; });
+    std::sort(all_dependent_nodes.begin(), all_dependent_nodes.end(), [dag](const int& a, const int& b) { return strcmp(dag->m_DagNodes[a].m_Annotation.Get(), dag->m_DagNodes[b].m_Annotation.Get()) < 0; });
 
     for(int32_t childNodeIndex : all_dependent_nodes)
     {
