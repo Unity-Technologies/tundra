@@ -120,6 +120,7 @@ struct DagNode
     FrozenArray<int32_t> m_SharedResources;
     FrozenArray<DagFileSignature> m_FileSignatures;
     FrozenArray<DagGlobSignature> m_GlobSignatures;
+    FrozenArray<FrozenFileAndHash> m_CachingInputIgnoreList;
     uint32_t m_Flags;
     uint32_t m_OriginalIndex;
     uint32_t m_DagNodeIndex;
@@ -136,7 +137,7 @@ struct SharedResourceData
 
 struct Dag
 {
-    static const uint32_t MagicNumber = 0xfac92243 ^ kTundraHashMagic;
+    static const uint32_t MagicNumber = 0x2ac92245 ^ kTundraHashMagic;
 
     uint32_t m_MagicNumber;
 
@@ -186,7 +187,7 @@ struct ScannerIndexWithListOfFiles
 
 struct DagDerived
 {
-    static const uint32_t MagicNumber = 0x9dead123 ^ kTundraHashMagic;
+    static const uint32_t MagicNumber = 0x9eead124 ^ kTundraHashMagic;
 
     uint32_t m_MagicNumber;
     uint32_t m_NodeCount;

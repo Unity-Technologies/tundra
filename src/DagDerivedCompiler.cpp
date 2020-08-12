@@ -119,7 +119,6 @@ struct CompileDagDerivedWorker
         HashSet<kFlagPathStrings> m_AlreadyProcessedFiles;
         Buffer<ScannerIndexWithListOfFiles> scannersWithListsOfFiles;
         Buffer<int32_t> all_dependent_nodes;
-        const Frozen::DagNode* dagNode;
     };
 
     void PerNodeWorkerDataInit(PerNodeWorkerData* data)
@@ -212,6 +211,9 @@ struct CompileDagDerivedWorker
         }
 
         PerNodeWorkerDataInit(&m_PerNodeWorkerData);
+
+        for (const auto& ignoredInput: node.m_CachingInputIgnoreList)
+            HashSetInsertIfNotPresent(&m_PerNodeWorkerData.m_AlreadyProcessedFiles, ignoredInput.m_FilenameHash, ignoredInput.m_Filename.Get());
 
         std::function<const int32_t*(int)> arrayAccess = [=](int index){return deps[index].begin();};
         std::function<size_t(int)> sizeAccess = [=](int index){return deps[index].m_Size;};
@@ -350,12 +352,12 @@ static void CompileDagDerivedWorkerDestroy(CompileDagDerivedWorker* data)
     BinaryWriterDestroy(data->writer);
 
     for (size_t i = 0; i < data->node_count; ++i)
-    {        
+    {
         BufferDestroy(&data->links[i], data->heap);
         BufferDestroy(&data->deps[i], data->heap);
     }
-    HeapFree(data->heap, data->links);    
-    HeapFree(data->heap, data->deps);    
+    HeapFree(data->heap, data->links);
+    HeapFree(data->heap, data->deps);
 }
 
 bool CompileDagDerived(const Frozen::Dag* dag, MemAllocHeap* heap, MemAllocLinear* scratch, StatCache *stat_cache, const char* dagderived_filename)

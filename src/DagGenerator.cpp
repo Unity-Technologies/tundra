@@ -293,6 +293,7 @@ static bool WriteNodes(
         const JsonArrayValue *shared_resources = FindArrayValue(node, "SharedResources");
         const JsonArrayValue *frontend_rsps = FindArrayValue(node, "FrontendResponseFiles");
         const JsonArrayValue *allowedOutputSubstrings = FindArrayValue(node, "AllowedOutputSubstrings");
+        const JsonArrayValue *cachingInputIgnoreList = FindArrayValue(node, "CachingInputIgnoreList");
         const char *writetextfile_payload = FindStringValue(node, "WriteTextFilePayload");
 
         if (writetextfile_payload == nullptr)
@@ -406,6 +407,8 @@ static bool WriteNodes(
 
         EmitFileSignatures(node, node_data_seg, array2_seg, str_seg);
         EmitGlobSignatures(node, node_data_seg, array2_seg, str_seg, heap, scratch);
+
+        WriteFileArray(node_data_seg, array2_seg, str_seg, cachingInputIgnoreList);
 
         uint32_t flags = 0;
 
