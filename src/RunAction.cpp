@@ -120,7 +120,7 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
         EmitOutputBytesToDestination(&result, buffer, strlen(buffer));
 
         MutexLock(queue_lock);
-        PrintNodeResult(&result, node_data, "", thread_state->m_Queue, thread_state, false, TimerGet(), ValidationResult::Pass, nullptr, true);
+        PrintNodeResult(&result, node_data, "", thread_state->m_Queue, thread_state, false, TimerGet(), ValidationResult::Pass, nullptr, true, false, HashDigest());
         MutexUnlock(queue_lock);
 
         ExecResultFreeMemory(&result);
@@ -292,7 +292,8 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
 
     //maybe consider changing this to use a dedicated lock for printing, instead of using the queuelock.
     MutexLock(queue_lock);
-    PrintNodeResult(&result, node_data, last_cmd_line, thread_state->m_Queue, thread_state, echo_cmdline, time_of_start, passedOutputValidation, untouched_outputs, false);
+
+    PrintNodeResult(&result, node_data, last_cmd_line, thread_state->m_Queue, thread_state, echo_cmdline, time_of_start, passedOutputValidation, untouched_outputs, false, RuntimeNodeHasAttemptedCacheLookup(node), node->m_CurrentLeafInputSignature);
     MutexUnlock(queue_lock);
 
     ExecResultFreeMemory(&result);

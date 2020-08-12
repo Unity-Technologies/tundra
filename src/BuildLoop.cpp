@@ -188,14 +188,15 @@ static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, M
     if (runActionResult == NodeBuildResult::kRanSuccesfully && queue->m_Config.m_AttemptCacheWrites && IsNodeCacheableByLeafInputs(node))
     {
         uint64_t time_exec_started = TimerGet();
-        bool success = CacheClient::AttemptWrite(queue->m_Config.m_Dag, node->m_DagNode, node->m_CurrentLeafInputSignature, stat_cache, queue_lock, thread_state);
+        auto writeResult = CacheClient::AttemptWrite(queue->m_Config.m_Dag, node->m_DagNode, node->m_CurrentLeafInputSignature, stat_cache, queue_lock, thread_state);
         uint64_t now = TimerGet();
         double duration = TimerDiffSeconds(time_exec_started, now);
 
         MutexLock(&queue->m_Lock);
         char digestString[kDigestStringSize];
         DigestToString(digestString, node->m_CurrentLeafInputSignature);
-        PrintMessage(success ? MessageStatusLevel::Success : MessageStatusLevel::Warning, duration, "%s [CacheWrite %s]", node->m_DagNode->m_Annotation.Get(), digestString);
+
+        PrintMessage(writeResult == CacheResult::Success ? MessageStatusLevel::Success : MessageStatusLevel::Warning, duration, "%s [CacheWrite %s]", node->m_DagNode->m_Annotation.Get(), digestString);
         MutexUnlock(&queue->m_Lock);
     }
 
@@ -296,25 +297,40 @@ static bool AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(RuntimeNode* 
 
     uint64_t time_exec_started = TimerGet();
     MutexUnlock(&queue->m_Lock);
-    bool readSucceeded = CacheClient::AttemptRead(queue->m_Config.m_Dag, node->m_DagNode, currentLeafInputSignature, queue->m_Config.m_StatCache, &queue->m_Lock, thread_state);
+    auto cacheReadResult = CacheClient::AttemptRead(queue->m_Config.m_Dag, node->m_DagNode, currentLeafInputSignature, queue->m_Config.m_StatCache, &queue->m_Lock, thread_state);
     MutexLock(&queue->m_Lock);
 
     uint64_t now = TimerGet();
     double duration = TimerDiffSeconds(time_exec_started, now);
     char digestString[kDigestStringSize];
     DigestToString(digestString, currentLeafInputSignature);
-    PrintMessage(readSucceeded ? MessageStatusLevel::Success : MessageStatusLevel::Info
+
+    auto printMsg = [=](MessageStatusLevel::Enum statusLevel, const char* msg)
+    {
+        PrintMessage(statusLevel
                 , duration
                 , "%s [%s %s]"
                 , node->m_DagNode->m_Annotation.Get()
-                , readSucceeded ? "CacheHit" : "CacheMiss"
+                , msg
                 , digestString);
+    };
 
-    if (readSucceeded)
+    switch (cacheReadResult)
     {
-        node->m_BuildResult = NodeBuildResult::kRanSuccesfully;
-        FinishNode(queue, node);
-        return true;
+        case CacheResult::Failure:
+            printMsg(MessageStatusLevel::Warning, "CacheRead");
+            break;
+        case CacheResult::Success:
+            printMsg(MessageStatusLevel::Success, "CacheHit");
+            node->m_BuildResult = NodeBuildResult::kRanSuccesfully;
+            FinishNode(queue, node);
+
+            return true;
+
+        case CacheResult::CacheMiss:
+            //on a cache miss we are not going to print anything when we miss.  We'll defer the printing to when we locally build this node at which
+            //time we'll mention that there was a miss, and what the hash of the miss was.
+            break;
     }
 
     return false;
