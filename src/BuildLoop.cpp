@@ -128,6 +128,10 @@ static void EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(BuildQueue *queue, R
             if (RuntimeNodeIsQueued(waiter) || RuntimeNodeIsActive(waiter) || waiter->m_Finished)
                 continue;
 
+            //we should only enqueue nodes that depend on us that we are actually trying to build
+            if (!RuntimeNodeHasEverBeenQueued(waiter))
+                continue;
+
             // If the node isn't ready, skip it.
             if (!AllDependenciesAreFinished(queue, waiter))
                 continue;
