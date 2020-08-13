@@ -85,6 +85,9 @@ static void Enqueue(BuildQueue *queue, RuntimeNode *runtime_node)
     write_index = (write_index + 1) & queue_mask;
     queue->m_QueueWriteIndex = write_index;
 
+    if (!RuntimeNodeHasEverBeenQueued(runtime_node))
+        queue->m_AmountOfNodesEverQueued++;
+
     RuntimeNodeFlagQueued(runtime_node);
 
     CHECK(AvailableNodeCount(queue) == 1 + avail_init);
@@ -325,15 +328,14 @@ static bool AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(RuntimeNode* 
             printMsg(MessageStatusLevel::Warning, "CacheRead");
             break;
         case CacheResult::Success:
-            printMsg(MessageStatusLevel::Success, "CacheHit");
+            PrintCacheHit(queue, thread_state, duration, node);
             node->m_BuildResult = NodeBuildResult::kRanSuccesfully;
             FinishNode(queue, node);
 
             return true;
 
         case CacheResult::CacheMiss:
-            //on a cache miss we are not going to print anything when we miss.  We'll defer the printing to when we locally build this node at which
-            //time we'll mention that there was a miss, and what the hash of the miss was.
+            PrintCacheMissIntoStructuredLog(thread_state,node);
             break;
     }
 

@@ -243,6 +243,7 @@ BuildResult::Enum BuildQueueBuild(BuildQueue *queue, MemAllocLinear* scratch)
 
     queue->m_QueueWriteIndex = amountQueued;
     queue->m_QueueReadIndex = 0;
+    queue->m_AmountOfNodesEverQueued = amountQueued;
 
     CondBroadcast(&queue->m_WorkAvailable);
 

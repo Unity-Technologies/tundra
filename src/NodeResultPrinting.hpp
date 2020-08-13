@@ -10,6 +10,7 @@ namespace Frozen { struct DagNode; };
 struct BuildQueue;
 struct ThreadState;
 struct DriverOptions;
+struct RuntimeNode;
 
 namespace MessageStatusLevel
 {
@@ -26,7 +27,8 @@ enum Enum
 void PrintMessage(MessageStatusLevel::Enum status_level, const char* message, ...);
 void PrintMessage(MessageStatusLevel::Enum status_level, int duration, const char* message, ...);
 void PrintMessage(MessageStatusLevel::Enum status_level, int duration, ExecResult *result, const char *message, ...);
-
+void PrintCacheHit(BuildQueue* queue, ThreadState *thread_state, double duration, RuntimeNode* node);
+void PrintCacheMissIntoStructuredLog(ThreadState* thread_state, RuntimeNode* node);
 void EmitColorForLevel(MessageStatusLevel::Enum status_level);
 void EmitColorReset();
 void InitNodeResultPrinting(const DriverOptions* driverOptions);

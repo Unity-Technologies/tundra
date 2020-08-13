@@ -317,7 +317,7 @@ void PrintMessage(MessageStatusLevel::Enum status_level, int duration, ExecResul
 
 static void PrintNodeResult(const NodeResultPrintData *data, BuildQueue *queue)
 {
-    PrintMessage(data->status_level, data->processed_node_count, queue->m_Config.m_TotalRuntimeNodeCount, data->duration, data->node_data->m_Annotation.Get());
+    PrintMessage(data->status_level, data->processed_node_count, queue->m_AmountOfNodesEverQueued, data->duration, data->node_data->m_Annotation.Get());
 
     if (data->verbose)
     {
@@ -414,6 +414,59 @@ inline char *StrDupN(MemAllocHeap *allocator, const char *str, size_t len)
 inline char *StrDup(MemAllocHeap *allocator, const char *str)
 {
     return StrDupN(allocator, str, strlen(str));
+}
+
+
+
+static void PrintCacheOperationIntoStructuredLog(ThreadState* thread_state, RuntimeNode* node, const char* hitOrMissMessage)
+{
+    if (IsStructuredLogActive())
+    {
+        MemAllocLinearScope allocScope(&thread_state->m_ScratchAlloc);
+
+        JsonWriter msg;
+        JsonWriteInit(&msg, &thread_state->m_ScratchAlloc);
+        JsonWriteStartObject(&msg);
+
+        JsonWriteKeyName(&msg, "msg");
+        JsonWriteValueString(&msg, hitOrMissMessage);
+
+        JsonWriteKeyName(&msg, "annotation");
+        JsonWriteValueString(&msg, node->m_DagNode->m_Annotation);
+
+        JsonWriteKeyName(&msg, "index");
+        JsonWriteValueInteger(&msg, node->m_DagNode->m_OriginalIndex);
+
+        JsonWriteKeyName(&msg, "leafInputSignature");
+        char hash[kDigestStringSize];
+        DigestToString(hash, node->m_CurrentLeafInputSignature);
+        JsonWriteValueString(&msg, hash);
+
+        JsonWriteEndObject(&msg);
+        LogStructured(&msg);
+    }
+}
+
+void PrintCacheHitIntoStructuredLog(ThreadState* thread_state, RuntimeNode* node)
+{
+    PrintCacheOperationIntoStructuredLog(thread_state, node, "cachehit");
+}
+
+void PrintCacheMissIntoStructuredLog(ThreadState* thread_state, RuntimeNode* node)
+{
+    PrintCacheOperationIntoStructuredLog(thread_state, node, "cachemiss");
+}
+
+void PrintCacheHit(BuildQueue* queue, ThreadState *thread_state, double duration, RuntimeNode* node)
+{
+    PrintCacheHitIntoStructuredLog(thread_state, node);
+
+    char buffer[1024];
+    char hash[kDigestStringSize];
+    DigestToString(hash, node->m_CurrentLeafInputSignature);
+    int written = snprintf(buffer, sizeof(buffer), "%s [CacheHit %s]", node->m_DagNode->m_Annotation.Get(), hash);
+    if (written >0 && written < sizeof(buffer))
+        PrintMessage(MessageStatusLevel::Success, queue->m_FinishedNodeCount, queue->m_AmountOfNodesEverQueued, duration, buffer);
 }
 
 void PrintNodeResult(
