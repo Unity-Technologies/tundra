@@ -31,8 +31,6 @@ struct NodeResultPrintData
     bool was_signalled;
     bool was_aborted;
     bool was_preparation_error;
-    bool had_cache_miss;
-    HashDigest cache_miss_hash;
 };
 
 static bool EmitColors = false;
@@ -319,14 +317,7 @@ void PrintMessage(MessageStatusLevel::Enum status_level, int duration, ExecResul
 
 static void PrintNodeResult(const NodeResultPrintData *data, BuildQueue *queue)
 {
-    if (!data->had_cache_miss)
-        PrintMessage(data->status_level, data->processed_node_count, queue->m_Config.m_TotalRuntimeNodeCount, data->duration, data->node_data->m_Annotation.Get());
-    else
-    {
-        char buf[kDigestStringSize];
-        DigestToString(buf, data->cache_miss_hash);
-        PrintMessage(data->status_level, data->processed_node_count, queue->m_Config.m_TotalRuntimeNodeCount, data->duration, "%s [CacheMiss %s]", data->node_data->m_Annotation.Get(), buf);
-    }
+    PrintMessage(data->status_level, data->processed_node_count, queue->m_Config.m_TotalRuntimeNodeCount, data->duration, data->node_data->m_Annotation.Get());
 
     if (data->verbose)
     {
@@ -435,9 +426,7 @@ void PrintNodeResult(
     uint64_t time_exec_started,
     ValidationResult validationResult,
     const bool *untouched_outputs,
-    bool was_preparation_error,
-    bool had_cache_miss,
-    HashDigest cache_miss_hash)
+    bool was_preparation_error)
 {
     int processedNodeCount = queue->m_FinishedNodeCount;
     bool failed = result->m_ReturnCode != 0 || result->m_WasSignalled || validationResult >= ValidationResult::UnexpectedConsoleOutputFail;
@@ -453,8 +442,6 @@ void PrintNodeResult(
     data.validation_result = validationResult;
     data.untouched_outputs = untouched_outputs;
     data.processed_node_count = processedNodeCount;
-    data.had_cache_miss = had_cache_miss;
-    data.cache_miss_hash = cache_miss_hash;
     data.status_level = failed ? MessageStatusLevel::Failure : MessageStatusLevel::Success;
 
     data.return_code = was_preparation_error ? 1 : result->m_ReturnCode;

@@ -40,9 +40,7 @@ void PrintNodeResult(
     uint64_t time_exec_started,
     ValidationResult validationResult,
     const bool *untouched_outputs,
-    bool was_preparation_error,
-    bool had_cache_miss,
-    HashDigest cache_miss_hash);
+    bool was_preparation_error);
 int PrintNodeInProgress(const Frozen::DagNode *node_data, uint64_t time_of_start, const BuildQueue *queue, const char* message = nullptr);
 void PrintDeferredMessages(BuildQueue *queue);
 void PrintServiceMessage(MessageStatusLevel::Enum statusLevel, const char *formatString, ...);
