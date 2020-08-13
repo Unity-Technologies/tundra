@@ -336,6 +336,35 @@ static bool AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(RuntimeNode* 
     return false;
 }
 
+void LogEnqueue(MemAllocLinear* scratch, RuntimeNode* enqueuedNode, RuntimeNode* enqueueingNode)
+{
+    MemAllocLinearScope allocScope(scratch);
+
+    JsonWriter msg;
+    JsonWriteInit(&msg, scratch);
+    JsonWriteStartObject(&msg);
+
+    JsonWriteKeyName(&msg, "msg");
+    JsonWriteValueString(&msg, "enqueueNode");
+
+    JsonWriteKeyName(&msg, "enqueuedNodeAnnotation");
+    JsonWriteValueString(&msg, enqueuedNode->m_DagNode->m_Annotation);
+
+    JsonWriteKeyName(&msg, "enqueuedNodeIndex");
+    JsonWriteValueInteger(&msg, enqueuedNode->m_DagNode->m_OriginalIndex);
+
+    if (enqueueingNode != nullptr)
+    {
+        JsonWriteKeyName(&msg, "enqueueingNodeAnnotation");
+        JsonWriteValueString(&msg, enqueueingNode->m_DagNode->m_Annotation);
+
+        JsonWriteKeyName(&msg, "enqueueingNodeIndex");
+        JsonWriteValueInteger(&msg, enqueueingNode->m_DagNode->m_OriginalIndex);
+    }
+    JsonWriteEndObject(&msg);
+    LogStructured(&msg);
+}
+
 static void EnqueueDependencies(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node)
 {
     int enqueue_count = 0;
@@ -347,6 +376,8 @@ static void EnqueueDependencies(BuildQueue *queue, ThreadState *thread_state, Ru
             // Did someone else get to the node first?
             if (RuntimeNodeHasEverBeenQueued(dependentNode))
                 continue;
+
+            LogEnqueue(&thread_state->m_ScratchAlloc, dependentNode, node);
 
             Enqueue(queue, dependentNode);
             ++enqueue_count;

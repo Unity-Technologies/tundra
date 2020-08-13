@@ -221,7 +221,7 @@ static void ProcessThrottling(BuildQueue *queue)
     throttled = false;
 }
 
-BuildResult::Enum BuildQueueBuild(BuildQueue *queue)
+BuildResult::Enum BuildQueueBuild(BuildQueue *queue, MemAllocLinear* scratch)
 {
     // Make sure none of the build threads see in-progress state due to a spurious wakeup.
     MutexLock(&queue->m_Lock);
@@ -237,6 +237,8 @@ BuildResult::Enum BuildQueueBuild(BuildQueue *queue)
         RuntimeNode *runtime_node = runtime_nodes + i;
         RuntimeNodeFlagQueued(runtime_node);
         build_queue[amountQueued++] = i;
+
+        LogEnqueue(scratch, runtime_node, nullptr);
     }
 
     queue->m_QueueWriteIndex = amountQueued;

@@ -883,7 +883,7 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count)
 
     BuildResult::Enum build_result = BuildResult::kOk;
 
-    build_result = BuildQueueBuild(&build_queue);
+    build_result = BuildQueueBuild(&build_queue, &self->m_Allocator);
 
     if (self->m_Options.m_DebugSigning)
     {

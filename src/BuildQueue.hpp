@@ -8,7 +8,7 @@
 #include "MemAllocHeap.hpp"
 #include "JsonWriter.hpp"
 #include "DagData.hpp"
-
+#include "BuildLoop.hpp"
 
 struct MemAllocHeap;
 struct RuntimeNode;
@@ -109,7 +109,7 @@ struct BuildQueue
 
 void BuildQueueInit(BuildQueue *queue, const BuildQueueConfig *config);
 
-BuildResult::Enum BuildQueueBuild(BuildQueue *queue);
+BuildResult::Enum BuildQueueBuild(BuildQueue *queue, MemAllocLinear* scratch);
 
 void BuildQueueDestroy(BuildQueue *queue);
 
