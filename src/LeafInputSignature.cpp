@@ -36,7 +36,7 @@ HashDigest ComputeLeafInputSignature(const int32_t* dagNodeIndexToRuntimeNodeInd
             char childLeafInputSignatureStr[kDigestStringSize];
             DigestToString(childLeafInputSignatureStr, childRuntimeNode.m_CurrentLeafInputSignature);
             fprintf(ingredient_stream, "This node depends on the following node which is itself leafcacheable."
-            "If you want to investigate why that node's signature is different you can use the same technique you used to obtain this file.\nnode=%s\nleafinputsignature=%s\n", childDagNode.m_Annotation.Get(), childLeafInputSignatureStr);
+            "%s\nleafinputsignature=%s\n\n", childDagNode.m_Annotation.Get(), childLeafInputSignatureStr);
         }
         HashUpdate(&hashState, &childRuntimeNode.m_CurrentLeafInputSignature, sizeof(HashDigest));
     }
@@ -125,8 +125,12 @@ HashDigest CalculateLeafInputHashOffline(const Frozen::Dag* dag, std::function<c
     Buffer<int32_t> all_dependent_nodes;
     BufferInit(&all_dependent_nodes);
 
-    std::function<bool(int32_t,int32_t)> alwaysTrue = [](int parentIndex, int childIndex) { return true; };
-    FindDependentNodesFromRootIndex(heap, dag, arrayAccess, sizeAccess, alwaysTrue, nodeIndex, all_dependent_nodes);
+    std::function<bool(int,int)> filterLeafInputCacheable = [&](int parentIndex, int childIndex)
+    {
+        bool isCacheable = dag->m_DagNodes[childIndex].m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs;
+        return !isCacheable;
+    };
+    FindDependentNodesFromRootIndex(heap, dag, arrayAccess, sizeAccess, filterLeafInputCacheable, nodeIndex, all_dependent_nodes);
 
     HashState hashState;
     HashInit(&hashState);
