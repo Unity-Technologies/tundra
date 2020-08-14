@@ -16,7 +16,6 @@ static bool FilterOutGeneratedIncludedFiles(void* _userData, const char* includi
 
 HashDigest ComputeLeafInputSignature(const int32_t* dagNodeIndexToRuntimeNodeIndex_Table, RuntimeNode* runtimeNodesArray, const Frozen::Dag* dag, const Frozen::DagDerived* dagDerived, const DagRuntimeData *dagRuntime, const Frozen::DagNode* dagNode, MemAllocHeap* heap, MemAllocLinear* scratch, int profilerThreadId, StatCache* stat_cache, DigestCache* digest_cache, ScanCache* scan_cache, FILE* ingredient_stream)
 {
-    printf("calculating %s\n", dagNode->m_Annotation.Get());
     HashState hashState;
     HashInit(&hashState);
 

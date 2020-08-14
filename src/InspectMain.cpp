@@ -9,7 +9,15 @@
 #include <stdlib.h>
 #include <time.h>
 
-static void DumpDagDerived(const Frozen::DagDerived* data)
+static void PrintNodeIndex(int index, const Frozen::Dag* dag)
+{
+    if (dag)
+        printf("  %d: %s\n", index, dag->m_DagNodes[index].m_Annotation.Get());
+    else
+        printf("  %d\n", index);
+}
+
+static void DumpDagDerived(const Frozen::DagDerived* data, const Frozen::Dag* dag)
 {
     printf("magic number: 0x%08x\n", data->m_MagicNumber);
     int node_count = data->m_NodeCount;
@@ -17,14 +25,38 @@ static void DumpDagDerived(const Frozen::DagDerived* data)
     printf("node count: %u\n", node_count);
     for (int nodeIndex=0; nodeIndex<node_count;nodeIndex++)
     {
-        printf("node %d:\n", nodeIndex);
-        printf("  backlinks: ");
+        const Frozen::DagNode* dagNode = nullptr;
+        if (dag)
+            dagNode = &dag->m_DagNodes[nodeIndex];
+
+        if (dag)
+            printf("node %d %s:\n", nodeIndex, dagNode->m_Annotation.Get());
+        else
+            printf("node %d:\n", nodeIndex);
+
+        if (dag)
+        {
+            printf("  flags:");
+            if (dagNode->m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs)
+                printf("    kFlagCacheableByLeafInputs");
+           if (dagNode->m_Flags & Frozen::DagNode::kFlagOverwriteOutputs)
+                printf("    kFlagOverwriteOutputs");
+        }
+
+        printf("  backlinks: \n");
         for (int32_t b : data->m_NodeBacklinks[nodeIndex])
-            printf("%d,", b);
+            PrintNodeIndex(b, dag);
         printf("\n");
         printf("  leafInputs: \n");
         for (auto& leafInput : data->m_NodeLeafInputs[nodeIndex])
             printf("    %s\n", leafInput.m_Filename.Get());
+
+        if (data->m_DependentNodesThatThemselvesAreLeafInputCacheable[nodeIndex].GetCount()>0)
+        {
+            printf("  DependentNodesThatThemselvesAreLeafInputCacheable: \n");
+            for (int32_t b : data->m_DependentNodesThatThemselvesAreLeafInputCacheable[nodeIndex])
+                PrintNodeIndex(b, dag);
+        }
 
         const FrozenArray<Frozen::ScannerIndexWithListOfFiles>& scannersWithListsOfFiles = data->m_Nodes_to_ScannersWithListsOfFiles[nodeIndex];
         for (auto& scannerWithListOfFiles: scannersWithListsOfFiles)
@@ -265,89 +297,97 @@ static void DumpDigestCache(const Frozen::DigestCacheState *data)
     }
 }
 
+const Frozen::Dag* dag_data = nullptr;
+const Frozen::DagDerived* dag_derived_data = nullptr;
+
 int main(int argc, char *argv[])
 {
-    MemoryMappedFile f;
-
-    const char *fn = argc >= 2 ? argv[1] : ".tundra2.dag";
-
-    MmapFileInit(&f);
-    MmapFileMap(&f, fn);
-
-    if (MmapFileValid(&f))
+    for (int i=1; i!= argc; i++)
     {
-        const char *suffix = strrchr(fn, '.');
+        const char* fn = argv[i];
+        MemoryMappedFile f;
+        MmapFileInit(&f);
+        MmapFileMap(&f, fn);
 
-        if (0 == strcmp(suffix, ".dag"))
+        if (MmapFileValid(&f))
         {
-            const Frozen::Dag *data = (const Frozen::Dag *)f.m_Address;
-            if (data->m_MagicNumber == Frozen::Dag::MagicNumber)
+            const char *suffix = strrchr(fn, '.');
+
+            if (0 == strcmp(suffix, ".dag"))
             {
-                DumpDag(data);
+                dag_data = (const Frozen::Dag *)f.m_Address;
+                if (dag_data->m_MagicNumber != Frozen::Dag::MagicNumber)
+                {
+                    fprintf(stderr, "%s: bad magic number\n", fn);
+                    exit(1);
+                }
+            }
+            else if (0 == strcmp(suffix, ".dag_derived"))
+            {
+                dag_derived_data = (const Frozen::DagDerived *)f.m_Address;
+                if (dag_derived_data->m_MagicNumber != Frozen::DagDerived::MagicNumber)
+                {
+                    fprintf(stderr, "%s: bad magic number\n", fn);
+                    exit(1);
+                }
+            }
+            else if (0 == strcmp(suffix, ".state"))
+            {
+                const Frozen::AllBuiltNodes *data = (const Frozen::AllBuiltNodes *)f.m_Address;
+                if (data->m_MagicNumber == Frozen::AllBuiltNodes::MagicNumber)
+                {
+                    DumpState(data);
+                }
+                else
+                {
+                    fprintf(stderr, "%s: bad magic number\n", fn);
+                }
+            }
+            else if (0 == strcmp(suffix, ".scancache"))
+            {
+                const Frozen::ScanData *data = (const Frozen::ScanData *)f.m_Address;
+                if (data->m_MagicNumber == Frozen::ScanData::MagicNumber)
+                {
+                    DumpScanCache(data);
+                }
+                else
+                {
+                    fprintf(stderr, "%s: bad magic number\n", fn);
+                }
+            }
+            else if (0 == strcmp(suffix, ".digestcache"))
+            {
+                const Frozen::DigestCacheState *data = (const Frozen::DigestCacheState *)f.m_Address;
+                if (data->m_MagicNumber == Frozen::DigestCacheState::MagicNumber)
+                {
+                    DumpDigestCache(data);
+                }
+                else
+                {
+                    fprintf(stderr, "%s: bad magic number\n", fn);
+                }
             }
             else
             {
-                fprintf(stderr, "%s: bad magic number\n", fn);
-            }
-        }
-        else if (0 == strcmp(suffix, ".dag_derived"))
-        {
-            const Frozen::DagDerived *data = (const Frozen::DagDerived *)f.m_Address;
-            if (data->m_MagicNumber == Frozen::DagDerived::MagicNumber)
-            {
-                DumpDagDerived(data);
-            }
-            else
-            {
-                fprintf(stderr, "%s: bad magic number\n", fn);
-            }
-        }
-        else if (0 == strcmp(suffix, ".state"))
-        {
-            const Frozen::AllBuiltNodes *data = (const Frozen::AllBuiltNodes *)f.m_Address;
-            if (data->m_MagicNumber == Frozen::AllBuiltNodes::MagicNumber)
-            {
-                DumpState(data);
-            }
-            else
-            {
-                fprintf(stderr, "%s: bad magic number\n", fn);
-            }
-        }
-        else if (0 == strcmp(suffix, ".scancache"))
-        {
-            const Frozen::ScanData *data = (const Frozen::ScanData *)f.m_Address;
-            if (data->m_MagicNumber == Frozen::ScanData::MagicNumber)
-            {
-                DumpScanCache(data);
-            }
-            else
-            {
-                fprintf(stderr, "%s: bad magic number\n", fn);
-            }
-        }
-        else if (0 == strcmp(suffix, ".digestcache"))
-        {
-            const Frozen::DigestCacheState *data = (const Frozen::DigestCacheState *)f.m_Address;
-            if (data->m_MagicNumber == Frozen::DigestCacheState::MagicNumber)
-            {
-                DumpDigestCache(data);
-            }
-            else
-            {
-                fprintf(stderr, "%s: bad magic number\n", fn);
+                fprintf(stderr, "%s: unknown file type\n", fn);
             }
         }
         else
         {
-            fprintf(stderr, "%s: unknown file type\n", fn);
+            fprintf(stderr, "%s: couldn't mmap file\n", fn);
         }
     }
-    else
+
+    if (dag_derived_data != nullptr)
     {
-        fprintf(stderr, "%s: couldn't mmap file\n", fn);
+        DumpDagDerived(dag_derived_data, dag_data);
+        exit(0);
+    }
+    if (dag_data != nullptr)
+    {
+        DumpDag(dag_data);
     }
 
-    MmapFileUnmap(&f);
+
     return 0;
 }
