@@ -24,7 +24,8 @@ HashDigest ComputeLeafInputSignature(const int32_t* dagNodeIndexToRuntimeNodeInd
         int childRuntimeNodeIndex = dagNodeIndexToRuntimeNodeIndex_Table[child];
         auto& childRuntimeNode = runtimeNodesArray[childRuntimeNodeIndex];
         const auto& childDagNode = dag->m_DagNodes[child];
-        if (childRuntimeNode.m_CurrentLeafInputSignature.m_Words64 == 0)
+
+        if (childRuntimeNode.m_CurrentLeafInputSignature.m_Words64[0] == 0)
         {
             //this is racy, but it should be okay(tm). It's possible the leaf input signature isn't stored yet, but another thread is already calculating it.
             //in that case we calculate it too, and both threads will just store the same value.
@@ -35,8 +36,7 @@ HashDigest ComputeLeafInputSignature(const int32_t* dagNodeIndexToRuntimeNodeInd
         {
             char childLeafInputSignatureStr[kDigestStringSize];
             DigestToString(childLeafInputSignatureStr, childRuntimeNode.m_CurrentLeafInputSignature);
-            fprintf(ingredient_stream, "This node depends on the following node which is itself leafcacheable."
-            "%s\nleafinputsignature=%s\n\n", childDagNode.m_Annotation.Get(), childLeafInputSignatureStr);
+            fprintf(ingredient_stream, "cacheabledependentnode: %s %s\n", childLeafInputSignatureStr, childDagNode.m_Annotation.Get());
         }
         HashUpdate(&hashState, &childRuntimeNode.m_CurrentLeafInputSignature, sizeof(HashDigest));
     }

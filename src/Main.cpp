@@ -456,19 +456,19 @@ int main(int argc, char *argv[])
         goto leave;
     }
 
-    if (driver.m_Options.m_JustPrintLeafInputSignature)
-    {
-        PrintLeafInputSignature(&driver, (const char **)argv, argc);
-        build_result = BuildResult::kOk;
-        goto leave;
-    }
-
     DriverReportStartup(&driver, (const char **)argv, argc);
 
     // Prepare list of nodes to build/clean/rebuild
     if (!DriverPrepareNodes(&driver, (const char **)argv, argc))
     {
         Log(kError, "couldn't set up list of targets to build");
+        goto leave;
+    }
+
+    if (driver.m_Options.m_JustPrintLeafInputSignature)
+    {
+        PrintLeafInputSignature(&driver, (const char **)argv, argc);
+        build_result = BuildResult::kOk;
         goto leave;
     }
 
