@@ -26,6 +26,11 @@ static void SortBufferOfFileAndHash(Buffer<FileAndHash>& buffer)
     std::sort(buffer.begin(), buffer.end(), [](const FileAndHash& a, const FileAndHash& b) { return strcmp(a.m_Filename, b.m_Filename) < 0; });
 }
 
+static bool HasFlag(int value, int flag)
+{
+    return (value & flag) != 0;
+}
+
 struct CompileDagDerivedWorker
 {
     BinaryWriter _writer;
@@ -37,6 +42,7 @@ struct CompileDagDerivedWorker
     BinarySegment *arraydata_seg;
     BinarySegment *arraydata2_seg;
     BinarySegment *leafnodearray_seg;
+    BinarySegment *cacheableDependenciesArray_seg;
     BinarySegment *scannerindex_seg;
     BinarySegment *str_seg;
 
@@ -200,13 +206,16 @@ struct CompileDagDerivedWorker
     void WriteLeafInputsAndScannerIndicesToFilesToScan_ForSingleNode(int nodeIndex)
     {
         const Frozen::DagNode& node = dag->m_DagNodes[nodeIndex];
-        if (0 == (node.m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs))
+        if (!HasFlag(node.m_Flags,Frozen::DagNode::kFlagCacheableByLeafInputs))
         {
             BinarySegmentWriteInt32(leafnodearray_seg, 0);
             BinarySegmentWriteNullPointer(leafnodearray_seg);
 
             BinarySegmentWriteInt32(scannerindex_seg, 0);
             BinarySegmentWriteNullPointer(scannerindex_seg);
+
+            BinarySegmentWriteInt32(cacheableDependenciesArray_seg, 0);
+            BinarySegmentWriteNullPointer(cacheableDependenciesArray_seg);
             return;
         }
 
@@ -218,7 +227,23 @@ struct CompileDagDerivedWorker
         std::function<const int32_t*(int)> arrayAccess = [=](int index){return deps[index].begin();};
         std::function<size_t(int)> sizeAccess = [=](int index){return deps[index].m_Size;};
 
-        FindDependentNodesFromRootIndex(heap, dag, arrayAccess, sizeAccess, nodeIndex, m_PerNodeWorkerData.all_dependent_nodes);
+        Buffer<int32_t> dependenciesThatAreLeafInputCacheableThemselves;
+        BufferInit(&dependenciesThatAreLeafInputCacheableThemselves);
+
+        std::function<bool(int,int)> filterLeafInputCacheable = [&](int parentIndex, int childIndex)
+        {
+            bool isCacheable = HasFlag(dag->m_DagNodes[childIndex].m_Flags,Frozen::DagNode::kFlagCacheableByLeafInputs);
+            if (isCacheable)
+            {
+                if (std::find(dependenciesThatAreLeafInputCacheableThemselves.begin(), dependenciesThatAreLeafInputCacheableThemselves.end(), childIndex) == dependenciesThatAreLeafInputCacheableThemselves.end())
+                    BufferAppendOne(&dependenciesThatAreLeafInputCacheableThemselves, heap, childIndex);
+                return false;
+            }
+
+            return true;
+        };
+
+        FindDependentNodesFromRootIndex(heap, dag, arrayAccess, sizeAccess, filterLeafInputCacheable, nodeIndex, m_PerNodeWorkerData.all_dependent_nodes);
 
         for(int32_t childNodeIndex : m_PerNodeWorkerData.all_dependent_nodes)
         {
@@ -240,6 +265,13 @@ struct CompileDagDerivedWorker
             WriteCommonStringPtr(arraydata_seg, str_seg, leafInput.m_Filename, &shared_strings, scratch);
             BinarySegmentWriteInt32(arraydata_seg, leafInput.m_FilenameHash);
         }
+
+
+        BinarySegmentWriteInt32(cacheableDependenciesArray_seg, dependenciesThatAreLeafInputCacheableThemselves.m_Size);
+        BinarySegmentWritePointer(cacheableDependenciesArray_seg, BinarySegmentPosition(arraydata_seg));
+        for(int i: dependenciesThatAreLeafInputCacheableThemselves)
+            BinarySegmentWriteInt32(arraydata_seg, i);
+        BufferDestroy(&dependenciesThatAreLeafInputCacheableThemselves, heap);
 
         BinarySegmentWriteInt32(scannerindex_seg, m_PerNodeWorkerData.scannersWithListsOfFiles.m_Size);
         BinarySegmentWritePointer(scannerindex_seg, BinarySegmentPosition(arraydata_seg));
@@ -272,6 +304,9 @@ struct CompileDagDerivedWorker
         //Write LeafInputs array header
         BinarySegmentWriteUint32(main_seg, node_count);
         BinarySegmentWritePointer(main_seg, BinarySegmentPosition(leafnodearray_seg));
+
+        BinarySegmentWriteUint32(main_seg, node_count);
+        BinarySegmentWritePointer(main_seg, BinarySegmentPosition(cacheableDependenciesArray_seg));
 
         //Write m_ScannerIndices_To_Files_To_Scan header
         BinarySegmentWriteUint32(main_seg, node_count);
@@ -340,6 +375,7 @@ static void CompileDagDerivedWorkerInit(CompileDagDerivedWorker* data, const Fro
     data->arraydata_seg = BinaryWriterAddSegment(data->writer);
     data->arraydata2_seg = BinaryWriterAddSegment(data->writer);
     data->leafnodearray_seg = BinaryWriterAddSegment(data->writer);
+    data->cacheableDependenciesArray_seg = BinaryWriterAddSegment(data->writer);
     data->scannerindex_seg = BinaryWriterAddSegment(data->writer);
     data->str_seg = BinaryWriterAddSegment(data->writer);
     data->node_count = dag->m_NodeCount;

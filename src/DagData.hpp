@@ -187,14 +187,18 @@ struct ScannerIndexWithListOfFiles
 
 struct DagDerived
 {
-    static const uint32_t MagicNumber = 0x9eead124 ^ kTundraHashMagic;
+    static const uint32_t MagicNumber = 0x9bead124 ^ kTundraHashMagic;
 
     uint32_t m_MagicNumber;
     uint32_t m_NodeCount;
 
     FrozenArray<FrozenArray<int32_t>> m_Dependencies;
     FrozenArray<FrozenArray<uint32_t>> m_NodeBacklinks;
+
+    //leaf inputs excluding leaf inputs that come from nodes we depend on that themselves are leaf input cacheable.
     FrozenArray<FrozenArray<FrozenFileAndHash>> m_NodeLeafInputs;
+
+    FrozenArray<FrozenArray<uint32_t>> m_DependentNodesThatThemselvesAreLeafInputCacheable;
 
     FrozenArray<FrozenArray<ScannerIndexWithListOfFiles>> m_Nodes_to_ScannersWithListsOfFiles;
     FrozenArray<HashDigest> m_LeafInputHash_Offline;
@@ -218,6 +222,6 @@ bool FindDagNodeForFile(const DagRuntimeData* data, uint32_t filenameHash, const
 bool IsFileGenerated(const DagRuntimeData* data, uint32_t filenameHash, const char* filename);
 
 void FindDependentNodesFromRootIndex(MemAllocHeap* heap, const Frozen::Dag* dag, const Frozen::DagDerived* dagDerived, int32_t rootIndex, Buffer<int32_t>& results);
-void FindDependentNodesFromRootIndex(MemAllocHeap* heap, const Frozen::Dag* dag, std::function<const int32_t*(int)>& arrayAccess, std::function<size_t(int)>& sizeAccess, int32_t rootIndex, Buffer<int32_t>& results);
+void FindDependentNodesFromRootIndex(MemAllocHeap* heap, const Frozen::Dag* dag, std::function<const int32_t*(int)>& arrayAccess, std::function<size_t(int)>& sizeAccess, std::function<bool(int,int)>& shouldProcess, int32_t rootIndex, Buffer<int32_t>& results);
 void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* dag, const Frozen::DagDerived* dagDerived, int32_t* searchRootIndices, int32_t searchRootCount, Buffer<int32_t>& results);
 void FindAllOutputFiles(const Frozen::Dag* dag, HashSet<kFlagPathStrings>& outputFiles);

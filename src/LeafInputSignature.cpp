@@ -14,12 +14,36 @@ static bool FilterOutGeneratedIncludedFiles(void* _userData, const char* includi
     return !IsFileGenerated((DagRuntimeData*)_userData, Djb2HashPath(includedFile), includedFile);
 }
 
-HashDigest ComputeLeafInputSignature(const Frozen::Dag* dag, const Frozen::DagDerived* dagDerived, const DagRuntimeData *dagRuntime, const Frozen::DagNode* dagNode, MemAllocHeap* heap, MemAllocLinear* scratch, int profilerThreadId, StatCache* stat_cache, DigestCache* digest_cache, ScanCache* scan_cache, FILE* ingredient_stream)
+HashDigest ComputeLeafInputSignature(const int32_t* dagNodeIndexToRuntimeNodeIndex_Table, RuntimeNode* runtimeNodesArray, const Frozen::Dag* dag, const Frozen::DagDerived* dagDerived, const DagRuntimeData *dagRuntime, const Frozen::DagNode* dagNode, MemAllocHeap* heap, MemAllocLinear* scratch, int profilerThreadId, StatCache* stat_cache, DigestCache* digest_cache, ScanCache* scan_cache, FILE* ingredient_stream)
 {
-    ProfilerScope profiler_scope("ComputeLeafInputSignature", profilerThreadId, dagNode->m_Annotation);
-
+    printf("calculating %s\n", dagNode->m_Annotation.Get());
     HashState hashState;
     HashInit(&hashState);
+
+    for (auto& child: dagDerived->m_DependentNodesThatThemselvesAreLeafInputCacheable[dagNode->m_DagNodeIndex])
+    {
+        int childRuntimeNodeIndex = dagNodeIndexToRuntimeNodeIndex_Table[child];
+        auto& childRuntimeNode = runtimeNodesArray[childRuntimeNodeIndex];
+        const auto& childDagNode = dag->m_DagNodes[child];
+        if (childRuntimeNode.m_CurrentLeafInputSignature.m_Words64 == 0)
+        {
+            //this is racy, but it should be okay(tm). It's possible the leaf input signature isn't stored yet, but another thread is already calculating it.
+            //in that case we calculate it too, and both threads will just store the same value.
+            childRuntimeNode.m_CurrentLeafInputSignature = ComputeLeafInputSignature(dagNodeIndexToRuntimeNodeIndex_Table, runtimeNodesArray, dag, dagDerived, dagRuntime, &childDagNode, heap, scratch, profilerThreadId, stat_cache, digest_cache, scan_cache, nullptr);
+        }
+
+        if (ingredient_stream)
+        {
+            char childLeafInputSignatureStr[kDigestStringSize];
+            DigestToString(childLeafInputSignatureStr, childRuntimeNode.m_CurrentLeafInputSignature);
+            fprintf(ingredient_stream, "This node depends on the following node which is itself leafcacheable."
+            "If you want to investigate why that node's signature is different you can use the same technique you used to obtain this file.\nnode=%s\nleafinputsignature=%s\n", childDagNode.m_Annotation.Get(), childLeafInputSignatureStr);
+        }
+        HashUpdate(&hashState, &childRuntimeNode.m_CurrentLeafInputSignature, sizeof(HashDigest));
+    }
+
+    //starting the profiler scope late here, because we do not support nested profiler scope, and at the top of this function we recurse.
+    ProfilerScope profiler_scope("ComputeLeafInputSignature", profilerThreadId, dagNode->m_Annotation);
 
     HashUpdate(&hashState, &(dagDerived->m_LeafInputHash_Offline[dagNode->m_DagNodeIndex]), sizeof(HashDigest));
 
@@ -30,6 +54,8 @@ HashDigest ComputeLeafInputSignature(const Frozen::Dag* dag, const Frozen::DagDe
     HashSetInit(&implicitLeafInputs, heap);
     for (auto& leafInput: leafInputs)
         HashSetInsert(&explicitLeafInputs, leafInput.m_FilenameHash, leafInput.m_Filename.Get());
+
+
 
     ScanInput scanInput;
     scanInput.m_ScanCache = scan_cache;
@@ -100,7 +126,8 @@ HashDigest CalculateLeafInputHashOffline(const Frozen::Dag* dag, std::function<c
     Buffer<int32_t> all_dependent_nodes;
     BufferInit(&all_dependent_nodes);
 
-    FindDependentNodesFromRootIndex(heap, dag, arrayAccess, sizeAccess, nodeIndex, all_dependent_nodes);
+    std::function<bool(int32_t,int32_t)> alwaysTrue = [](int parentIndex, int childIndex) { return true; };
+    FindDependentNodesFromRootIndex(heap, dag, arrayAccess, sizeAccess, alwaysTrue, nodeIndex, all_dependent_nodes);
 
     HashState hashState;
     HashInit(&hashState);
@@ -171,6 +198,8 @@ void PrintLeafInputSignature(Driver* driver, const char **argv, int argc)
     DagRuntimeDataInit(&runtimeData, driver->m_DagData, &driver->m_Heap);
 
     ComputeLeafInputSignature(
+        driver->m_DagNodeIndexToRuntimeNodeIndex_Table.begin(),
+        driver->m_RuntimeNodes.begin(),
         driver->m_DagData,
         driver->m_DagDerivedData,
         &runtimeData,

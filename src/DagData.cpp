@@ -2,7 +2,7 @@
 #include "Buffer.hpp"
 #include "HashTable.hpp"
 
-void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* dag, std::function<const int32_t*(int)>& arrayAccess, std::function<size_t(int)>& sizeAccess, int32_t* searchRootIndices, int32_t searchRootCount, Buffer<int32_t>& results)
+static void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* dag, std::function<const int32_t*(int)>& arrayAccess, std::function<size_t(int)>& sizeAccess, std::function<bool(int,int)>& shouldProcess, int32_t* searchRootIndices, int32_t searchRootCount, Buffer<int32_t>& results)
 {
     Buffer<int32_t> node_stack;
     BufferInitWithCapacity(&node_stack, heap, 1024);
@@ -28,8 +28,16 @@ void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* da
             ++node_count;
 
             // Stash node dependencies on the work queue to keep iterating
-            
-            BufferAppend(&node_stack, heap, arrayAccess(dag_index), sizeAccess(dag_index));
+
+            int dependencyCount = sizeAccess(dag_index);
+            const int32_t* dependencyArray = arrayAccess(dag_index);
+
+            for (int i=0; i!=dependencyCount; i++)
+            {
+                int childIndex = dependencyArray[i];
+                if (shouldProcess(dag_index, childIndex))
+                    BufferAppendOne(&node_stack, heap, childIndex);
+            }
         }
     }
 
@@ -41,12 +49,13 @@ void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* da
 {
     std::function<const int32_t*(int)> arrayAccess = [=](int index){return dagDerived->m_Dependencies[index].GetArray();};
     std::function<size_t(int)> sizeAccess = [=](int index){return dagDerived->m_Dependencies[index].GetCount();};
-    FindDependentNodesFromRootIndices(heap, dag, arrayAccess, sizeAccess, searchRootIndices, searchRootCount, results);
+    std::function<bool(int,int)> alwaysTrue = [](int,int) { return true; };
+    FindDependentNodesFromRootIndices(heap, dag, arrayAccess, sizeAccess, alwaysTrue, searchRootIndices, searchRootCount, results);
 }
 
-void FindDependentNodesFromRootIndex(MemAllocHeap* heap, const Frozen::Dag* dag, std::function<const int32_t*(int)>& arrayAccess, std::function<size_t(int)>& sizeAccess, int32_t rootIndex, Buffer<int32_t>& results)
+void FindDependentNodesFromRootIndex(MemAllocHeap* heap, const Frozen::Dag* dag, std::function<const int32_t*(int)>& arrayAccess, std::function<size_t(int)>& sizeAccess, std::function<bool(int,int)>& shouldProcess, int32_t rootIndex, Buffer<int32_t>& results)
 {
-    FindDependentNodesFromRootIndices(heap, dag, arrayAccess, sizeAccess, &rootIndex, 1, results);
+    FindDependentNodesFromRootIndices(heap, dag, arrayAccess, sizeAccess, shouldProcess, &rootIndex, 1, results);
 }
 
 void FindDependentNodesFromRootIndex(MemAllocHeap* heap, const Frozen::Dag* dag, const Frozen::DagDerived* dagDerived, int32_t rootIndex, Buffer<int32_t>& results)
@@ -75,12 +84,12 @@ void DagRuntimeDataInit(DagRuntimeData* data, const Frozen::Dag* dag, MemAllocHe
             HashTableInsert(&data->m_OutputDirectoriesToDagNodes, output.m_FilenameHash, output.m_Filename.Get(), i);
     }
 
-    // We currently don't populate m_OutputDirectories for all nodes. 
+    // We currently don't populate m_OutputDirectories for all nodes.
     // Some output directries still only show up in m_DirectoriesCausingImplicitDependencies.
     // For those, we don't know which node they came from, so we ise the special index value of -1.
     for (auto& d: dag->m_DirectoriesCausingImplicitDependencies)
         HashTableInsert(&data->m_OutputDirectoriesToDagNodes, d.m_FilenameHash, d.m_Filename.Get(), -1);
-    
+
     data->m_Dag = dag;
 }
 

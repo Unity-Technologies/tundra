@@ -258,6 +258,8 @@ static HashDigest ComputeLeafInputSignature(BuildQueue* queue, ThreadState* thre
 
     fprintf(sig, "Hot hash ingredients:\n");
     HashDigest res = ComputeLeafInputSignature(
+            queue->m_Config.m_DagNodeIndexToRuntimeNodeIndex_Table,
+            queue->m_Config.m_RuntimeNodes,
             queue->m_Config.m_Dag,
             queue->m_Config.m_DagDerived,
             &queue->m_Config.m_DagRuntimeData,
