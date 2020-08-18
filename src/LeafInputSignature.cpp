@@ -61,6 +61,9 @@ HashDigest ComputeLeafInputSignature(const int32_t* dagNodeIndexToRuntimeNodeInd
     scanInput.m_ScratchAlloc = scratch;
     scanInput.m_ScratchHeap = heap;
 
+    MemAllocLinear scanResults;
+    LinearAllocInit(&scanResults, heap, MB(4), "ComputeLeafInputSignature");
+
     IncludeFilterCallback ignoreCallback;
     ignoreCallback.userData = (void*)dagRuntime;
     ignoreCallback.callback = FilterOutGeneratedIncludedFiles;
@@ -70,6 +73,7 @@ HashDigest ComputeLeafInputSignature(const int32_t* dagNodeIndexToRuntimeNodeInd
         scanInput.m_ScannerConfig = dag->m_Scanners[scannerIndexWithListOfFiles.m_ScannerIndex];
         for (const FrozenFileAndHash& file: scannerIndexWithListOfFiles.m_FilesToScan)
         {
+            MemAllocLinearScope allocScope(scratch);
             scanInput.m_FileName = file.m_Filename;
             ScanOutput scanOutput;
             if (ScanImplicitDeps(stat_cache, &scanInput, &scanOutput, &ignoreCallback))
@@ -81,7 +85,7 @@ HashDigest ComputeLeafInputSignature(const int32_t* dagNodeIndexToRuntimeNodeInd
                         continue;
                     if (HashSetLookup(&implicitLeafInputs, includedFile.m_FilenameHash, includedFile.m_Filename))
                         continue;
-                    HashSetInsert(&implicitLeafInputs, includedFile.m_FilenameHash, includedFile.m_Filename);
+                    HashSetInsert(&implicitLeafInputs, includedFile.m_FilenameHash, StrDup(&scanResults, includedFile.m_Filename));
                 }
             }
         }
@@ -114,6 +118,9 @@ HashDigest ComputeLeafInputSignature(const int32_t* dagNodeIndexToRuntimeNodeInd
 
     HashDigest result;
     HashFinalize(&hashState, &result);
+
+    LinearAllocDestroy(&scanResults);
+
     return result;
 }
 
