@@ -232,13 +232,16 @@ BuildResult::Enum BuildQueueBuild(BuildQueue *queue, MemAllocLinear* scratch)
 
     int amountQueued = 0;
 
-    for (int i = 0; i < queue->m_Config.m_AmountOfRuntimeNodesSpecificallyRequested; ++i)
+    for (int i = 0; i < queue->m_Config.m_TotalRuntimeNodeCount; ++i)
     {
         RuntimeNode *runtime_node = runtime_nodes + i;
-        RuntimeNodeFlagQueued(runtime_node);
-        build_queue[amountQueued++] = i;
+        if (RuntimeNodeIsExplicitlyRequested(runtime_node))
+        {
+            RuntimeNodeFlagQueued(runtime_node);
+            build_queue[amountQueued++] = i;
 
-        LogEnqueue(scratch, runtime_node, nullptr);
+            LogEnqueue(scratch, runtime_node, nullptr);
+        }
     }
 
     queue->m_QueueWriteIndex = amountQueued;
