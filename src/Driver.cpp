@@ -895,10 +895,10 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count)
 
     *out_finished_node_count = build_queue.m_FinishedNodeCount;
 
-    DagRuntimeDataDestroy(&queue_config.m_DagRuntimeData);
-
     // Shut down build queue
     BuildQueueDestroy(&build_queue);
+
+    DagRuntimeDataDestroy(&queue_config.m_DagRuntimeData);
 
     return build_result;
 }
