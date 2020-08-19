@@ -64,29 +64,18 @@ FileInfo GetFileInfo(const char *path)
 
     DWORD attrs;
 
-    if (strlen(path) >= MAX_PATH)
-    {
-        //// To work around maximum path length limitations on Windows, we have to use the wide-character version of the API, with a special prefix
-        std::wstring widePath(ToWideString(path));
-        if (!ConvertToLongPath(&widePath))
-            goto Failure;
+    std::wstring widePath(ToWideString(path));
+    //// To work around maximum path length limitations on Windows, we have to use the wide-character version of the API, with a special prefix
+    if (!ConvertToLongPath(&widePath))
+        goto Failure;
 
-        if (0 != _wstat64(widePath.c_str(), &stbuf))
-            goto Failure;
+    if (0 != _wstat64(widePath.c_str(), &stbuf))
+        goto Failure;
 
-        attrs = GetFileAttributesW(widePath.c_str());
-        if (attrs == INVALID_FILE_ATTRIBUTES)
-            goto Failure;
-    }
-    else
-    {
-        if (0 != _stat64(path, &stbuf))
-            goto Failure;
-
-        attrs = GetFileAttributesA(path);
-        if (attrs == INVALID_FILE_ATTRIBUTES)
-            goto Failure;
-    }
+    attrs = GetFileAttributesW(widePath.c_str());
+    if (attrs == INVALID_FILE_ATTRIBUTES)
+        goto Failure;
+  
 
     if ((attrs & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
         flags |= FileInfo::kFlagSymlink;

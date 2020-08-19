@@ -402,6 +402,8 @@ std::wstring ToWideString(const char* input)
 
 bool ConvertToLongPath(std::wstring* path)
 {
+    if (path == nullptr) return false;
+
     if (IsNormalized(*path))
     {
         WIN32_FILE_ATTRIBUTE_DATA data;
