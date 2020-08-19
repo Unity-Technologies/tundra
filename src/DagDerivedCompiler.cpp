@@ -78,6 +78,15 @@ struct CompileDagDerivedWorker
         HeapFree(heap, links);
     }
 
+    void AddUsedDependenciesOfDagNodeRecursive(const Frozen::DagNode* node, int i)
+    {
+        for(int dep : node->m_DependenciesConsumedDuringUsageOnly)
+        {
+            BufferAppendOne(&deps[i], heap, dep);
+            AddUsedDependenciesOfDagNodeRecursive(dag->m_DagNodes + dep, i);
+        }
+    }
+
     void WriteFrozenArrayOfDependenciesAndBackLinks()
     {
         deps = HeapAllocateArrayZeroed<Buffer<int32_t>>(heap, node_count);
@@ -86,8 +95,7 @@ struct CompileDagDerivedWorker
             for(int dep : dag->m_DagNodes[i].m_OriginalDependencies)
             {
                 BufferAppendOne(&deps[i], heap, dep);
-                for(int dep2 : dag->m_DagNodes[dep].m_DependenciesConsumedDuringUsageOnly)
-                    BufferAppendOne(&deps[i], heap, dep2);
+                AddUsedDependenciesOfDagNodeRecursive(dag->m_DagNodes + dep, i);
             }
         }
 
