@@ -2,6 +2,8 @@
 
 #include "Common.hpp"
 #include "Hash.hpp"
+#include "Buffer.hpp"
+#include "HashTable.hpp"
 
 namespace NodeBuildResult
 {
@@ -33,6 +35,12 @@ namespace Frozen
 
 struct SinglyLinkedPathList;
 
+struct IncludingIncludedPair
+{
+    const char* m_IncludingFile;
+    const char* m_IncludedFile;
+};
+
 struct RuntimeNode
 {
     uint16_t m_Flags;
@@ -49,6 +57,10 @@ struct RuntimeNode
     HashDigest m_CurrentLeafInputSignature;
 
     SinglyLinkedPathList* m_DynamicallyDiscoveredOutputFiles;
+
+    HashSet<kFlagPathStrings> m_ExplicitLeafInputs;
+    HashSet<kFlagPathStrings> m_ImplicitLeafInputs;
+    Buffer<IncludingIncludedPair> m_GeneratedFilesIncludingVersionedFiles;
 };
 
 inline bool RuntimeNodeIsQueued(const RuntimeNode *runtime_node)

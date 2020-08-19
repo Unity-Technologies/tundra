@@ -184,11 +184,18 @@ static bool IsNodeCacheableByLeafInputs(RuntimeNode* node)
     return 0 != (node->m_DagNode->m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs);
 }
 
-static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, Mutex *queue_lock, ThreadState* thread_state, StatCache* stat_cache)
+
+static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, Mutex *queue_lock, ThreadState* thread_state, StatCache* stat_cache, const Frozen::DagDerived* dagDerived)
 {
     bool haveToRunAction = CheckInputSignatureToSeeNodeNeedsExecuting(queue, thread_state, node);
     if (!haveToRunAction)
         return NodeBuildResult::kUpToDate;
+
+    if (IsNodeCacheableByLeafInputs(node))
+    {
+        if (!VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLeafInputs(queue, thread_state, node, dagDerived))
+            return NodeBuildResult::kRanFailed;
+    }
 
     NodeBuildResult::Enum runActionResult = RunAction(queue, thread_state, node, queue_lock);
 
@@ -216,12 +223,9 @@ static bool AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(RuntimeNode* 
     if (RuntimeNodeHasAttemptedCacheLookup(node))
         return false;
 
-    HashDigest currentLeafInputSignature = CalculateLeafInputSignature(queue, thread_state, node);
-    node->m_CurrentLeafInputSignature = currentLeafInputSignature;
-
     if (node->m_BuiltNode)
     {
-        if (node->m_BuiltNode->m_LeafInputSignature == currentLeafInputSignature && !OutputFilesMissingFor(node->m_BuiltNode, queue->m_Config.m_StatCache))
+        if (node->m_BuiltNode->m_LeafInputSignature == node->m_CurrentLeafInputSignature && !OutputFilesMissingFor(node->m_BuiltNode, queue->m_Config.m_StatCache) && node->m_BuiltNode->m_WasBuiltSuccessfully)
         {
             node->m_BuildResult = NodeBuildResult::kUpToDate;
             FinishNode(queue, node);
@@ -233,13 +237,13 @@ static bool AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(RuntimeNode* 
 
     uint64_t time_exec_started = TimerGet();
     MutexUnlock(&queue->m_Lock);
-    auto cacheReadResult = CacheClient::AttemptRead(queue->m_Config.m_Dag, node->m_DagNode, currentLeafInputSignature, queue->m_Config.m_StatCache, &queue->m_Lock, thread_state);
+    auto cacheReadResult = CacheClient::AttemptRead(queue->m_Config.m_Dag, node->m_DagNode, node->m_CurrentLeafInputSignature, queue->m_Config.m_StatCache, &queue->m_Lock, thread_state);
     MutexLock(&queue->m_Lock);
 
     uint64_t now = TimerGet();
     double duration = TimerDiffSeconds(time_exec_started, now);
     char digestString[kDigestStringSize];
-    DigestToString(digestString, currentLeafInputSignature);
+    DigestToString(digestString, node->m_CurrentLeafInputSignature);
 
     auto printMsg = [=](MessageStatusLevel::Enum statusLevel, const char* msg)
     {
@@ -328,14 +332,23 @@ static void ProcessNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
 {
     Log(kSpam, "T=%d, Advancing %s\n", thread_state->m_ThreadIndex, node->m_DagNode->m_Annotation.Get());
 
+
+
     CHECK(!node->m_Finished);
     CHECK(RuntimeNodeIsActive(node));
     CHECK(!RuntimeNodeIsQueued(node));
 
-    if (IsNodeCacheableByLeafInputs(node) && queue->m_Config.m_AttemptCacheReads)
+    if (IsNodeCacheableByLeafInputs(node))
     {
-        if (AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(node, queue, thread_state))
-            return;
+        if (!RuntimeNodeHasAttemptedCacheLookup(node))
+        {
+            HashDigest currentLeafInputSignature = CalculateLeafInputSignature(queue, thread_state, node);
+            node->m_CurrentLeafInputSignature = currentLeafInputSignature;
+        }
+
+        if (queue->m_Config.m_AttemptCacheReads)
+            if (AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(node, queue, thread_state))
+                return;
     }
 
     if (!AllDependenciesAreFinished(queue,node))
@@ -347,7 +360,7 @@ static void ProcessNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
     if (AllDependenciesAreSuccesful(queue, node))
     {
         MutexUnlock(queue_lock);
-        NodeBuildResult::Enum nodeBuildResult = ExecuteNode(queue, node, queue_lock, thread_state, thread_state->m_Queue->m_Config.m_StatCache);
+        NodeBuildResult::Enum nodeBuildResult = ExecuteNode(queue, node, queue_lock, thread_state, thread_state->m_Queue->m_Config.m_StatCache, queue->m_Config.m_DagDerived);
         MutexLock(queue_lock);
 
         switch (node->m_BuildResult = nodeBuildResult)

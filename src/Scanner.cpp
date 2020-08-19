@@ -175,7 +175,7 @@ bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput 
         if (!info.Exists())
             continue;
 
-        ComputeScanCacheKey(&scan_key, fn, scanner_config->m_ScannerGuid);
+        ComputeScanCacheKey(&scan_key, fn, input->m_ScannerConfig->m_ScannerGuid, input->m_SafeToScanBeforeDependenciesAreProduced);
 
         ScanCacheLookupResult cache_result;
 

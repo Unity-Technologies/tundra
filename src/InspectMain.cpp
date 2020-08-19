@@ -28,7 +28,7 @@ static void DumpDagDerived(const Frozen::DagDerived* data, const Frozen::Dag* da
         const Frozen::DagNode* dagNode = nullptr;
         if (dag)
             dagNode = &dag->m_DagNodes[nodeIndex];
-
+        printf("\n");
         if (dag)
             printf("node %d %s:\n", nodeIndex, dagNode->m_Annotation.Get());
         else
@@ -43,20 +43,38 @@ static void DumpDagDerived(const Frozen::DagDerived* data, const Frozen::Dag* da
                 printf("    kFlagOverwriteOutputs");
         }
 
-        printf("  backlinks: \n");
-        for (int32_t b : data->m_NodeBacklinks[nodeIndex])
-            PrintNodeIndex(b, dag);
-        printf("\n");
-        printf("  leafInputs: \n");
-        for (auto& leafInput : data->m_NodeLeafInputs[nodeIndex])
-            printf("    %s\n", leafInput.m_Filename.Get());
-
-        if (data->m_DependentNodesThatThemselvesAreLeafInputCacheable[nodeIndex].GetCount()>0)
+        auto PrintNodeArray = [=](const char* title, const FrozenArray<uint32_t>& array)
         {
-            printf("  DependentNodesThatThemselvesAreLeafInputCacheable: \n");
-            for (int32_t b : data->m_DependentNodesThatThemselvesAreLeafInputCacheable[nodeIndex])
-                PrintNodeIndex(b, dag);
-        }
+            if (array.GetCount() == 0)
+                return;
+
+            printf("\n  %s: (%d)\n", title, array.GetCount());
+            for (int32_t b : array)
+            {
+                if (dag)
+                    printf("  %s %d: %s\n", title, b, dag->m_DagNodes[b].m_Annotation.Get());
+                else
+                    printf("  %s %d\n", title, b);
+            }
+            printf("\n");
+        };
+
+        auto PrintFileAndHashArray = [=](const char* title, const FrozenArray<FrozenFileAndHash>& array)
+        {
+            if (array.GetCount() == 0)
+                return;
+
+            printf("\n  %s: (%d)\n", title, array.GetCount());
+            for (auto& b : array)
+                printf("   %s %s\n", title, b.m_Filename.Get());
+            printf("\n");
+        };
+
+        PrintNodeArray("backlinks", data->m_NodeBacklinks[nodeIndex]);
+        PrintFileAndHashArray("leafInputs", data->m_NodeLeafInputs[nodeIndex]);
+        PrintNodeArray("dependentNodesThatThemselvesAreLeafInputCacheable", data->m_DependentNodesThatThemselvesAreLeafInputCacheable[nodeIndex]);
+        PrintNodeArray("RecursiveDependenciesWithScanners", data->m_RecursiveDependenciesWithScanners[nodeIndex]);
+
 
         const FrozenArray<Frozen::ScannerIndexWithListOfFiles>& scannersWithListsOfFiles = data->m_Nodes_to_ScannersWithListsOfFiles[nodeIndex];
         for (auto& scannerWithListOfFiles: scannersWithListsOfFiles)
@@ -79,6 +97,7 @@ static void DumpDag(const Frozen::Dag *data)
     printf("node count: %u\n", node_count);
     for (int i = 0; i < node_count; ++i)
     {
+        printf("\n");
         printf("node %d:\n", i);
         char digest_str[kDigestStringSize];
         DigestToString(digest_str, data->m_NodeGuids[i]);
@@ -246,6 +265,10 @@ static void DumpState(const Frozen::AllBuiltNodes *data)
         printf("  Implicit inputs:\n");
         for (int i=0; i!=node.m_ImplicitInputFiles.GetCount(); i++)
             printf("    %lld %s\n", node.m_ImplicitInputFiles[i].m_Timestamp, node.m_ImplicitInputFiles[i].m_Filename.Get());
+
+        printf("  GeneratedFilesIncludingVersionedFiles:\n");
+        for (int i=0; i!=node.m_VersionedFilesIncludedByGeneratedFiles.GetCount(); i++)
+            printf("    %s includes %s\n", node.m_VersionedFilesIncludedByGeneratedFiles[i].m_IncludingFile.Get(), node.m_VersionedFilesIncludedByGeneratedFiles[i].m_IncludedFile.m_Filename.Get());
 
         printf("\n");
     }

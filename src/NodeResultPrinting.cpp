@@ -402,22 +402,6 @@ static void PrintNodeResult(const NodeResultPrintData *data, BuildQueue *queue)
     }
 }
 
-inline char *StrDupN(MemAllocHeap *allocator, const char *str, size_t len)
-{
-    size_t sz = len + 1;
-    char *buffer = static_cast<char *>(HeapAllocate(allocator, sz));
-    memcpy(buffer, str, sz - 1);
-    buffer[sz - 1] = '\0';
-    return buffer;
-}
-
-inline char *StrDup(MemAllocHeap *allocator, const char *str)
-{
-    return StrDupN(allocator, str, strlen(str));
-}
-
-
-
 static void PrintCacheOperationIntoStructuredLog(ThreadState* thread_state, RuntimeNode* node, const char* hitOrMissMessage)
 {
     if (IsStructuredLogActive())

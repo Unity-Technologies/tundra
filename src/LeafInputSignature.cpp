@@ -7,6 +7,9 @@
 #include "FileSign.hpp"
 #include "Scanner.hpp"
 #include "Driver.hpp"
+#include "Exec.hpp"
+#include "NodeResultPrinting.hpp"
+#include "AllBuiltNodes.hpp"
 #include <time.h>
 
 static bool FilterOutGeneratedIncludedFiles(void* _userData, const char* includingFile, const char* includedFile)
@@ -15,7 +18,20 @@ static bool FilterOutGeneratedIncludedFiles(void* _userData, const char* includi
     return !IsFileGenerated((DagRuntimeData*)_userData, Djb2HashPath(includedFile), includedFile);
 }
 
-static HashDigest CalculateLeafInputSignature(const int32_t* dagNodeIndexToRuntimeNodeIndex_Table, RuntimeNode* runtimeNodesArray, const Frozen::Dag* dag, const Frozen::DagDerived* dagDerived, const DagRuntimeData *dagRuntime, const Frozen::DagNode* dagNode, MemAllocHeap* heap, MemAllocLinear* scratch, int profilerThreadId, StatCache* stat_cache, DigestCache* digest_cache, ScanCache* scan_cache, FILE* ingredient_stream)
+static HashDigest CalculateLeafInputSignatureHot(const int32_t* dagNodeIndexToRuntimeNodeIndex_Table,
+    RuntimeNode* runtimeNodesArray,
+    const Frozen::Dag* dag,
+    const Frozen::DagDerived* dagDerived,
+    const DagRuntimeData *dagRuntime,
+    const Frozen::DagNode* dagNode,
+    RuntimeNode* runtimeNode,
+    MemAllocHeap* heap,
+    MemAllocLinear* scratch,
+    int profilerThreadId,
+    StatCache* stat_cache,
+    DigestCache* digest_cache,
+    ScanCache* scan_cache,
+    FILE* ingredient_stream)
 {
     HashState hashState;
     HashInit(&hashState);
@@ -30,7 +46,7 @@ static HashDigest CalculateLeafInputSignature(const int32_t* dagNodeIndexToRunti
         {
             //this is racy, but it should be okay(tm). It's possible the leaf input signature isn't stored yet, but another thread is already calculating it.
             //in that case we calculate it too, and both threads will just store the same value.
-            childRuntimeNode.m_CurrentLeafInputSignature = CalculateLeafInputSignature(dagNodeIndexToRuntimeNodeIndex_Table, runtimeNodesArray, dag, dagDerived, dagRuntime, &childDagNode, heap, scratch, profilerThreadId, stat_cache, digest_cache, scan_cache, nullptr);
+            childRuntimeNode.m_CurrentLeafInputSignature = CalculateLeafInputSignatureHot(dagNodeIndexToRuntimeNodeIndex_Table, runtimeNodesArray, dag, dagDerived, dagRuntime, &childDagNode, &childRuntimeNode, heap, scratch, profilerThreadId, stat_cache, digest_cache, scan_cache, nullptr);
         }
 
         if (ingredient_stream)
@@ -49,15 +65,19 @@ static HashDigest CalculateLeafInputSignature(const int32_t* dagNodeIndexToRunti
 
     const FrozenArray<FrozenFileAndHash>& leafInputs = dagDerived->m_NodeLeafInputs[dagNode->m_DagNodeIndex];
 
-    HashSet<kFlagPathStrings> explicitLeafInputs, implicitLeafInputs;
+    HashSet<kFlagPathStrings> localExplicitLeafInputs;
+    HashSet<kFlagPathStrings> localImplicitLeafInputs;
+
+    auto& explicitLeafInputs = runtimeNode == nullptr ? localExplicitLeafInputs : runtimeNode->m_ExplicitLeafInputs;
+    auto& implicitLeafInputs = runtimeNode == nullptr ? localImplicitLeafInputs : runtimeNode->m_ImplicitLeafInputs;
+
     HashSetInit(&explicitLeafInputs, heap);
     HashSetInit(&implicitLeafInputs, heap);
     for (auto& leafInput: leafInputs)
         HashSetInsert(&explicitLeafInputs, leafInput.m_FilenameHash, leafInput.m_Filename.Get());
 
-
-
     ScanInput scanInput;
+    scanInput.m_SafeToScanBeforeDependenciesAreProduced = true;
     scanInput.m_ScanCache = scan_cache;
     scanInput.m_ScratchAlloc = scratch;
     scanInput.m_ScratchHeap = heap;
@@ -72,10 +92,12 @@ static HashDigest CalculateLeafInputSignature(const int32_t* dagNodeIndexToRunti
     for (const Frozen::ScannerIndexWithListOfFiles& scannerIndexWithListOfFiles : dagDerived->m_Nodes_to_ScannersWithListsOfFiles[dagNode->m_DagNodeIndex])
     {
         scanInput.m_ScannerConfig = dag->m_Scanners[scannerIndexWithListOfFiles.m_ScannerIndex];
+
         for (const FrozenFileAndHash& file: scannerIndexWithListOfFiles.m_FilesToScan)
         {
             MemAllocLinearScope allocScope(scratch);
             scanInput.m_FileName = file.m_Filename;
+
             ScanOutput scanOutput;
             if (ScanImplicitDeps(stat_cache, &scanInput, &scanOutput, &ignoreCallback))
             {
@@ -86,7 +108,7 @@ static HashDigest CalculateLeafInputSignature(const int32_t* dagNodeIndexToRunti
                         continue;
                     if (HashSetLookup(&implicitLeafInputs, includedFile.m_FilenameHash, includedFile.m_Filename))
                         continue;
-                    HashSetInsert(&implicitLeafInputs, includedFile.m_FilenameHash, StrDup(&scanResults, includedFile.m_Filename));
+                    HashSetInsert(&implicitLeafInputs, includedFile.m_FilenameHash,/*todo: free this memory*/ StrDup(heap, includedFile.m_Filename));
                 }
             }
         }
@@ -192,9 +214,6 @@ HashDigest CalculateLeafInputSignature(BuildQueue* queue, ThreadState* thread_st
     if (sig == NULL)
         CroakErrno("Failed opening signature ingredients for writing.");
 
-    if (sigoffline == NULL)
-        CroakErrno("Failed opening offline signature ingredients for reading.");
-
 #if TUNDRA_WIN32
     const char* username = getenv("USERNAME");
     if (username != nullptr)
@@ -211,26 +230,30 @@ HashDigest CalculateLeafInputSignature(BuildQueue* queue, ThreadState* thread_st
     fprintf(sig, "Current local time and date: %s", asctime(info));
     fprintf(sig, "Annotation %s\n\n", node->m_DagNode->m_Annotation.Get());
 
-    fprintf(sig, "Cold hash ingredients (anything below this line is hashed and must not change to get a cache hit):\n");
-
-    char            buffer[1024];
-    size_t          n;
-
-    while ((n = fread(buffer, sizeof(char), sizeof(buffer), sigoffline)) > 0)
+    if (sigoffline != nullptr)
     {
-        if (fwrite(buffer, sizeof(char), n, sig) != n)
-            CroakErrno("Failed writing cold signature ingredients.");
+        fprintf(sig, "Cold hash ingredients (anything below this line is hashed and must not change to get a cache hit):\n");
+
+        char            buffer[1024];
+        size_t          n;
+
+        while ((n = fread(buffer, sizeof(char), sizeof(buffer), sigoffline)) > 0)
+        {
+            if (fwrite(buffer, sizeof(char), n, sig) != n)
+                CroakErrno("Failed writing cold signature ingredients.");
+        }
+        fclose(sigoffline);
     }
-    fclose(sigoffline);
 
     fprintf(sig, "Hot hash ingredients:\n");
-    HashDigest res = CalculateLeafInputSignature(
+    HashDigest res = CalculateLeafInputSignatureHot(
             queue->m_Config.m_DagNodeIndexToRuntimeNodeIndex_Table,
             queue->m_Config.m_RuntimeNodes,
             queue->m_Config.m_Dag,
             queue->m_Config.m_DagDerived,
             &queue->m_Config.m_DagRuntimeData,
             node->m_DagNode,
+            node,
             &thread_state->m_LocalHeap,
             &thread_state->m_ScratchAlloc,
             thread_state->m_ProfilerThreadId,
@@ -282,13 +305,14 @@ void PrintLeafInputSignature(Driver* driver, const char **argv, int argc)
     DagRuntimeData runtimeData;
     DagRuntimeDataInit(&runtimeData, driver->m_DagData, &driver->m_Heap);
 
-    CalculateLeafInputSignature(
+    CalculateLeafInputSignatureHot(
         driver->m_DagNodeIndexToRuntimeNodeIndex_Table.begin(),
         driver->m_RuntimeNodes.begin(),
         driver->m_DagData,
         driver->m_DagDerivedData,
         &runtimeData,
         &dagNode,
+        nullptr,
         &driver->m_Heap,
         &scratch,
         0,
@@ -299,4 +323,117 @@ void PrintLeafInputSignature(Driver* driver, const char **argv, int argc)
 
     DagRuntimeDataDestroy(&runtimeData);
     LinearAllocDestroy(&scratch);
+}
+
+
+
+#define PRINT_ALL_MISSING_FILES 0
+
+bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLeafInputs(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node, const Frozen::DagDerived* dagDerived)
+{
+#if PRINT_ALL_MISSING_FILES
+    bool fail = false;
+#endif
+    for(auto nodeWithScanner: dagDerived->m_RecursiveDependenciesWithScanners[node->m_DagNodeIndex])
+    {
+        int runtimeNodeIndex = queue->m_Config.m_DagNodeIndexToRuntimeNodeIndex_Table[nodeWithScanner];
+
+        //find runtimenode:
+        RuntimeNode* runtimeNodeWithScanner = &queue->m_Config.m_RuntimeNodes[runtimeNodeIndex];
+
+        auto IsAlreadyLeafInput = [=](uint32_t hash, const char* filename) -> bool
+        {
+            if (HashSetLookup(&node->m_ExplicitLeafInputs, hash,filename))
+                return true;
+            if (HashSetLookup(&node->m_ImplicitLeafInputs, hash,filename))
+                return true;
+            return false;
+        };
+
+        auto PrintHeaderError = [=](const char* includedFile, const char* includingFile)
+        {
+            ExecResult result = {0, false};
+            result.m_ReturnCode = 1;
+
+            InitOutputBuffer(&result.m_OutputBuffer, &thread_state->m_LocalHeap);
+
+            const char* formatString =
+            "This node '%s' is marked as leaf input cacheable.\n"
+            "It has a dependency node '%s' whose inputfile is being scanned for includes.\n"
+            "Generated file '%s' was found including the non generated file '%s'.\n"
+            "Because '%s' is exclusively included by generated files,\n"
+            "this node cannot be safely cached.\n"
+            "You can fix this by either:\n"
+            "- Making '%s' not include '%s'.\n"
+            "- By ensuring that this build has a non-generated file that also includes '%s'.\n"
+            "- By using the filesThatMightBeIncluded feature.\n";
+
+            char buffer[4096];
+            snprintf(buffer,sizeof(buffer), formatString,
+                node->m_DagNode->m_Annotation.Get(),
+                runtimeNodeWithScanner->m_DagNode->m_Annotation.Get(),
+                includingFile,
+                includedFile,
+                includedFile,
+                includingFile,
+                includedFile,
+                includedFile
+            );
+
+            result.m_FrozenNodeData = node->m_DagNode;
+            EmitOutputBytesToDestination(&result, buffer, strlen(buffer));
+
+            MutexLock(&queue->m_Lock);
+            PrintNodeResult(&result, node->m_DagNode, "No command was run. Files were scanned for includes in preparation of running.", queue, thread_state, false, TimerGet(), ValidationResult::Pass, nullptr, true);
+            MutexUnlock(&queue->m_Lock);
+
+            ExecResultFreeMemory(&result);
+        };
+
+        switch (runtimeNodeWithScanner->m_BuildResult)
+        {
+            case NodeBuildResult::kUpToDate:
+
+                for(const Frozen::IncludingIncludedPair& pair: runtimeNodeWithScanner->m_BuiltNode->m_VersionedFilesIncludedByGeneratedFiles)
+                {
+                    if (!IsAlreadyLeafInput(pair.m_IncludedFile.m_FilenameHash, pair.m_IncludedFile.m_Filename.Get()))
+                    {
+#if !PRINT_ALL_MISSING_FILES
+                        PrintHeaderError(pair.m_IncludedFile.m_Filename.Get(), pair.m_IncludingFile.Get());
+                        return false;
+#else
+                        printf("#include \"%s\"\n", pair.m_IncludedFile.m_Filename.Get());
+                        fail=true;
+#endif
+                    }
+                }
+
+                break;
+            case NodeBuildResult::kRanSuccesfully:
+                for(auto pair: runtimeNodeWithScanner->m_GeneratedFilesIncludingVersionedFiles)
+                {
+                    if (!IsAlreadyLeafInput(Djb2HashPath(pair.m_IncludedFile), pair.m_IncludedFile))
+                    {
+#if !PRINT_ALL_MISSING_FILES
+                        PrintHeaderError(pair.m_IncludedFile, pair.m_IncludingFile);
+                        return false;
+#else
+                        printf("#include \"%s\"\n", pair.m_IncludedFile);
+                        fail = true;
+#endif
+                    }
+                }
+
+                break;
+            default:
+                Croak("Unexpected build node result of dependent node while verifying headers");
+        }
+
+
+    }
+#if PRINT_ALL_MISSING_FILES
+    if (fail)
+            return false;
+#endif
+    return true;
 }

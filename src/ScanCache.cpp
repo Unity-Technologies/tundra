@@ -28,9 +28,26 @@ struct ScanCache::Record
 void ComputeScanCacheKey(
     HashDigest *key_out,
     const char *filename,
-    const HashDigest &scanner_hash)
+    const HashDigest& scanner_hash,
+    bool safeToScanBeforeDependenciesAreProduced
+    )
 {
     uint64_t path_hash = Djb2HashPath64(filename);
+
+    //There are two kinds of scan requests that are done.
+    //One is the normal one that is ran when we are guaranteed that all included files that are generated are already generated.
+    //in this case safeToScanBeforeDependenciesAreProduced will be false.
+
+    //The other case is at the very beginning of the build during leaf input calculation. When we scan at this time, we will find include statements
+    //that we cannot find on disk. This happens to be just fine, because for leaf input calculation we want to actually skip searching in generated files
+    //however because the ScanImplicitDeps will actually omit the includes it cannot find, _and_ put the results in the scan cache,
+    //it's possible for a leafinput scan request to pollute the cache for the cache during normal input signature calculation that really requires
+    //the included generated file to be reported.
+
+    //we deal with this by storing these two different kind of requests in the scan cache with different keys. This way both kind of queries will only
+    //get cache hits on queries of their own kind.
+    if (safeToScanBeforeDependenciesAreProduced)
+        path_hash++;
 
 #if ENABLED(USE_SHA1_HASH)
     key_out->m_Words.m_A = scanner_hash.m_Words.m_A ^ path_hash;

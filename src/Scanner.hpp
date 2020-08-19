@@ -13,6 +13,7 @@ struct StatCache;
 struct ScanInput
 {
     const Frozen::ScannerData *m_ScannerConfig;
+    bool m_SafeToScanBeforeDependenciesAreProduced;
     MemAllocLinear *m_ScratchAlloc;
     MemAllocHeap *m_ScratchHeap;
     const char *m_FileName;

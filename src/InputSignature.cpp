@@ -16,6 +16,7 @@
 #include "Profiler.hpp"
 #include "NodeResultPrinting.hpp"
 #include "OutputValidation.hpp"
+#include "InputSignature.hpp"
 #include "DigestCache.hpp"
 #include "SharedResources.hpp"
 #include "HumanActivityDetection.hpp"
@@ -222,6 +223,7 @@ static void ReportInputSignatureChanges(
             scan_input.m_ScratchHeap = &thread_state->m_LocalHeap;
             scan_input.m_FileName = input.m_Filename;
             scan_input.m_ScanCache = scan_cache;
+            scan_input.m_SafeToScanBeforeDependenciesAreProduced = false;
 
             ScanOutput scan_output;
 
@@ -292,13 +294,23 @@ static void ReportInputSignatureChanges(
     }
 }
 
+
+
+struct ValidateIncludeData
+{
+    DagRuntimeData* m_DagRuntimeData;
+    Buffer<IncludingIncludedPair>* m_GeneratedFilesIncludingVersionedFiles;
+    MemAllocHeap* m_Heap;
+};
+
 static bool ValidateInclude(void* _userData, const char* includingFile, const char* includedFile)
 {
     // If a file is generated, it may only include
     // -other generated files
     // -files specifically allowed by `fileThatMightBeIncluded`
 
-    auto dagRuntime = (DagRuntimeData*)_userData;
+    auto validateIncludeData = (ValidateIncludeData*)_userData;
+    auto dagRuntime = validateIncludeData->m_DagRuntimeData;
     const Frozen::DagNode* includingFileNode;
     bool includingFileIsGenerated = FindDagNodeForFile(dagRuntime, Djb2HashPath(includingFile), includingFile, &includingFileNode);
 
@@ -321,13 +333,18 @@ static bool ValidateInclude(void* _userData, const char* includingFile, const ch
         }
     }
 
-    // Not allowed. Print warning message.
-    Log(kDebug, "Illegal include %s -> %s\n", includingFile, includedFile);
+    auto heap = validateIncludeData->m_Heap;
+    IncludingIncludedPair pair;
+    pair.m_IncludedFile = StrDup(heap, includedFile);
+    pair.m_IncludingFile = StrDup(heap, includingFile);
+    BufferAppendOne(validateIncludeData->m_GeneratedFilesIncludingVersionedFiles, heap, pair);
     return true;
 }
 
-static HashDigest CalculateInputSignature(BuildQueue* queue, ThreadState* thread_state, const Frozen::DagNode* dagnode)
+static bool CalculateInputSignature(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node)
 {
+    auto& dagnode = node->m_DagNode;
+
     ProfilerScope prof_scope("CheckInputSignature", thread_state->m_ProfilerThreadId, dagnode->m_Annotation);
 
     const BuildQueueConfig &config = queue->m_Config;
@@ -363,6 +380,12 @@ static HashDigest CalculateInputSignature(BuildQueue* queue, ThreadState* thread
     // Roll back scratch allocator after all file scans
     MemAllocLinearScope alloc_scope(&thread_state->m_ScratchAlloc);
 
+
+    ValidateIncludeData vid;
+    vid.m_DagRuntimeData = &queue->m_Config.m_DagRuntimeData;
+    vid.m_GeneratedFilesIncludingVersionedFiles = &node->m_GeneratedFilesIncludingVersionedFiles;
+    vid.m_Heap = queue->m_Config.m_Heap;
+
     for (const FrozenFileAndHash &input : dagnode->m_InputFiles)
     {
         // Add path and timestamp of every direct input file.
@@ -385,11 +408,12 @@ static HashDigest CalculateInputSignature(BuildQueue* queue, ThreadState* thread
             scan_input.m_ScratchHeap = &thread_state->m_LocalHeap;
             scan_input.m_FileName = input.m_Filename;
             scan_input.m_ScanCache = queue->m_Config.m_ScanCache;
+            scan_input.m_SafeToScanBeforeDependenciesAreProduced = false;
 
             ScanOutput scan_output;
 
             IncludeFilterCallback validateCallback;
-            validateCallback.userData = (void*)&queue->m_Config.m_DagRuntimeData;
+            validateCallback.userData = (void*)&vid;
             validateCallback.callback = &ValidateInclude;
 
             if (ScanImplicitDeps(stat_cache, &scan_input, &scan_output, &validateCallback))
@@ -430,16 +454,15 @@ static HashDigest CalculateInputSignature(BuildQueue* queue, ThreadState* thread
     HashAddInteger(&sighash, (dagnode->m_Flags & Frozen::DagNode::kFlagAllowUnexpectedOutput) ? 1 : 0);
     HashAddInteger(&sighash, (dagnode->m_Flags & Frozen::DagNode::kFlagAllowUnwrittenOutputFiles) ? 1 : 0);
 
-    HashDigest result;
-    HashFinalize(&sighash, &result);
-    return result;
+    HashFinalize(&sighash, &node->m_CurrentInputSignature);
+    return true;
 }
 
 bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node)
 {
     const Frozen::DagNode *dagnode = node->m_DagNode;
 
-    node->m_CurrentInputSignature = CalculateInputSignature(queue, thread_state, dagnode);
+    CalculateInputSignature(queue, thread_state, node);
 
     // Figure out if we need to rebuild this node.
     const Frozen::BuiltNode *prev_builtnode = node->m_BuiltNode;

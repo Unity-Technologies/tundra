@@ -7,11 +7,13 @@ namespace Frozen { struct ScanData; }
 struct MemAllocHeap;
 struct MemAllocLinear;
 struct MemoryMappedFile;
+struct ScanInput;
 
 void ComputeScanCacheKey(
     HashDigest *key_out,
     const char *filename,
-    const HashDigest &scanner_hash);
+    const HashDigest& hash_digest,
+    bool safeToScanBeforeDependenciesAreProduced);
 
 struct ScanCacheLookupResult
 {

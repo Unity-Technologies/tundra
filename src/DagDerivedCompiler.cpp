@@ -43,6 +43,7 @@ struct CompileDagDerivedWorker
     BinarySegment *arraydata2_seg;
     BinarySegment *leafnodearray_seg;
     BinarySegment *cacheableDependenciesArray_seg;
+    BinarySegment *dependenciesWithScannersArray_seg;
     BinarySegment *scannerindex_seg;
     BinarySegment *str_seg;
 
@@ -125,6 +126,7 @@ struct CompileDagDerivedWorker
         HashSet<kFlagPathStrings> m_AlreadyProcessedFiles;
         Buffer<ScannerIndexWithListOfFiles> scannersWithListsOfFiles;
         Buffer<int32_t> all_dependent_nodes;
+        Buffer<int32_t> recursive_dependencies_with_scanners;
     };
 
     void PerNodeWorkerDataInit(PerNodeWorkerData* data)
@@ -132,6 +134,7 @@ struct CompileDagDerivedWorker
         BufferInit(&data->scannersWithListsOfFiles);
         BufferInit(&data->leafInputBuffer);
         BufferInit(&data->all_dependent_nodes);
+        BufferInit(&data->recursive_dependencies_with_scanners);
         HashSetInit(&data->m_AlreadyProcessedFiles, heap);
     }
 
@@ -140,14 +143,16 @@ struct CompileDagDerivedWorker
         BufferDestroy(&data->scannersWithListsOfFiles, heap);
         BufferDestroy(&data->leafInputBuffer, heap);
         BufferDestroy(&data->all_dependent_nodes, heap);
+        BufferDestroy(&data->recursive_dependencies_with_scanners, heap);
         HashSetDestroy(&data->m_AlreadyProcessedFiles);
     }
 
     PerNodeWorkerData m_PerNodeWorkerData;
 
-    void PerNode_ProcessDiscoveredExplicitLeafInput(const FrozenFileAndHash& file, const Frozen::DagNode& childDagNode)
+    void PerNode_ProcessDiscoveredExplicitLeafInput(const FrozenFileAndHash& file, const Frozen::DagNode& childDagNode, int scannerIndex)
     {
         const Frozen::DagNode* fileGeneratingNode;
+
         if (FindDagNodeForFile(&dagRuntimeData, file.m_FilenameHash, file.m_Filename.Get(), &fileGeneratingNode))
         {
             //ok, so this means it's a generated file.  we do not recurse into those, but we will add their FilesThatMightBeIncluded
@@ -160,7 +165,7 @@ struct CompileDagDerivedWorker
             }
 
             for(auto& f: fileGeneratingNode->m_FilesThatMightBeIncluded)
-                PerNode_ProcessDiscoveredExplicitLeafInput(f, *fileGeneratingNode);
+                PerNode_ProcessDiscoveredExplicitLeafInput(f, *fileGeneratingNode, scannerIndex);
 
             return;
         }
@@ -181,7 +186,7 @@ struct CompileDagDerivedWorker
         BufferAppendOne(&m_PerNodeWorkerData.leafInputBuffer, heap, leafInputFile);
 
         //and if it doesn't have a scanner we are done here.
-        if (childDagNode.m_ScannerIndex == -1)
+        if (scannerIndex == -1)
             return;
 
         //if it does have a scanner, we need to make this sure this file will get scanned with its scanner as part of runtime leaf input signature creation.
@@ -197,7 +202,7 @@ struct CompileDagDerivedWorker
         };
 
         //for each cacheable node, we keep a list of ScannerIndexWithListOfFiles. Let's see if there is already an entry for our scanner. if there isn't we make one.
-        ScannerIndexWithListOfFiles* scannerIndexWithListsOfFiles = findOrMakeScannerWithListOfFilesFor(childDagNode.m_ScannerIndex);
+        ScannerIndexWithListOfFiles* scannerIndexWithListsOfFiles = findOrMakeScannerWithListOfFilesFor(scannerIndex);
 
         //and add this file to the list for that scanner.
         BufferAppendOne(&scannerIndexWithListsOfFiles->m_FilesToScan, heap, leafInputFile);
@@ -216,6 +221,9 @@ struct CompileDagDerivedWorker
 
             BinarySegmentWriteInt32(cacheableDependenciesArray_seg, 0);
             BinarySegmentWriteNullPointer(cacheableDependenciesArray_seg);
+
+            BinarySegmentWriteInt32(dependenciesWithScannersArray_seg, 0);
+            BinarySegmentWriteNullPointer(dependenciesWithScannersArray_seg);
             return;
         }
 
@@ -250,9 +258,12 @@ struct CompileDagDerivedWorker
             const Frozen::DagNode& childDagNode = dag->m_DagNodes[childNodeIndex];
 
             for (auto& inputFile: childDagNode.m_InputFiles)
-                PerNode_ProcessDiscoveredExplicitLeafInput(inputFile, childDagNode);
+                PerNode_ProcessDiscoveredExplicitLeafInput(inputFile, childDagNode, childDagNode.m_ScannerIndex);
             for (auto& fileThatMightBeIncluded: childDagNode.m_FilesThatMightBeIncluded)
-                PerNode_ProcessDiscoveredExplicitLeafInput(fileThatMightBeIncluded, childDagNode);
+                PerNode_ProcessDiscoveredExplicitLeafInput(fileThatMightBeIncluded, childDagNode, childDagNode.m_ScannerIndex);
+
+            if (childDagNode.m_ScannerIndex != -1)
+                BufferAppendOne(&m_PerNodeWorkerData.recursive_dependencies_with_scanners, heap, childDagNode.m_DagNodeIndex);
         }
 
         auto& leafInputBuffer = m_PerNodeWorkerData.leafInputBuffer;
@@ -290,6 +301,11 @@ struct CompileDagDerivedWorker
             BufferDestroy(&scannerIndexWithListOfFiles.m_FilesToScan, heap);
         }
 
+        BinarySegmentWriteInt32(dependenciesWithScannersArray_seg, m_PerNodeWorkerData.recursive_dependencies_with_scanners.m_Size);
+        BinarySegmentWritePointer(dependenciesWithScannersArray_seg, BinarySegmentPosition(arraydata_seg));
+        for(auto d: m_PerNodeWorkerData.recursive_dependencies_with_scanners)
+            BinarySegmentWriteUint32(arraydata_seg, d);
+
         PerNodeWorkerDataDestroy(&m_PerNodeWorkerData);
     }
 
@@ -311,6 +327,9 @@ struct CompileDagDerivedWorker
         //Write m_ScannerIndices_To_Files_To_Scan header
         BinarySegmentWriteUint32(main_seg, node_count);
         BinarySegmentWritePointer(main_seg, BinarySegmentPosition(scannerindex_seg));
+
+        BinarySegmentWriteUint32(main_seg, node_count);
+        BinarySegmentWritePointer(main_seg, BinarySegmentPosition(dependenciesWithScannersArray_seg));
 
         for (int32_t nodeIndex = 0; nodeIndex < node_count; ++nodeIndex)
         {
@@ -376,6 +395,7 @@ static void CompileDagDerivedWorkerInit(CompileDagDerivedWorker* data, const Fro
     data->arraydata2_seg = BinaryWriterAddSegment(data->writer);
     data->leafnodearray_seg = BinaryWriterAddSegment(data->writer);
     data->cacheableDependenciesArray_seg = BinaryWriterAddSegment(data->writer);
+    data->dependenciesWithScannersArray_seg = BinaryWriterAddSegment(data->writer);
     data->scannerindex_seg = BinaryWriterAddSegment(data->writer);
     data->str_seg = BinaryWriterAddSegment(data->writer);
     data->node_count = dag->m_NodeCount;

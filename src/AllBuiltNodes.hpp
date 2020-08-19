@@ -17,6 +17,12 @@ struct NodeInputFileData
 
 static_assert(sizeof(NodeInputFileData) == 12, "struct layout");
 
+struct IncludingIncludedPair
+{
+    FrozenString m_IncludingFile;
+    FrozenFileAndHash m_IncludedFile;
+};
+
 struct BuiltNode
 {
     uint32_t m_WasBuiltSuccessfully;
@@ -27,13 +33,13 @@ struct BuiltNode
     FrozenString m_Action;
     FrozenArray<NodeInputFileData> m_InputFiles;
     FrozenArray<NodeInputFileData> m_ImplicitInputFiles;
-
+    FrozenArray<IncludingIncludedPair> m_VersionedFilesIncludedByGeneratedFiles;
     FrozenArray<uint32_t> m_DagsWeHaveSeenThisNodeInPreviously;
 };
 
 struct AllBuiltNodes
 {
-    static const uint32_t MagicNumber = 0xc1a24bc1 ^ kTundraHashMagic;
+    static const uint32_t MagicNumber = 0xc1a24bc2 ^ kTundraHashMagic;
 
     uint32_t m_MagicNumber;
 

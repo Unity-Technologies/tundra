@@ -137,7 +137,7 @@ struct SharedResourceData
 
 struct Dag
 {
-    static const uint32_t MagicNumber = 0x2ac92245 ^ kTundraHashMagic;
+    static const uint32_t MagicNumber = 0x2dea2245 ^ kTundraHashMagic;
 
     uint32_t m_MagicNumber;
 
@@ -187,7 +187,7 @@ struct ScannerIndexWithListOfFiles
 
 struct DagDerived
 {
-    static const uint32_t MagicNumber = 0x9bead124 ^ kTundraHashMagic;
+    static const uint32_t MagicNumber = 0x9bead126 ^ kTundraHashMagic;
 
     uint32_t m_MagicNumber;
     uint32_t m_NodeCount;
@@ -195,13 +195,15 @@ struct DagDerived
     FrozenArray<FrozenArray<int32_t>> m_Dependencies;
     FrozenArray<FrozenArray<uint32_t>> m_NodeBacklinks;
 
+    //all data below are SOA style arrays that contain information for cacheable nodes.  for nodes that are not cacheable, the entry is not populated
     //leaf inputs excluding leaf inputs that come from nodes we depend on that themselves are leaf input cacheable.
     FrozenArray<FrozenArray<FrozenFileAndHash>> m_NodeLeafInputs;
-
     FrozenArray<FrozenArray<uint32_t>> m_DependentNodesThatThemselvesAreLeafInputCacheable;
-
     FrozenArray<FrozenArray<ScannerIndexWithListOfFiles>> m_Nodes_to_ScannersWithListsOfFiles;
+    FrozenArray<FrozenArray<uint32_t>> m_RecursiveDependenciesWithScanners;
+
     FrozenArray<HashDigest> m_LeafInputHash_Offline;
+
 
     uint32_t m_MagicNumberEnd;
 };

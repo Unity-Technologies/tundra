@@ -160,7 +160,7 @@ static void GetIncludesRecursive(const HashDigest &scannerGuid, const char *fn, 
     HashTableInsert(&seen, fnHash, fn, scannerGuid);
 
     HashDigest scan_key;
-    ComputeScanCacheKey(&scan_key, fn, scannerGuid);
+    ComputeScanCacheKey(&scan_key, fn, scannerGuid, false);
 
     const int32_t count = scan_data->m_EntryCount;
     if (const HashDigest *ptr = BinarySearch(scan_data->m_Keys.Get(), count, scan_key))
@@ -230,7 +230,7 @@ bool DriverReportIncludes(Driver *self)
 
     HashTableWalk(&seen, [&](uint32_t index, uint32_t hash, const char *filename, const HashDigest &scannerguid) {
         HashDigest scan_key;
-        ComputeScanCacheKey(&scan_key, filename, scannerguid);
+        ComputeScanCacheKey(&scan_key, filename, scannerguid, false);
         const int32_t count = scan_data->m_EntryCount;
         if (const HashDigest *ptr = BinarySearch(scan_data->m_Keys.Get(), count, scan_key))
         {
@@ -1092,6 +1092,7 @@ bool DriverSaveAllBuiltNodes(Driver *self)
                 scan_input.m_ScratchHeap = &self->m_Heap;
                 scan_input.m_FileName = dag_node->m_InputFiles[i].m_Filename;
                 scan_input.m_ScanCache = &self->m_ScanCache;
+                scan_input.m_SafeToScanBeforeDependenciesAreProduced = false;
 
                 ScanOutput scan_output;
 
@@ -1133,6 +1134,15 @@ bool DriverSaveAllBuiltNodes(Driver *self)
             BinarySegmentWriteNullPointer(built_nodes_seg);
         }
 
+        BinarySegmentWriteInt32(built_nodes_seg, runtime_node->m_GeneratedFilesIncludingVersionedFiles.m_Size);
+        BinarySegmentWritePointer(built_nodes_seg, BinarySegmentPosition(array_seg));
+        for(auto& pair: runtime_node->m_GeneratedFilesIncludingVersionedFiles)
+        {
+            WriteCommonStringPtr(array_seg, string_seg, pair.m_IncludingFile, &shared_strings, scratch);
+            WriteCommonStringPtr(array_seg, string_seg, pair.m_IncludedFile, &shared_strings, scratch);
+            BinarySegmentWriteUint32(array_seg, Djb2HashPath(pair.m_IncludedFile));
+        }
+
         const Frozen::BuiltNode* built_node = runtime_node->m_BuiltNode;
         //we cast the empty_frozen_array below here to a FrozenArray<uint32_t> that is empty, so the code below gets a lot simpler.
         const FrozenArray<uint32_t> &previous_dags = (built_node == nullptr) ? FrozenArray<uint32_t>::empty() : built_node->m_DagsWeHaveSeenThisNodeInPreviously;
@@ -1171,6 +1181,15 @@ bool DriverSaveAllBuiltNodes(Driver *self)
             BinarySegmentWriteUint64(array_seg, built_node->m_ImplicitInputFiles[i].m_Timestamp);
 
             WriteCommonStringPtr(array_seg, string_seg, built_node->m_ImplicitInputFiles[i].m_Filename, &shared_strings, &self->m_Allocator);
+        }
+
+        BinarySegmentWriteInt32(built_nodes_seg, built_node->m_VersionedFilesIncludedByGeneratedFiles.GetCount());
+        BinarySegmentWritePointer(built_nodes_seg, BinarySegmentPosition(array_seg));
+        for(auto& pair: built_node->m_VersionedFilesIncludedByGeneratedFiles)
+        {
+            WriteCommonStringPtr(array_seg, string_seg, pair.m_IncludingFile, &shared_strings, &self->m_Allocator);
+            WriteCommonStringPtr(array_seg, string_seg, pair.m_IncludedFile.m_Filename.Get(), &shared_strings, &self->m_Allocator);
+            BinarySegmentWriteUint32(array_seg, pair.m_IncludedFile.m_FilenameHash);
         }
 
         int32_t dag_count = built_node->m_DagsWeHaveSeenThisNodeInPreviously.GetCount();
