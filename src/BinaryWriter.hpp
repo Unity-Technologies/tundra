@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Buffer.hpp"
+#include "Hash.hpp"
 
 struct MemAllocHeap;
 struct BinarySegment;
@@ -30,6 +31,7 @@ void BinarySegmentAlign(BinarySegment* seg, size_t alignment);
 void* BinarySegmentAlloc(BinarySegment* seg, size_t len);
 void BinarySegmentWrite(BinarySegment* seg, const void* data, size_t len);
 void BinarySegmentWritePointer(BinarySegment* seg, BinaryLocator locator);
+void BinarySegmentWriteHashDigest(BinarySegment *seg, const HashDigest& hashDigest);
 
 inline void BinarySegmentWriteUint8(BinarySegment* seg, uint8_t v)
 {

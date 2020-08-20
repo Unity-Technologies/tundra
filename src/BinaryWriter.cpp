@@ -1,5 +1,5 @@
 #include "BinaryWriter.hpp"
-
+#include "Hash.hpp"
 #include <cstdio>
 
 
@@ -59,6 +59,11 @@ void *BinarySegmentAlloc(BinarySegment *seg, size_t len)
 void BinarySegmentWrite(BinarySegment *seg, const void *data, size_t len)
 {
     BufferAppend(&seg->m_Bytes, seg->m_Heap, (const uint8_t *)data, len);
+}
+
+void BinarySegmentWriteHashDigest(BinarySegment *seg, const HashDigest& hashDigest)
+{
+    BinarySegmentWrite(seg, &hashDigest, sizeof(HashDigest));
 }
 
 void BinarySegmentWritePointer(BinarySegment *seg, BinaryLocator locator)

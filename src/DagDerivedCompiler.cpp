@@ -70,6 +70,11 @@ struct CompileDagDerivedWorker
         }
     }
 
+    static bool IsLeafInputCacheable(const Frozen::DagNode& dagNode)
+    {
+        return HasFlag(dagNode.m_Flags,Frozen::DagNode::kFlagCacheableByLeafInputs);
+    }
+
     struct ScannerIndexWithListOfFiles
     {
         int32_t m_ScannerIndex;
@@ -164,10 +169,10 @@ struct CompileDagDerivedWorker
         BufferAppendOne(&scannerIndexWithListsOfFiles->m_FilesToScan, heap, leafInputFile);
     }
 
-    void WriteLeafInputsAndScannerIndicesToFilesToScan_ForSingleNode(int nodeIndex)
+    void WriteIntoCacheableNodeDataArraysFor(int nodeIndex)
     {
         const Frozen::DagNode& node = dag->m_DagNodes[nodeIndex];
-        if (!HasFlag(node.m_Flags,Frozen::DagNode::kFlagCacheableByLeafInputs))
+        if (!IsLeafInputCacheable(node))
         {
             BinarySegmentWriteInt32(nodeLeafInputsArray_seg, 0);
             BinarySegmentWriteNullPointer(nodeLeafInputsArray_seg);
@@ -180,6 +185,9 @@ struct CompileDagDerivedWorker
 
             BinarySegmentWriteInt32(dependentNodesWithScannersArray_seg, 0);
             BinarySegmentWriteNullPointer(dependentNodesWithScannersArray_seg);
+
+            HashDigest empty = {};
+            BinarySegmentWriteHashDigest(dependentNodesWithScannersArray_seg, empty);
             return;
         }
 
@@ -194,10 +202,9 @@ struct CompileDagDerivedWorker
         Buffer<int32_t> dependenciesThatAreLeafInputCacheableThemselves;
         BufferInit(&dependenciesThatAreLeafInputCacheableThemselves);
 
-        std::function<bool(int,int)> filterLeafInputCacheable = [&](int parentIndex, int childIndex)
+        std::function<bool(int,int)> filterAndCollectLeafInputCacheable = [&](int parentIndex, int childIndex)
         {
-            bool isCacheable = HasFlag(dag->m_DagNodes[childIndex].m_Flags,Frozen::DagNode::kFlagCacheableByLeafInputs);
-            if (isCacheable)
+            if (IsLeafInputCacheable(dag->m_DagNodes[childIndex]))
             {
                 if (std::find(dependenciesThatAreLeafInputCacheableThemselves.begin(), dependenciesThatAreLeafInputCacheableThemselves.end(), childIndex) == dependenciesThatAreLeafInputCacheableThemselves.end())
                     BufferAppendOne(&dependenciesThatAreLeafInputCacheableThemselves, heap, childIndex);
@@ -207,7 +214,7 @@ struct CompileDagDerivedWorker
             return true;
         };
 
-        FindDependentNodesFromRootIndex(heap, dag, arrayAccess, sizeAccess, filterLeafInputCacheable, nodeIndex, m_PerNodeWorkerData.all_dependent_nodes);
+        FindDependentNodesFromRootIndex(heap, dag, arrayAccess, sizeAccess, filterAndCollectLeafInputCacheable, nodeIndex, m_PerNodeWorkerData.all_dependent_nodes);
 
         for(int32_t childNodeIndex : m_PerNodeWorkerData.all_dependent_nodes)
         {
@@ -262,6 +269,32 @@ struct CompileDagDerivedWorker
         for(auto d: m_PerNodeWorkerData.recursive_dependencies_with_scanners)
             BinarySegmentWriteUint32(arraydata_seg, d);
 
+
+        auto CalculateLeafInputHashOffline2 = [=](const Frozen::DagNode& node) -> HashDigest
+        {
+            HashDigest hashResult = {};
+
+            if (0 != (node.m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs))
+            {
+                char path[kMaxPathLength];
+                snprintf(path, sizeof(path), "%s/offline-%d", dag->m_CacheSignatureDirectoryName.Get(), node.m_DagNodeIndex);
+                PathBuffer output;
+                PathInit(&output, path);
+                MakeDirectoriesForFile(stat_cache, output);
+
+                FILE *sig = fopen(path, "w");
+                if (sig == NULL)
+                    CroakErrno("Failed opening offline signature ingredients for writing.");
+
+                std::function<const int32_t*(int)> arrayAccess = [=](int index){return combinedDependenciesBuffers[index].begin();};
+                std::function<size_t(int)> sizeAccess = [=](int index){return combinedDependenciesBuffers[index].m_Size;};
+                hashResult = CalculateLeafInputHashOffline(dag, arrayAccess, sizeAccess, node.m_DagNodeIndex, heap, sig);
+                fclose(sig);
+            }
+        };
+
+        BinarySegmentWriteHashDigest(leafInputHashOfflineArray_seg, CalculateLeafInputHashOffline2(node));
+
         PerNodeWorkerDataDestroy(&m_PerNodeWorkerData);
     }
 
@@ -291,28 +324,7 @@ struct CompileDagDerivedWorker
         }
 
 
-        auto CalculateLeafInputHashOffline2 = [=](const Frozen::DagNode& node) -> HashDigest
-        {
-            HashDigest hashResult = {};
 
-            if (0 != (node.m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs))
-            {
-                char path[kMaxPathLength];
-                snprintf(path, sizeof(path), "%s/offline-%d", dag->m_CacheSignatureDirectoryName.Get(), node.m_DagNodeIndex);
-                PathBuffer output;
-                PathInit(&output, path);
-                MakeDirectoriesForFile(stat_cache, output);
-
-                FILE *sig = fopen(path, "w");
-                if (sig == NULL)
-                    CroakErrno("Failed opening offline signature ingredients for writing.");
-
-                std::function<const int32_t*(int)> arrayAccess = [=](int index){return combinedDependenciesBuffers[index].begin();};
-                std::function<size_t(int)> sizeAccess = [=](int index){return combinedDependenciesBuffers[index].m_Size;};
-                hashResult = CalculateLeafInputHashOffline(dag, arrayAccess, sizeAccess, node.m_DagNodeIndex, heap, sig);
-                fclose(sig);
-            }
-        };
 
         auto WriteArrayOfIndices = [=](BinarySegment* segment, Buffer<int32_t>& indices)->void{
                 BinarySegmentWriteInt32(segment, indices.m_Size);
@@ -352,11 +364,10 @@ struct CompileDagDerivedWorker
             WriteArrayOfIndices(dependenciesArray_seg, combinedDependenciesBuffers[nodeIndex]);
             WriteArrayOfIndices(backlinksArray_seg, backlinksBuffers[nodeIndex]);
 
-            WriteLeafInputsAndScannerIndicesToFilesToScan_ForSingleNode(nodeIndex);
+            const Frozen::DagNode& dagNode = dag->m_DagNodes[nodeIndex];
 
-            const Frozen::DagNode& node = dag->m_DagNodes[nodeIndex];
-            HashDigest result = CalculateLeafInputHashOffline2(node);
-            BinarySegmentWrite(leafInputHashOfflineArray_seg, (const char *)&result, sizeof(HashDigest));
+            WriteIntoCacheableNodeDataArraysFor(nodeIndex);
+
         }
 
         DagRuntimeDataDestroy(&dagRuntimeData);
