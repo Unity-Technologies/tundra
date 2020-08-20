@@ -14,7 +14,6 @@ struct MemAllocHeap;
 struct BuildQueue;
 struct Driver;
 
-HashDigest CalculateLeafInputSignature(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node);
-HashDigest CalculateLeafInputHashOffline(const Frozen::Dag* dag, std::function<const int32_t*(int)>& arrayAccess, std::function<size_t(int)>& sizeAccess, int32_t nodeIndex, MemAllocHeap* heap, FILE* ingredient_stream);
+HashDigest CalculateLeafInputSignatureRuntime(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node);
 bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLeafInputs(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node, const Frozen::DagDerived* dagDerived);
 void PrintLeafInputSignature(Driver* driver, const char **argv, int argc);

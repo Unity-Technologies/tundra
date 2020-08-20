@@ -1,5 +1,5 @@
 #include "LeafInputSignature.hpp"
-#include "Hash.hpp"
+#include "LeafInputSignatureOffline.hpp"
 #include "DagData.hpp"
 #include "RuntimeNode.hpp"
 #include "BuildQueue.hpp"
@@ -21,7 +21,8 @@ static bool FilterOutGeneratedIncludedFiles(void* _userData, const char* includi
     return !IsFileGenerated((DagRuntimeData*)_userData, Djb2HashPath(includedFile), includedFile);
 }
 
-static HashDigest CalculateLeafInputSignatureHot(const int32_t* dagNodeIndexToRuntimeNodeIndex_Table,
+static HashDigest CalculateLeafInputSignatureRuntime_Impl(
+    const int32_t* dagNodeIndexToRuntimeNodeIndex_Table,
     RuntimeNode* runtimeNodesArray,
     const Frozen::Dag* dag,
     const Frozen::DagDerived* dagDerived,
@@ -39,17 +40,17 @@ static HashDigest CalculateLeafInputSignatureHot(const int32_t* dagNodeIndexToRu
     HashState hashState;
     HashInit(&hashState);
 
-    for (auto& child: dagDerived->DependentNodesThatThemselvesAreLeafInputCacheableFor(dagNode->m_DagNodeIndex))
+    for (auto& dependentNodeThatIsCacheableItself: dagDerived->DependentNodesThatThemselvesAreLeafInputCacheableFor(dagNode->m_DagNodeIndex))
     {
-        int childRuntimeNodeIndex = dagNodeIndexToRuntimeNodeIndex_Table[child];
+        int childRuntimeNodeIndex = dagNodeIndexToRuntimeNodeIndex_Table[dependentNodeThatIsCacheableItself];
         auto& childRuntimeNode = runtimeNodesArray[childRuntimeNodeIndex];
-        const auto& childDagNode = dag->m_DagNodes[child];
+        const auto& childDagNode = dag->m_DagNodes[dependentNodeThatIsCacheableItself];
 
         if (childRuntimeNode.m_CurrentLeafInputSignature.m_Words64[0] == 0)
         {
             //this is racy, but it should be okay(tm). It's possible the leaf input signature isn't stored yet, but another thread is already calculating it.
             //in that case we calculate it too, and both threads will just store the same value.
-            childRuntimeNode.m_CurrentLeafInputSignature = CalculateLeafInputSignatureHot(dagNodeIndexToRuntimeNodeIndex_Table, runtimeNodesArray, dag, dagDerived, dagRuntime, &childDagNode, &childRuntimeNode, heap, scratch, profilerThreadId, stat_cache, digest_cache, scan_cache, nullptr);
+            childRuntimeNode.m_CurrentLeafInputSignature = CalculateLeafInputSignatureRuntime_Impl(dagNodeIndexToRuntimeNodeIndex_Table, runtimeNodesArray, dag, dagDerived, dagRuntime, &childDagNode, &childRuntimeNode, heap, scratch, profilerThreadId, stat_cache, digest_cache, scan_cache, nullptr);
         }
 
         if (ingredient_stream)
@@ -151,60 +152,9 @@ static HashDigest CalculateLeafInputSignatureHot(const int32_t* dagNodeIndexToRu
     return result;
 }
 
-//This function calculates the offline part of the signature, which we store in the dag-derived file
-HashDigest CalculateLeafInputHashOffline(const Frozen::Dag* dag, std::function<const int32_t*(int)>& arrayAccess, std::function<size_t(int)>& sizeAccess, int32_t nodeIndex, MemAllocHeap* heap, FILE* ingredient_stream)
-{
-    HashDigest hashResult = {};
-
-    Buffer<int32_t> all_dependent_nodes;
-    BufferInit(&all_dependent_nodes);
-
-    std::function<bool(int,int)> filterLeafInputCacheable = [&](int parentIndex, int childIndex)
-    {
-        bool isCacheable = dag->m_DagNodes[childIndex].m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs;
-        return !isCacheable;
-    };
-    FindDependentNodesFromRootIndex(heap, dag, arrayAccess, sizeAccess, filterLeafInputCacheable, nodeIndex, all_dependent_nodes);
-
-    HashState hashState;
-    HashInit(&hashState);
-
-    std::sort(all_dependent_nodes.begin(), all_dependent_nodes.end(), [dag](const int& a, const int& b) { return strcmp(dag->m_DagNodes[a].m_Annotation.Get(), dag->m_DagNodes[b].m_Annotation.Get()) < 0; });
-
-    for(int32_t childNodeIndex : all_dependent_nodes)
-    {
-        auto& dagNode = dag->m_DagNodes[childNodeIndex];
-
-        if (ingredient_stream)
-            fprintf(ingredient_stream, "\nannotation: %s\n", dagNode.m_Annotation.Get());
-
-        HashAddString(ingredient_stream, &hashState, "action", dagNode.m_Action.Get());
-
-        for(auto& env: dagNode.m_EnvVars)
-        {
-            HashAddString(ingredient_stream, &hashState, "env_name", env.m_Name);
-            HashAddString(ingredient_stream, &hashState, "env_value", env.m_Value);
-        }
-        for (auto& s: dagNode.m_AllowedOutputSubstrings)
-            HashAddString(ingredient_stream, &hashState, "allowed_outputstring", s);
-        for (auto& f: dagNode.m_OutputFiles)
-            HashAddString(ingredient_stream, &hashState, "output", f.m_Filename.Get());
-
-        int relevantFlags = dagNode.m_Flags & ~Frozen::DagNode::kFlagCacheableByLeafInputs;
-
-        //if our flags are completely default, let's not add them to the stream, it makes the ingredient stream easier
-        //to parse/compare for a human.
-        if (relevantFlags != (Frozen::DagNode::kFlagOverwriteOutputs | Frozen::DagNode::kFlagAllowUnexpectedOutput))
-            HashAddInteger(ingredient_stream, &hashState, "flags", relevantFlags);
-    }
-    HashFinalize(&hashState, &hashResult);
-
-    BufferDestroy(&all_dependent_nodes, heap);
-    return hashResult;
-};
 
 
-HashDigest CalculateLeafInputSignature(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node)
+HashDigest CalculateLeafInputSignatureRuntime(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node)
 {
     char path[kMaxPathLength];
     snprintf(path, sizeof(path), "%s/tmp-%d", queue->m_Config.m_Dag->m_CacheSignatureDirectoryName.Get(), node->m_DagNodeIndex);
@@ -250,7 +200,7 @@ HashDigest CalculateLeafInputSignature(BuildQueue* queue, ThreadState* thread_st
     }
 
     fprintf(sig, "Hot hash ingredients:\n");
-    HashDigest res = CalculateLeafInputSignatureHot(
+    HashDigest res = CalculateLeafInputSignatureRuntime_Impl(
             queue->m_Config.m_DagNodeIndexToRuntimeNodeIndex_Table,
             queue->m_Config.m_RuntimeNodes,
             queue->m_Config.m_Dag,
@@ -309,7 +259,7 @@ void PrintLeafInputSignature(Driver* driver, const char **argv, int argc)
     DagRuntimeData runtimeData;
     DagRuntimeDataInit(&runtimeData, driver->m_DagData, &driver->m_Heap);
 
-    CalculateLeafInputSignatureHot(
+    CalculateLeafInputSignatureRuntime_Impl(
         driver->m_DagNodeIndexToRuntimeNodeIndex_Table.begin(),
         driver->m_RuntimeNodes.begin(),
         driver->m_DagData,
@@ -328,10 +278,6 @@ void PrintLeafInputSignature(Driver* driver, const char **argv, int argc)
     DagRuntimeDataDestroy(&runtimeData);
     LinearAllocDestroy(&scratch);
 }
-
-
-
-#define PRINT_ALL_MISSING_FILES 0
 
 struct HeaderValidationError
 {
@@ -359,9 +305,6 @@ bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLe
                 return true;
             return false;
         };
-
-
-
 
         switch (runtimeNodeWithScanner->m_BuildResult)
         {

@@ -11,7 +11,7 @@
 #include "HashTable.hpp"
 #include "FileSign.hpp"
 #include "BuildQueue.hpp"
-#include "LeafInputSignature.hpp"
+#include "LeafInputSignatureOffline.hpp"
 #include "CacheClient.hpp"
 #include "MakeDirectories.hpp"
 #include "StatCache.hpp"

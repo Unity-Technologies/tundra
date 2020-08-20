@@ -339,7 +339,7 @@ static void ProcessNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
     {
         if (!RuntimeNodeHasAttemptedCacheLookup(node))
         {
-            HashDigest currentLeafInputSignature = CalculateLeafInputSignature(queue, thread_state, node);
+            HashDigest currentLeafInputSignature = CalculateLeafInputSignatureRuntime(queue, thread_state, node);
             node->m_CurrentLeafInputSignature = currentLeafInputSignature;
         }
 
