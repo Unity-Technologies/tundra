@@ -800,6 +800,16 @@ void DriverDestroy(Driver *self)
 
     ScanCacheDestroy(&self->m_ScanCache);
 
+    for (auto &node: self->m_RuntimeNodes)
+    {
+        BufferDestroy(&node.m_GeneratedFilesIncludingVersionedFiles, &self->m_Heap);
+        HashSetDestroy(&node.m_ExplicitLeafInputs);
+        HashSetWalk(&node.m_ImplicitLeafInputs, [&](uint32_t index, uint32_t hash, const char* path) {
+            HeapFree(&self->m_Heap, path);
+        });
+        HashSetDestroy(&node.m_ImplicitLeafInputs);
+    }
+
     BufferDestroy(&self->m_RuntimeNodes, &self->m_Heap);
     BufferDestroy(&self->m_DagNodeIndexToRuntimeNodeIndex_Table, &self->m_Heap);
 

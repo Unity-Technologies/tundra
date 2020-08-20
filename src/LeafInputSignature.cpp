@@ -145,6 +145,15 @@ static HashDigest CalculateLeafInputSignatureHot(const int32_t* dagNodeIndexToRu
     HashDigest result;
     HashFinalize(&hashState, &result);
 
+    if (runtimeNode == nullptr)
+    {
+        HashSetDestroy(&localExplicitLeafInputs);
+        HashSetWalk(&localImplicitLeafInputs, [&](uint32_t index, uint32_t hash, const char* path) {
+            HeapFree(heap, path);
+        });
+        HashSetDestroy(&localImplicitLeafInputs);
+    }
+
     LinearAllocDestroy(&scanResults);
 
     return result;
