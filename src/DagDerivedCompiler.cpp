@@ -86,16 +86,12 @@ struct CompileDagDerivedWorker
         Buffer<FileAndHash> leafInputBuffer;
         HashSet<kFlagPathStrings> m_AlreadyProcessedFiles;
         Buffer<ScannerIndexWithListOfFiles> scannersWithListsOfFiles;
-        Buffer<int32_t> all_dependent_nodes;
-        Buffer<int32_t> recursive_dependencies_with_scanners;
     };
 
     void PerNodeWorkerDataInit(PerNodeWorkerData* data)
     {
         BufferInit(&data->scannersWithListsOfFiles);
         BufferInit(&data->leafInputBuffer);
-        BufferInit(&data->all_dependent_nodes);
-        BufferInit(&data->recursive_dependencies_with_scanners);
         HashSetInit(&data->m_AlreadyProcessedFiles, heap);
     }
 
@@ -103,21 +99,25 @@ struct CompileDagDerivedWorker
     {
         BufferDestroy(&data->scannersWithListsOfFiles, heap);
         BufferDestroy(&data->leafInputBuffer, heap);
-        BufferDestroy(&data->all_dependent_nodes, heap);
-        BufferDestroy(&data->recursive_dependencies_with_scanners, heap);
         HashSetDestroy(&data->m_AlreadyProcessedFiles);
     }
 
     PerNodeWorkerData m_PerNodeWorkerData;
 
-    void PerNode_ProcessDiscoveredExplicitLeafInput(const FrozenFileAndHash& file, const Frozen::DagNode& childDagNode, int scannerIndex)
+    void ProcessDiscoverdInput(const FrozenFileAndHash& file, const Frozen::DagNode& childDagNode, int scannerIndex)
     {
+        //maybe we already processed this one before?
+        if (!HashSetInsertIfNotPresent(&m_PerNodeWorkerData.m_AlreadyProcessedFiles, file.m_FilenameHash, file.m_Filename.Get()))
+        {
+            //yeah we did, we're done here.
+            return;
+        }
+
         const Frozen::DagNode* fileGeneratingNode;
 
         if (FindDagNodeForFile(&dagRuntimeData, file.m_FilenameHash, file.m_Filename.Get(), &fileGeneratingNode))
         {
             //ok, so this means it's a generated file.  we do not recurse into those, but we will add their FilesThatMightBeIncluded
-
             if (fileGeneratingNode == nullptr)
             {
                 //this can happen if we do know a file is generated, but we do not know which node made it. Only happens with DirectoriesCreatingImplicitDependencies,
@@ -126,19 +126,12 @@ struct CompileDagDerivedWorker
             }
 
             for(auto& f: fileGeneratingNode->m_FilesThatMightBeIncluded)
-                PerNode_ProcessDiscoveredExplicitLeafInput(f, *fileGeneratingNode, scannerIndex);
+                ProcessDiscoverdInput(f, *fileGeneratingNode, scannerIndex);
 
             return;
         }
 
         //ok, not a generated file, so this is a leaf input.
-
-        //maybe we already processed this one before?
-        if (!HashSetInsertIfNotPresent(&m_PerNodeWorkerData.m_AlreadyProcessedFiles, file.m_FilenameHash, file.m_Filename.Get()))
-        {
-            //yeah we did, we're done here.
-            return;
-        }
 
         //so we will add the file to our list of found leaf input files.
         FileAndHash leafInputFile;
@@ -169,6 +162,34 @@ struct CompileDagDerivedWorker
         BufferAppendOne(&scannerIndexWithListsOfFiles->m_FilesToScan, heap, leafInputFile);
     }
 
+    void WriteIndexArray(BinarySegment* segment, Buffer<int32_t>& buffer)
+    {
+        BinarySegmentWriteInt32(segment, buffer.m_Size);
+        BinarySegmentWritePointer(segment, BinarySegmentPosition(arraydata_seg));
+        for(int index: buffer)
+            BinarySegmentWriteInt32(arraydata_seg, index);
+    }
+
+    void FindAllDependenciesStoppingAtCacheableNodesFor(int dagNodeIndex, Buffer<int32_t>& resulting_dependencies, Buffer<int32_t>& resulting_dependencies_cacheable_themselves)
+    {
+        std::function<const int32_t*(int)> arrayAccess = [=](int index){return combinedDependenciesBuffers[index].begin();};
+        std::function<size_t(int)> sizeAccess = [=](int index){return combinedDependenciesBuffers[index].m_Size;};
+
+        std::function<bool(int,int)> filterAndCollectLeafInputCacheable = [&](int parentIndex, int childIndex)
+        {
+            if (IsLeafInputCacheable(dag->m_DagNodes[childIndex]))
+            {
+                if (std::find(resulting_dependencies_cacheable_themselves.begin(), resulting_dependencies_cacheable_themselves.end(), childIndex) == resulting_dependencies_cacheable_themselves.end())
+                    BufferAppendOne(&resulting_dependencies_cacheable_themselves, heap, childIndex);
+                return false;
+            }
+
+            return true;
+        };
+
+        FindDependentNodesFromRootIndex(heap, dag, arrayAccess, sizeAccess, filterAndCollectLeafInputCacheable, dagNodeIndex, resulting_dependencies);
+    };
+
     void WriteIntoCacheableNodeDataArraysFor(int nodeIndex)
     {
         const Frozen::DagNode& node = dag->m_DagNodes[nodeIndex];
@@ -193,41 +214,39 @@ struct CompileDagDerivedWorker
 
         PerNodeWorkerDataInit(&m_PerNodeWorkerData);
 
+
+        Buffer<int32_t> dependencies, dependenciesThatAreLeafInputCacheableThemselves;
+        BufferInit(&dependenciesThatAreLeafInputCacheableThemselves);
+        BufferInit(&dependencies);
+
+        FindAllDependenciesStoppingAtCacheableNodesFor(nodeIndex, dependencies, dependenciesThatAreLeafInputCacheableThemselves);
+        WriteIndexArray(dependentNodesThatThemselvesAreLeafInputCacheableArray_seg, dependenciesThatAreLeafInputCacheableThemselves);
+        BufferDestroy(&dependenciesThatAreLeafInputCacheableThemselves, heap);
+
         for (const auto& ignoredInput: node.m_CachingInputIgnoreList)
             HashSetInsertIfNotPresent(&m_PerNodeWorkerData.m_AlreadyProcessedFiles, ignoredInput.m_FilenameHash, ignoredInput.m_Filename.Get());
 
-        std::function<const int32_t*(int)> arrayAccess = [=](int index){return combinedDependenciesBuffers[index].begin();};
-        std::function<size_t(int)> sizeAccess = [=](int index){return combinedDependenciesBuffers[index].m_Size;};
+        Buffer<int32_t> dependentNodesWithScanners;
+        BufferInit(&dependentNodesWithScanners);
 
-        Buffer<int32_t> dependenciesThatAreLeafInputCacheableThemselves;
-        BufferInit(&dependenciesThatAreLeafInputCacheableThemselves);
-
-        std::function<bool(int,int)> filterAndCollectLeafInputCacheable = [&](int parentIndex, int childIndex)
+        for(int32_t dependencyDagIndex : dependencies)
         {
-            if (IsLeafInputCacheable(dag->m_DagNodes[childIndex]))
-            {
-                if (std::find(dependenciesThatAreLeafInputCacheableThemselves.begin(), dependenciesThatAreLeafInputCacheableThemselves.end(), childIndex) == dependenciesThatAreLeafInputCacheableThemselves.end())
-                    BufferAppendOne(&dependenciesThatAreLeafInputCacheableThemselves, heap, childIndex);
-                return false;
-            }
+            const Frozen::DagNode& dependencyDagNode = dag->m_DagNodes[dependencyDagIndex];
 
-            return true;
-        };
+            for (auto& inputFile: dependencyDagNode.m_InputFiles)
+                ProcessDiscoverdInput(inputFile, dependencyDagNode, dependencyDagNode.m_ScannerIndex);
+            for (auto& fileThatMightBeIncluded: dependencyDagNode.m_FilesThatMightBeIncluded)
+                ProcessDiscoverdInput(fileThatMightBeIncluded, dependencyDagNode, dependencyDagNode.m_ScannerIndex);
 
-        FindDependentNodesFromRootIndex(heap, dag, arrayAccess, sizeAccess, filterAndCollectLeafInputCacheable, nodeIndex, m_PerNodeWorkerData.all_dependent_nodes);
-
-        for(int32_t childNodeIndex : m_PerNodeWorkerData.all_dependent_nodes)
-        {
-            const Frozen::DagNode& childDagNode = dag->m_DagNodes[childNodeIndex];
-
-            for (auto& inputFile: childDagNode.m_InputFiles)
-                PerNode_ProcessDiscoveredExplicitLeafInput(inputFile, childDagNode, childDagNode.m_ScannerIndex);
-            for (auto& fileThatMightBeIncluded: childDagNode.m_FilesThatMightBeIncluded)
-                PerNode_ProcessDiscoveredExplicitLeafInput(fileThatMightBeIncluded, childDagNode, childDagNode.m_ScannerIndex);
-
-            if (childDagNode.m_ScannerIndex != -1)
-                BufferAppendOne(&m_PerNodeWorkerData.recursive_dependencies_with_scanners, heap, childDagNode.m_DagNodeIndex);
+            if (dependencyDagNode.m_ScannerIndex != -1)
+                BufferAppendOne(&dependentNodesWithScanners, heap, dependencyDagNode.m_DagNodeIndex);
         }
+        BufferDestroy(&dependencies, heap);
+
+        WriteIndexArray(this->dependentNodesWithScannersArray_seg, dependentNodesWithScanners);
+        BufferDestroy(&dependentNodesWithScanners, heap);
+
+
 
         auto& leafInputBuffer = m_PerNodeWorkerData.leafInputBuffer;
         SortBufferOfFileAndHash(leafInputBuffer);
@@ -241,11 +260,6 @@ struct CompileDagDerivedWorker
         }
 
 
-        BinarySegmentWriteInt32(dependentNodesThatThemselvesAreLeafInputCacheableArray_seg, dependenciesThatAreLeafInputCacheableThemselves.m_Size);
-        BinarySegmentWritePointer(dependentNodesThatThemselvesAreLeafInputCacheableArray_seg, BinarySegmentPosition(arraydata_seg));
-        for(int i: dependenciesThatAreLeafInputCacheableThemselves)
-            BinarySegmentWriteInt32(arraydata_seg, i);
-        BufferDestroy(&dependenciesThatAreLeafInputCacheableThemselves, heap);
 
         BinarySegmentWriteInt32(scannersWithListOfFilesArray_seg, m_PerNodeWorkerData.scannersWithListsOfFiles.m_Size);
         BinarySegmentWritePointer(scannersWithListOfFilesArray_seg, BinarySegmentPosition(arraydata_seg));
@@ -264,33 +278,22 @@ struct CompileDagDerivedWorker
             BufferDestroy(&scannerIndexWithListOfFiles.m_FilesToScan, heap);
         }
 
-        BinarySegmentWriteInt32(dependentNodesWithScannersArray_seg, m_PerNodeWorkerData.recursive_dependencies_with_scanners.m_Size);
-        BinarySegmentWritePointer(dependentNodesWithScannersArray_seg, BinarySegmentPosition(arraydata_seg));
-        for(auto d: m_PerNodeWorkerData.recursive_dependencies_with_scanners)
-            BinarySegmentWriteUint32(arraydata_seg, d);
-
-
         auto CalculateLeafInputHashOffline2 = [=](const Frozen::DagNode& node) -> HashDigest
         {
-            HashDigest hashResult = {};
+            char path[kMaxPathLength];
+            snprintf(path, sizeof(path), "%s/offline-%d", dag->m_CacheSignatureDirectoryName.Get(), node.m_DagNodeIndex);
+            PathBuffer output;
+            PathInit(&output, path);
+            MakeDirectoriesForFile(stat_cache, output);
 
-            if (0 != (node.m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs))
-            {
-                char path[kMaxPathLength];
-                snprintf(path, sizeof(path), "%s/offline-%d", dag->m_CacheSignatureDirectoryName.Get(), node.m_DagNodeIndex);
-                PathBuffer output;
-                PathInit(&output, path);
-                MakeDirectoriesForFile(stat_cache, output);
+            FILE *sig = fopen(path, "w");
+            if (sig == NULL)
+                CroakErrno("Failed opening offline signature ingredients for writing.");
 
-                FILE *sig = fopen(path, "w");
-                if (sig == NULL)
-                    CroakErrno("Failed opening offline signature ingredients for writing.");
-
-                std::function<const int32_t*(int)> arrayAccess = [=](int index){return combinedDependenciesBuffers[index].begin();};
-                std::function<size_t(int)> sizeAccess = [=](int index){return combinedDependenciesBuffers[index].m_Size;};
-                hashResult = CalculateLeafInputHashOffline(dag, arrayAccess, sizeAccess, node.m_DagNodeIndex, heap, sig);
-                fclose(sig);
-            }
+            std::function<const int32_t*(int)> arrayAccess = [=](int index){return combinedDependenciesBuffers[index].begin();};
+            std::function<size_t(int)> sizeAccess = [=](int index){return combinedDependenciesBuffers[index].m_Size;};
+            return CalculateLeafInputHashOffline(dag, arrayAccess, sizeAccess, node.m_DagNodeIndex, heap, sig);
+            fclose(sig);
         };
 
         BinarySegmentWriteHashDigest(leafInputHashOfflineArray_seg, CalculateLeafInputHashOffline2(node));
