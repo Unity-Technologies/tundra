@@ -150,7 +150,6 @@ bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput 
 
     MemAllocHeap *scratch_heap = input->m_ScratchHeap;
     MemAllocLinear *scratch_alloc = input->m_ScratchAlloc;
-    const Frozen::ScannerData *scanner_config = input->m_ScannerConfig;
     ScanCache *scan_cache = input->m_ScanCache;
 
     Buffer<const char *> found_includes;

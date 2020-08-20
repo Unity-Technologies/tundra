@@ -11,6 +11,9 @@
 #include "NodeResultPrinting.hpp"
 #include "AllBuiltNodes.hpp"
 #include <time.h>
+#if !TUNDRA_WIN32
+#include <unistd.h>
+#endif
 
 static bool FilterOutGeneratedIncludedFiles(void* _userData, const char* includingFile, const char* includedFile)
 {

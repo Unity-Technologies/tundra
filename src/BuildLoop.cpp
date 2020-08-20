@@ -31,9 +31,6 @@
 #include <algorithm>
 #include <stdio.h>
 #include <time.h>
-#if !TUNDRA_WIN32
-#include <unistd.h>
-#endif
 
 static int AvailableNodeCount(BuildQueue *queue)
 {
