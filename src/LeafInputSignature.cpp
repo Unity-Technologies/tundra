@@ -329,11 +329,17 @@ void PrintLeafInputSignature(Driver* driver, const char **argv, int argc)
 
 #define PRINT_ALL_MISSING_FILES 0
 
+struct HeaderValidationError
+{
+    RuntimeNode* runtimeNode;
+    IncludingIncludedPair pair;
+};
+
 bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLeafInputs(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node, const Frozen::DagDerived* dagDerived)
 {
-#if PRINT_ALL_MISSING_FILES
-    bool fail = false;
-#endif
+    Buffer<HeaderValidationError> illegalIncludesToReport;
+    BufferInit(&illegalIncludesToReport);
+
     for(auto nodeWithScanner: dagDerived->m_RecursiveDependenciesWithScanners[node->m_DagNodeIndex])
     {
         int runtimeNodeIndex = queue->m_Config.m_DagNodeIndexToRuntimeNodeIndex_Table[nodeWithScanner];
@@ -350,45 +356,8 @@ bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLe
             return false;
         };
 
-        auto PrintHeaderError = [=](const char* includedFile, const char* includingFile)
-        {
-            ExecResult result = {0, false};
-            result.m_ReturnCode = 1;
 
-            InitOutputBuffer(&result.m_OutputBuffer, &thread_state->m_LocalHeap);
 
-            const char* formatString =
-            "This node '%s' is marked as leaf input cacheable.\n"
-            "It has a dependency node '%s' whose inputfile is being scanned for includes.\n"
-            "Generated file '%s' was found including the non generated file '%s'.\n"
-            "Because '%s' is exclusively included by generated files,\n"
-            "this node cannot be safely cached.\n"
-            "You can fix this by either:\n"
-            "- Making '%s' not include '%s'.\n"
-            "- By ensuring that this build has a non-generated file that also includes '%s'.\n"
-            "- By using the filesThatMightBeIncluded feature.\n";
-
-            char buffer[4096];
-            snprintf(buffer,sizeof(buffer), formatString,
-                node->m_DagNode->m_Annotation.Get(),
-                runtimeNodeWithScanner->m_DagNode->m_Annotation.Get(),
-                includingFile,
-                includedFile,
-                includedFile,
-                includingFile,
-                includedFile,
-                includedFile
-            );
-
-            result.m_FrozenNodeData = node->m_DagNode;
-            EmitOutputBytesToDestination(&result, buffer, strlen(buffer));
-
-            MutexLock(&queue->m_Lock);
-            PrintNodeResult(&result, node->m_DagNode, "No command was run. Files were scanned for includes in preparation of running.", queue, thread_state, false, TimerGet(), ValidationResult::Pass, nullptr, true);
-            MutexUnlock(&queue->m_Lock);
-
-            ExecResultFreeMemory(&result);
-        };
 
         switch (runtimeNodeWithScanner->m_BuildResult)
         {
@@ -398,13 +367,11 @@ bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLe
                 {
                     if (!IsAlreadyLeafInput(pair.m_IncludedFile.m_FilenameHash, pair.m_IncludedFile.m_Filename.Get()))
                     {
-#if !PRINT_ALL_MISSING_FILES
-                        PrintHeaderError(pair.m_IncludedFile.m_Filename.Get(), pair.m_IncludingFile.Get());
-                        return false;
-#else
-                        printf("#include \"%s\"\n", pair.m_IncludedFile.m_Filename.Get());
-                        fail=true;
-#endif
+                        HeaderValidationError error;
+                        error.runtimeNode = runtimeNodeWithScanner;
+                        error.pair.m_IncludedFile = pair.m_IncludedFile.m_Filename.Get();;
+                        error.pair.m_IncludingFile = pair.m_IncludingFile.Get();
+                        BufferAppendOne(&illegalIncludesToReport, &thread_state->m_LocalHeap, error);
                     }
                 }
 
@@ -414,13 +381,10 @@ bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLe
                 {
                     if (!IsAlreadyLeafInput(Djb2HashPath(pair.m_IncludedFile), pair.m_IncludedFile))
                     {
-#if !PRINT_ALL_MISSING_FILES
-                        PrintHeaderError(pair.m_IncludedFile, pair.m_IncludingFile);
-                        return false;
-#else
-                        printf("#include \"%s\"\n", pair.m_IncludedFile);
-                        fail = true;
-#endif
+                        HeaderValidationError error;
+                        error.runtimeNode = runtimeNodeWithScanner;
+                        error.pair = pair;
+                        BufferAppendOne(&illegalIncludesToReport, &thread_state->m_LocalHeap, error);
                     }
                 }
 
@@ -428,12 +392,57 @@ bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLe
             default:
                 Croak("Unexpected build node result of dependent node while verifying headers");
         }
-
-
     }
-#if PRINT_ALL_MISSING_FILES
-    if (fail)
-            return false;
-#endif
+
+    if (illegalIncludesToReport.m_Size > 1)
+    {
+        printf("//Add the following includes to a versioned file\n");
+        for(auto& error: illegalIncludesToReport)
+            printf("#include \"%s\"\n", error.pair.m_IncludedFile);
+    }
+
+    if (illegalIncludesToReport.m_Size > 0)
+    {
+        auto error = illegalIncludesToReport[0];
+
+        ExecResult result = {0, false};
+        result.m_ReturnCode = 1;
+
+        InitOutputBuffer(&result.m_OutputBuffer, &thread_state->m_LocalHeap);
+
+        const char* formatString =
+        "This node '%s' is marked as leaf input cacheable.\n"
+        "It has a dependency node '%s' whose inputfile is being scanned for includes.\n"
+        "Generated file '%s' was found including the non generated file '%s'.\n"
+        "Because '%s' is exclusively included by generated files,\n"
+        "this node cannot be safely cached.\n"
+        "You can fix this by either:\n"
+        "- Making '%s' not include '%s'.\n"
+        "- By ensuring that this build has a non-generated file that also includes '%s'.\n"
+        "- By using the filesThatMightBeIncluded feature.\n";
+
+        char buffer[4096];
+        snprintf(buffer,sizeof(buffer), formatString,
+            node->m_DagNode->m_Annotation.Get(),
+            error.runtimeNode->m_DagNode->m_Annotation.Get(),
+            error.pair.m_IncludingFile,
+            error.pair.m_IncludedFile,
+            error.pair.m_IncludedFile,
+            error.pair.m_IncludingFile,
+            error.pair.m_IncludedFile,
+            error.pair.m_IncludedFile
+        );
+
+        result.m_FrozenNodeData = node->m_DagNode;
+        EmitOutputBytesToDestination(&result, buffer, strlen(buffer));
+
+        MutexLock(&queue->m_Lock);
+        PrintNodeResult(&result, node->m_DagNode, "No command was run. Files were scanned for includes in preparation of running.", queue, thread_state, false, TimerGet(), ValidationResult::Pass, nullptr, true);
+        MutexUnlock(&queue->m_Lock);
+
+        ExecResultFreeMemory(&result);
+        return false;
+    }
+
     return true;
 }
