@@ -195,15 +195,36 @@ struct DagDerived
     FrozenArray<FrozenArray<int32_t>> m_Dependencies;
     FrozenArray<FrozenArray<uint32_t>> m_NodeBacklinks;
 
+
     //all data below are SOA style arrays that contain information for cacheable nodes.  for nodes that are not cacheable, the entry is not populated
     //leaf inputs excluding leaf inputs that come from nodes we depend on that themselves are leaf input cacheable.
-    FrozenArray<FrozenArray<FrozenFileAndHash>> m_NodeLeafInputs;
-    FrozenArray<FrozenArray<uint32_t>> m_DependentNodesThatThemselvesAreLeafInputCacheable;
-    FrozenArray<FrozenArray<ScannerIndexWithListOfFiles>> m_Nodes_to_ScannersWithListsOfFiles;
-    FrozenArray<FrozenArray<uint32_t>> m_RecursiveDependenciesWithScanners;
 
+    //for each cacheable node: the list of explicitly found leaf inputs to be used to calculate a cachekey from.
+    FrozenArray<FrozenArray<FrozenFileAndHash>> m_NodeLeafInputs;
+
+    //many cacheable nodes end up depending on other cacheable nodes. We do not adopt their leaf inputs
+    //but it is important to include their leaf input signature in ours, so we need to know which ones they are.
+    FrozenArray<FrozenArray<uint32_t>> m_DependentNodesThatThemselvesAreLeafInputCacheable;
+
+    //of all our leaf inputs, some will have to be scanned for includes. We prebaked a list of files for each scanner
+    //so at runtime we know exactly which files to scan how as part of calculating the leaf input signature.
+    FrozenArray<FrozenArray<ScannerIndexWithListOfFiles>> m_Nodes_to_ScannersWithListsOfFiles;
+
+    //In order to implement validation that there are no files that influence the build that are not part of the leaf input signature
+    //we need to know which of our dependency nodes might have had a dynamic includes that we did not know about yet.
+    FrozenArray<FrozenArray<uint32_t>> m_DependentNodesWithScanners;
+
+
+    //Since the commandlines and environment variables for all cacheable nodes as well as all their dependencies are known at graph-building time
+    //we have already hashed them down so we no longer have to do that at runtime.
     FrozenArray<HashDigest> m_LeafInputHash_Offline;
 
+    //convenience accessors to the arrays above, to make callsites a bit easier to read
+    const FrozenArray<FrozenFileAndHash>& LeafInputsFor(int leafInputCacheableNode) const { return m_NodeLeafInputs[leafInputCacheableNode]; }
+    const FrozenArray<uint32_t>& DependentNodesThatThemselvesAreLeafInputCacheableFor(int leafInputCacheableNode) const { return m_DependentNodesThatThemselvesAreLeafInputCacheable[leafInputCacheableNode]; }
+    const FrozenArray<ScannerIndexWithListOfFiles>& ScannersWithListOfFilesFor(int leafInputCacheableNode) const { return m_Nodes_to_ScannersWithListsOfFiles[leafInputCacheableNode]; }
+    const FrozenArray<uint32_t>& DependentNodesWithScannerFor(int leafInputCacheableNode) const { return m_DependentNodesWithScanners[leafInputCacheableNode]; }
+    const HashDigest& LeafInputHashOfflineFor(int leafInputCacheableNode) const { return m_LeafInputHash_Offline[leafInputCacheableNode];}
 
     uint32_t m_MagicNumberEnd;
 };

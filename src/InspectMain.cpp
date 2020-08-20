@@ -71,12 +71,12 @@ static void DumpDagDerived(const Frozen::DagDerived* data, const Frozen::Dag* da
         };
 
         PrintNodeArray("backlinks", data->m_NodeBacklinks[nodeIndex]);
-        PrintFileAndHashArray("leafInputs", data->m_NodeLeafInputs[nodeIndex]);
-        PrintNodeArray("dependentNodesThatThemselvesAreLeafInputCacheable", data->m_DependentNodesThatThemselvesAreLeafInputCacheable[nodeIndex]);
-        PrintNodeArray("RecursiveDependenciesWithScanners", data->m_RecursiveDependenciesWithScanners[nodeIndex]);
+        PrintFileAndHashArray("leafInputs", data->LeafInputsFor(nodeIndex));
+        PrintNodeArray("dependentNodesThatThemselvesAreLeafInputCacheable", data->DependentNodesThatThemselvesAreLeafInputCacheableFor(nodeIndex));
+        PrintNodeArray("RecursiveDependenciesWithScanners", data->DependentNodesWithScannerFor(nodeIndex));
 
 
-        const FrozenArray<Frozen::ScannerIndexWithListOfFiles>& scannersWithListsOfFiles = data->m_Nodes_to_ScannersWithListsOfFiles[nodeIndex];
+        const FrozenArray<Frozen::ScannerIndexWithListOfFiles>& scannersWithListsOfFiles = data->ScannersWithListOfFilesFor(nodeIndex);
         for (auto& scannerWithListOfFiles: scannersWithListsOfFiles)
         {
             printf("  ScannerIndex %d will run on the following files:\n", scannerWithListOfFiles.m_ScannerIndex);
@@ -85,7 +85,7 @@ static void DumpDagDerived(const Frozen::DagDerived* data, const Frozen::Dag* da
         }
 
         char tmp[kDigestStringSize];
-        DigestToString(tmp, data->m_LeafInputHash_Offline[nodeIndex]);
+        DigestToString(tmp, data->LeafInputHashOfflineFor(nodeIndex);
         printf("  leafInputsHash_OffLine: %s\n", tmp);
     }
 }

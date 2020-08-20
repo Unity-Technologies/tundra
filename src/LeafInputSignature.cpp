@@ -39,7 +39,7 @@ static HashDigest CalculateLeafInputSignatureHot(const int32_t* dagNodeIndexToRu
     HashState hashState;
     HashInit(&hashState);
 
-    for (auto& child: dagDerived->m_DependentNodesThatThemselvesAreLeafInputCacheable[dagNode->m_DagNodeIndex])
+    for (auto& child: dagDerived->DependentNodesThatThemselvesAreLeafInputCacheableFor(dagNode->m_DagNodeIndex))
     {
         int childRuntimeNodeIndex = dagNodeIndexToRuntimeNodeIndex_Table[child];
         auto& childRuntimeNode = runtimeNodesArray[childRuntimeNodeIndex];
@@ -64,9 +64,10 @@ static HashDigest CalculateLeafInputSignatureHot(const int32_t* dagNodeIndexToRu
     //starting the profiler scope late here, because we do not support nested profiler scope, and at the top of this function we recurse.
     ProfilerScope profiler_scope("ComputeLeafInputSignature", profilerThreadId, dagNode->m_Annotation);
 
-    HashUpdate(&hashState, &(dagDerived->m_LeafInputHash_Offline[dagNode->m_DagNodeIndex]), sizeof(HashDigest));
+    HashDigest offlinePart = dagDerived->LeafInputHashOfflineFor(dagNode->m_DagNodeIndex);
+    HashUpdate(&hashState, &offlinePart, sizeof(HashDigest));
 
-    const FrozenArray<FrozenFileAndHash>& leafInputs = dagDerived->m_NodeLeafInputs[dagNode->m_DagNodeIndex];
+    const FrozenArray<FrozenFileAndHash>& leafInputs = dagDerived->LeafInputsFor(dagNode->m_DagNodeIndex);
 
     HashSet<kFlagPathStrings> localExplicitLeafInputs;
     HashSet<kFlagPathStrings> localImplicitLeafInputs;
@@ -92,7 +93,7 @@ static HashDigest CalculateLeafInputSignatureHot(const int32_t* dagNodeIndexToRu
     ignoreCallback.userData = (void*)dagRuntime;
     ignoreCallback.callback = FilterOutGeneratedIncludedFiles;
 
-    for (const Frozen::ScannerIndexWithListOfFiles& scannerIndexWithListOfFiles : dagDerived->m_Nodes_to_ScannersWithListsOfFiles[dagNode->m_DagNodeIndex])
+    for (const Frozen::ScannerIndexWithListOfFiles& scannerIndexWithListOfFiles : dagDerived->ScannersWithListOfFilesFor(dagNode->m_DagNodeIndex))
     {
         scanInput.m_ScannerConfig = dag->m_Scanners[scannerIndexWithListOfFiles.m_ScannerIndex];
 
@@ -343,7 +344,7 @@ bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLe
     Buffer<HeaderValidationError> illegalIncludesToReport;
     BufferInit(&illegalIncludesToReport);
 
-    for(auto nodeWithScanner: dagDerived->m_RecursiveDependenciesWithScanners[node->m_DagNodeIndex])
+    for(auto nodeWithScanner: dagDerived->DependentNodesWithScannerFor(node->m_DagNodeIndex))
     {
         int runtimeNodeIndex = queue->m_Config.m_DagNodeIndexToRuntimeNodeIndex_Table[nodeWithScanner];
 
