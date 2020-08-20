@@ -10,6 +10,7 @@
 
 struct MemAllocHeap
 {
+    size_t m_Size;
 };
 
 void HeapInit(MemAllocHeap *heap);

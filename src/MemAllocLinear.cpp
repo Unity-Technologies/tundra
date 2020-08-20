@@ -34,8 +34,15 @@ void LinearAllocInit(MemAllocLinear *self, MemAllocHeap *heap, size_t max_size, 
 #endif
 }
 
-void LinearAllocDestroy(MemAllocLinear *self)
+void LinearAllocDestroy(MemAllocLinear *self, bool shouldNotLeak)
 {
+    // Usually it is ok for linear allocators to leak, as they are used for
+    // short-term storage, and then all memory is released. But linear allocators
+    // which are reused, like the thread scratch allocators, we want to make sure
+    // that every user scopes them.
+    if (shouldNotLeak && self->m_Offset != 0)
+        Croak("Destroying linear alloc which is expected to be empty.");
+
     HeapFree(self->m_BackingHeap, self->m_BasePointer);
     self->m_BasePointer = nullptr;
 }

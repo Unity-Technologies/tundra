@@ -111,7 +111,7 @@ static HashDigest CalculateLeafInputSignatureHot(const int32_t* dagNodeIndexToRu
                         continue;
                     if (HashSetLookup(&implicitLeafInputs, includedFile.m_FilenameHash, includedFile.m_Filename))
                         continue;
-                    HashSetInsert(&implicitLeafInputs, includedFile.m_FilenameHash,/*todo: free this memory*/ StrDup(heap, includedFile.m_Filename));
+                    HashSetInsert(&implicitLeafInputs, includedFile.m_FilenameHash, StrDup(heap, includedFile.m_Filename));
                 }
             }
         }
@@ -269,7 +269,7 @@ HashDigest CalculateLeafInputSignature(BuildQueue* queue, ThreadState* thread_st
             &queue->m_Config.m_DagRuntimeData,
             node->m_DagNode,
             node,
-            &thread_state->m_LocalHeap,
+            thread_state->m_Queue->m_Config.m_Heap,
             &thread_state->m_ScratchAlloc,
             thread_state->m_ProfilerThreadId,
             queue->m_Config.m_StatCache,

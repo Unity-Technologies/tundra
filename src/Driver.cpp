@@ -803,11 +803,14 @@ void DriverDestroy(Driver *self)
     for (auto &node: self->m_RuntimeNodes)
     {
         BufferDestroy(&node.m_GeneratedFilesIncludingVersionedFiles, &self->m_Heap);
-        HashSetDestroy(&node.m_ExplicitLeafInputs);
-        HashSetWalk(&node.m_ImplicitLeafInputs, [&](uint32_t index, uint32_t hash, const char* path) {
-            HeapFree(&self->m_Heap, path);
-        });
-        HashSetDestroy(&node.m_ImplicitLeafInputs);
+        if (node.m_ExplicitLeafInputs.m_Heap != nullptr)
+        {
+            HashSetDestroy(&node.m_ExplicitLeafInputs);
+            HashSetWalk(&node.m_ImplicitLeafInputs, [&](uint32_t index, uint32_t hash, const char* path) {
+                HeapFree(&self->m_Heap, path);
+            });
+            HashSetDestroy(&node.m_ImplicitLeafInputs);
+        }
     }
 
     BufferDestroy(&self->m_RuntimeNodes, &self->m_Heap);

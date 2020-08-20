@@ -42,6 +42,7 @@ static void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::
     }
 
     HeapFree(heap, node_visited_bits);
+    BufferDestroy(&node_stack, heap);
     node_visited_bits = nullptr;
 }
 
