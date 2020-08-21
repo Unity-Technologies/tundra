@@ -965,12 +965,12 @@ static void save_node_sharedcode(bool nodeWasBuiltSuccesfully, const HashDigest 
 {
     //we're writing to two arrays in one go.  the FrozenArray<HashDigest> m_NodeGuids and the FrozenArray<BuiltNode> m_BuiltNodes
     //the hashdigest is quick
-    BinarySegmentWrite(segments.guid, (const char *)guid, sizeof(HashDigest));
+    BinarySegmentWriteHashDigest(segments.guid, *guid);
 
     //the rest not so much
     BinarySegmentWriteInt32(segments.built_nodes, nodeWasBuiltSuccesfully ? 1 : 0);
-    BinarySegmentWrite(segments.built_nodes, (const char *)input_signature, sizeof(HashDigest));
-    BinarySegmentWrite(segments.built_nodes, (const char *)leafinput_signature, sizeof(HashDigest));
+    BinarySegmentWriteHashDigest(segments.built_nodes, *input_signature);
+    BinarySegmentWriteHashDigest(segments.built_nodes, *leafinput_signature);
 
     auto WriteFrozenFileAndHashIntoBuiltNodesStream = [segments](const FrozenFileAndHash& f) -> void {
         BinarySegmentWritePointer(segments.array, BinarySegmentPosition(segments.string));
@@ -1073,13 +1073,9 @@ bool DriverSaveAllBuiltNodes(Driver *self)
 
         const Frozen::DagNode* dag_node = runtime_node->m_DagNode;
 
-        bool nodeWasBuiltSuccessfully = runtime_node->m_BuildResult == NodeBuildResult::kRanSuccesfully || runtime_node->m_BuildResult == NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun;
+        bool nodeWasBuiltSuccessfully = runtime_node->m_BuildResult != NodeBuildResult::kRanFailed;
 
         save_node_sharedcode(nodeWasBuiltSuccessfully, &runtime_node->m_CurrentInputSignature, &runtime_node->m_CurrentLeafInputSignature, runtime_node->m_DagNode, guid, segments, runtime_node->m_DynamicallyDiscoveredOutputFiles);
-
-        HashSet<kFlagPathStrings> implicitDependencies;
-        if (dag_node->m_ScannerIndex != -1)
-            HashSetInit(&implicitDependencies, &self->m_Heap);
 
         int32_t file_count = dag_node->m_InputFiles.GetCount();
         BinarySegmentWriteInt32(built_nodes_seg, file_count);
@@ -1177,8 +1173,8 @@ bool DriverSaveAllBuiltNodes(Driver *self)
         switch(runtime_node->m_BuildResult)
         {
             case NodeBuildResult::kDidNotRun:
-            case NodeBuildResult::kUpToDate:
                 return false;
+            case NodeBuildResult::kUpToDate:
             case NodeBuildResult::kRanSuccesfully:
             case NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun:
             case NodeBuildResult::kRanFailed:

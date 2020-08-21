@@ -267,10 +267,6 @@ static void DumpState(const Frozen::AllBuiltNodes *data)
         for (int i=0; i!=node.m_ImplicitInputFiles.GetCount(); i++)
             printf("    %lld %s\n", node.m_ImplicitInputFiles[i].m_Timestamp, node.m_ImplicitInputFiles[i].m_Filename.Get());
 
-        printf("  GeneratedFilesIncludingVersionedFiles:\n");
-        for (int i=0; i!=node.m_VersionedFilesIncludedByGeneratedFiles.GetCount(); i++)
-            printf("    %s includes %s\n", node.m_VersionedFilesIncludedByGeneratedFiles[i].m_IncludingFile.Get(), node.m_VersionedFilesIncludedByGeneratedFiles[i].m_IncludedFile.m_Filename.Get());
-
         printf("\n");
     }
 }
