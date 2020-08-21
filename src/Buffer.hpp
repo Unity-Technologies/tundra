@@ -126,3 +126,12 @@ T BufferPopOne(Buffer<T> *buffer)
     buffer->m_Size = size - 1;
     return buffer->m_Storage[size - 1];
 }
+
+template <typename T>
+bool BufferContains(Buffer<T>* buffer, const T& element)
+{
+    for (int i=0; i!=buffer->m_Size;i++)
+        if (buffer->m_Storage[i] == element)
+            return true;
+    return false;
+}
