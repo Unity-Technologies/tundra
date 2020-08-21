@@ -341,7 +341,7 @@ void HashTableWalk(HashTable<T, kFlags> *self, Callback callback)
 }
 
 template <uint32_t kFlags, typename Callback>
-void HashSetWalk(HashSet<kFlags> *self, Callback callback)
+void HashSetWalk(const HashSet<kFlags> *self, Callback callback)
 {
     uint32_t *hashes = self->m_Hashes;
     const char **strings = self->m_Strings;

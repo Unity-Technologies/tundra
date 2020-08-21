@@ -1094,41 +1094,14 @@ bool DriverSaveAllBuiltNodes(Driver *self)
             BinarySegmentWriteUint64(array_seg, timestamp);
 
             WriteCommonStringPtr(array_seg, string_seg, dag_node->m_InputFiles[i].m_Filename, &shared_strings, scratch);
-
-            if (dag_node->m_ScannerIndex != -1)
-            {
-                MemAllocLinearScope alloc_scope(scratch);
-
-                ScanInput scan_input;
-                scan_input.m_ScannerConfig = self->m_DagData->m_Scanners[dag_node->m_ScannerIndex];
-                scan_input.m_ScratchAlloc = scratch;
-                scan_input.m_ScratchHeap = &self->m_Heap;
-                scan_input.m_FileName = dag_node->m_InputFiles[i].m_Filename;
-                scan_input.m_ScanCache = &self->m_ScanCache;
-                scan_input.m_SafeToScanBeforeDependenciesAreProduced = false;
-
-                ScanOutput scan_output;
-
-                // It looks like we're re-running the scanner here, but the scan results should all be cached already, so it
-                // should be fast.
-                if (ScanImplicitDeps(&self->m_StatCache, &scan_input, &scan_output))
-                {
-                    for (int i = 0, count = scan_output.m_IncludedFileCount; i < count; ++i)
-                    {
-                        const FileAndHash &path = scan_output.m_IncludedFiles[i];
-                        if (!HashSetLookup(&implicitDependencies, path.m_FilenameHash, path.m_Filename))
-                            HashSetInsert(&implicitDependencies, path.m_FilenameHash, path.m_Filename);
-                    }
-                }
-            }
         }
 
         if (dag_node->m_ScannerIndex != -1)
         {
-            BinarySegmentWriteInt32(built_nodes_seg, implicitDependencies.m_RecordCount);
+            BinarySegmentWriteInt32(built_nodes_seg, runtime_node->m_ImplicitInputs.m_RecordCount);
             BinarySegmentWritePointer(built_nodes_seg, BinarySegmentPosition(array_seg));
 
-            HashSetWalk(&implicitDependencies, [=, &shared_strings](uint32_t index, uint32_t hash, const char *filename) {
+            HashSetWalk(&runtime_node->m_ImplicitInputs, [=, &shared_strings](uint32_t index, uint32_t hash, const char *filename) {
                 uint64_t timestamp = 0;
                 FileInfo fileInfo = StatCacheStat(&self->m_StatCache, filename, hash);
                 if (fileInfo.Exists())
@@ -1138,8 +1111,6 @@ bool DriverSaveAllBuiltNodes(Driver *self)
 
                 WriteCommonStringPtr(array_seg, string_seg, filename, &shared_strings, scratch);
             });
-
-            HashSetDestroy(&implicitDependencies);
         }
         else
         {
