@@ -14,7 +14,7 @@ inline uint32_t AtomicIncrement(uint32_t *value)
     return InterlockedIncrement((long *)value);
 }
 
-inline uint64_t AtomicAdd(uint64_t *ptr, uint64_t value)
+inline uint64_t AtomicAdd(uint64_t *ptr, int64_t value)
 {
 #if defined(TUNDRA_WIN32_MINGW)
     // Crappy mingw doesn't have InterlockedExchangeAdd64
@@ -44,7 +44,7 @@ inline uint32_t AtomicIncrement(uint32_t *value)
 {
     return __sync_add_and_fetch(value, 1);
 }
-inline uint64_t AtomicAdd(uint64_t *ptr, uint64_t value)
+inline uint64_t AtomicAdd(uint64_t *ptr, int64_t value)
 {
 #if defined(__powerpc__)
     // Not implemented on PPC. I only have a single core PPC anyway.
