@@ -45,19 +45,6 @@ static bool IncludeSetAddNoDuplicateString(IncludeSet *self, const char *string,
     return true;
 }
 
-static bool IncludeSetAddDuplicateString(IncludeSet *self, const char *string, uint32_t hash)
-{
-    if (HashSetLookup(&self->m_HashTable, hash, string))
-    {
-        return false;
-    }
-
-    // Allocate a new cell
-    HashSetInsert(&self->m_HashTable, hash, StrDup(self->m_LinearAlloc, string));
-
-    return true;
-}
-
 static bool FindFile(
     StatCache *stat_cache,
     PathBuffer *buffer,
