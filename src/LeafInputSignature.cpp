@@ -455,6 +455,7 @@ bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLe
         PrintNodeResult(&result, node->m_DagNode, "No command was run. Files were scanned for includes in preparation of running.", queue, thread_state, false, TimerGet(), ValidationResult::Pass, nullptr, true);
         MutexUnlock(&queue->m_Lock);
 
+        BufferDestroy(&illegalIncludesToReport, &thread_state->m_LocalHeap);
         ExecResultFreeMemory(&result);
         return false;
     }

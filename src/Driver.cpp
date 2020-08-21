@@ -802,6 +802,11 @@ void DriverDestroy(Driver *self)
 
     for (auto &node: self->m_RuntimeNodes)
     {
+        for(auto& pair: node.m_GeneratedFilesIncludingVersionedFiles)
+        {
+            HeapFree(&self->m_Heap, pair.m_IncludingFile);
+            HeapFree(&self->m_Heap, pair.m_IncludedFile);
+        }
         BufferDestroy(&node.m_GeneratedFilesIncludingVersionedFiles, &self->m_Heap);
         if (node.m_ExplicitLeafInputs.m_Heap != nullptr)
         {
@@ -822,7 +827,7 @@ void DriverDestroy(Driver *self)
 
     LinearAllocDestroy(&self->m_ScanCacheAllocator);
     LinearAllocDestroy(&self->m_StatCacheAllocator);
-    LinearAllocDestroy(&self->m_Allocator);
+    LinearAllocDestroy(&self->m_Allocator, true);
     HeapDestroy(&self->m_Heap);
 }
 
