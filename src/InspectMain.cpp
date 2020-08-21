@@ -252,6 +252,8 @@ static void DumpState(const Frozen::AllBuiltNodes *data)
         printf("  m_WasBuiltSuccessfully: %d\n", node.m_WasBuiltSuccessfully);
         DigestToString(digest_str, node.m_InputSignature);
         printf("  input_signature: %s\n", digest_str);
+        DigestToString(digest_str, node.m_LeafInputSignature);
+        printf("  leafinputsignature: %s\n", digest_str);
         printf("  outputs:\n");
         for (const FrozenFileAndHash& fileAndHash : node.m_OutputFiles)
             printf("    (0x%08x) %s\n", fileAndHash.m_FilenameHash, fileAndHash.m_Filename.Get());
