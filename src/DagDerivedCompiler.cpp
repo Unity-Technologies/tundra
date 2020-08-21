@@ -65,7 +65,7 @@ struct CompileDagDerivedWorker
     {
         for(int dep : node->m_DependenciesConsumedDuringUsageOnly)
         {
-            BufferAppendOne(&combinedDependenciesBuffers[i], heap, dep);
+            BufferAppendOneIfNotPresent(&combinedDependenciesBuffers[i], heap, dep);
             AddUsedDependenciesOfDagNodeRecursive(dag->m_DagNodes + dep, i);
         }
     }
@@ -271,6 +271,8 @@ struct CompileDagDerivedWorker
         }
     }
 
+
+
     bool WriteStreams(const char* dagderived_filename)
     {
         MemAllocLinearScope scratchScope(scratch);
@@ -280,7 +282,7 @@ struct CompileDagDerivedWorker
         {
             for(int dep : dag->m_DagNodes[i].m_OriginalDependencies)
             {
-                BufferAppendOne(&combinedDependenciesBuffers[i], heap, dep);
+                BufferAppendOneIfNotPresent(&combinedDependenciesBuffers[i], heap, dep);
                 AddUsedDependenciesOfDagNodeRecursive(dag->m_DagNodes + dep, i);
             }
         }
@@ -289,7 +291,7 @@ struct CompileDagDerivedWorker
         for (int32_t i = 0; i < node_count; ++i)
         {
             for(int dep : combinedDependenciesBuffers[i])
-                BufferAppendOne(&backlinksBuffers[dep], heap, i);
+                BufferAppendOneIfNotPresent(&backlinksBuffers[dep], heap, i);
         }
 
         auto WriteArrayOfIndices = [=](BinarySegment* segment, Buffer<int32_t>& indices)->void{

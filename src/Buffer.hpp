@@ -118,6 +118,7 @@ void BufferAppendOne(Buffer<T> *buffer, MemAllocHeap *heap, U elem)
     *dest = (T)elem;
 }
 
+
 template <typename T>
 T BufferPopOne(Buffer<T> *buffer)
 {
@@ -134,4 +135,14 @@ bool BufferContains(Buffer<T>* buffer, const T& element)
         if (buffer->m_Storage[i] == element)
             return true;
     return false;
+}
+
+
+template <typename T, typename U>
+void BufferAppendOneIfNotPresent(Buffer<T> *buffer, MemAllocHeap *heap, U elem)
+{
+    if (BufferContains(buffer, (T)elem))
+        return;
+    T *dest = BufferAlloc(buffer, heap, 1);
+    *dest = (T)elem;
 }
