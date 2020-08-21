@@ -76,16 +76,17 @@ static void DumpDagDerived(const Frozen::DagDerived* data, const Frozen::Dag* da
         PrintNodeArray("RecursiveDependenciesWithScanners", data->DependentNodesWithScannerFor(nodeIndex));
 
 
-        const FrozenArray<Frozen::ScannerIndexWithListOfFiles>& scannersWithListsOfFiles = data->ScannersWithListOfFilesFor(nodeIndex);
+        const FrozenArray<FrozenArray<FrozenFileAndHash>>& scannersWithListsOfFiles = data->ScannersWithListOfFilesFor(nodeIndex);
+        for (int scannerIndex=0; scannerIndex!=scannersWithListsOfFiles.GetCount();scannerIndex++)
         for (auto& scannerWithListOfFiles: scannersWithListsOfFiles)
         {
-            printf("  ScannerIndex %d will run on the following files:\n", scannerWithListOfFiles.m_ScannerIndex);
-            for(auto& file: scannerWithListOfFiles.m_FilesToScan)
+            printf("  ScannerIndex %d will run on the following files:\n", scannerIndex);
+            for(auto& file: scannerWithListOfFiles)
                 printf("    %s\n",file.m_Filename.Get());
         }
 
         char tmp[kDigestStringSize];
-        DigestToString(tmp, data->LeafInputHashOfflineFor(nodeIndex);
+        DigestToString(tmp, data->LeafInputHashOfflineFor(nodeIndex));
         printf("  leafInputsHash_OffLine: %s\n", tmp);
     }
 }

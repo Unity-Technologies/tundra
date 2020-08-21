@@ -179,15 +179,9 @@ struct Dag
 };
 
 
-struct ScannerIndexWithListOfFiles
-{
-    int32_t m_ScannerIndex;
-    FrozenArray<FrozenFileAndHash> m_FilesToScan;
-};
-
 struct DagDerived
 {
-    static const uint32_t MagicNumber = 0x9bead126 ^ kTundraHashMagic;
+    static const uint32_t MagicNumber = 0x9cead126 ^ kTundraHashMagic;
 
     uint32_t m_MagicNumber;
     uint32_t m_NodeCount;
@@ -208,7 +202,7 @@ struct DagDerived
 
     //of all our leaf inputs, some will have to be scanned for includes. We prebaked a list of files for each scanner
     //so at runtime we know exactly which files to scan how as part of calculating the leaf input signature.
-    FrozenArray<FrozenArray<ScannerIndexWithListOfFiles>> m_ScannersWithListOfFiles;
+    FrozenArray<FrozenArray<FrozenArray<FrozenFileAndHash>>> m_ScannersWithListOfFiles;
 
     //In order to implement validation that there are no files that influence the build that are not part of the leaf input signature
     //we need to know which of our dependency nodes might have had a dynamic includes that we did not know about yet.
@@ -222,7 +216,7 @@ struct DagDerived
     //convenience accessors to the arrays above, to make callsites a bit easier to read
     const FrozenArray<FrozenFileAndHash>& LeafInputsFor(int leafInputCacheableNode) const { return m_LeafInputs[leafInputCacheableNode]; }
     const FrozenArray<uint32_t>& DependentNodesThatThemselvesAreLeafInputCacheableFor(int leafInputCacheableNode) const { return m_DependentNodesThatThemselvesAreLeafInputCacheable[leafInputCacheableNode]; }
-    const FrozenArray<ScannerIndexWithListOfFiles>& ScannersWithListOfFilesFor(int leafInputCacheableNode) const { return m_ScannersWithListOfFiles[leafInputCacheableNode]; }
+    const FrozenArray<FrozenArray<FrozenFileAndHash>>& ScannersWithListOfFilesFor(int leafInputCacheableNode) const { return m_ScannersWithListOfFiles[leafInputCacheableNode]; }
     const FrozenArray<uint32_t>& DependentNodesWithScannerFor(int leafInputCacheableNode) const { return m_DependentNodesWithScanners[leafInputCacheableNode]; }
     const HashDigest& LeafInputHashOfflineFor(int leafInputCacheableNode) const { return m_LeafInputHash_Offline[leafInputCacheableNode];}
 

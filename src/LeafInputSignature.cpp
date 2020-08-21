@@ -94,11 +94,12 @@ static HashDigest CalculateLeafInputSignatureRuntime_Impl(
     ignoreCallback.userData = (void*)dagRuntime;
     ignoreCallback.callback = FilterOutGeneratedIncludedFiles;
 
-    for (const Frozen::ScannerIndexWithListOfFiles& scannerIndexWithListOfFiles : dagDerived->ScannersWithListOfFilesFor(dagNode->m_DagNodeIndex))
+    auto& filesAffectedByScanners = dagDerived->ScannersWithListOfFilesFor(dagNode->m_DagNodeIndex);
+    for (int scannerIndex=0; scannerIndex != filesAffectedByScanners.GetCount(); scannerIndex++)
     {
-        scanInput.m_ScannerConfig = dag->m_Scanners[scannerIndexWithListOfFiles.m_ScannerIndex];
+        scanInput.m_ScannerConfig = dag->m_Scanners[scannerIndex];
 
-        for (const FrozenFileAndHash& file: scannerIndexWithListOfFiles.m_FilesToScan)
+        for (const FrozenFileAndHash& file: filesAffectedByScanners[scannerIndex])
         {
             MemAllocLinearScope allocScope(scratch);
             scanInput.m_FileName = file.m_Filename;
@@ -293,8 +294,6 @@ bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLe
     for(auto nodeWithScanner: dagDerived->DependentNodesWithScannerFor(node->m_DagNodeIndex))
     {
         int runtimeNodeIndex = queue->m_Config.m_DagNodeIndexToRuntimeNodeIndex_Table[nodeWithScanner];
-
-        //find runtimenode:
         RuntimeNode* runtimeNodeWithScanner = &queue->m_Config.m_RuntimeNodes[runtimeNodeIndex];
 
         auto IsAlreadyLeafInput = [=](uint32_t hash, const char* filename) -> bool
