@@ -35,12 +35,6 @@ namespace Frozen
 
 struct SinglyLinkedPathList;
 
-struct IncludingIncludedPair
-{
-    const char* m_IncludingFile;
-    const char* m_IncludedFile;
-};
-
 struct RuntimeNode
 {
     uint16_t m_Flags;
@@ -58,9 +52,10 @@ struct RuntimeNode
 
     SinglyLinkedPathList* m_DynamicallyDiscoveredOutputFiles;
 
+    HashSet<kFlagPathStrings> m_ImplicitInputs;
+
     HashSet<kFlagPathStrings> m_ExplicitLeafInputs;
     HashSet<kFlagPathStrings> m_ImplicitLeafInputs;
-    Buffer<IncludingIncludedPair> m_GeneratedFilesIncludingVersionedFiles;
 };
 
 inline bool RuntimeNodeIsQueued(const RuntimeNode *runtime_node)

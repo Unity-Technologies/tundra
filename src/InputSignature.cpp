@@ -295,52 +295,6 @@ static void ReportInputSignatureChanges(
 }
 
 
-
-struct ValidateIncludeData
-{
-    DagRuntimeData* m_DagRuntimeData;
-    Buffer<IncludingIncludedPair>* m_GeneratedFilesIncludingVersionedFiles;
-    MemAllocHeap* m_Heap;
-};
-
-static bool ValidateInclude(void* _userData, const char* includingFile, const char* includedFile)
-{
-    // If a file is generated, it may only include
-    // -other generated files
-    // -files specifically allowed by `fileThatMightBeIncluded`
-
-    auto validateIncludeData = (ValidateIncludeData*)_userData;
-    auto dagRuntime = validateIncludeData->m_DagRuntimeData;
-    const Frozen::DagNode* includingFileNode;
-    bool includingFileIsGenerated = FindDagNodeForFile(dagRuntime, Djb2HashPath(includingFile), includingFile, &includingFileNode);
-
-    // The including file is not generated. We don't care about its includes.
-    if (!includingFileIsGenerated)
-        return true;
-
-    // The included file is generated. This is allowed
-    if (IsFileGenerated(dagRuntime, Djb2HashPath(includedFile), includedFile))
-        return true;
-
-    // The included file is not generated. Check `includingFileNode->m_FilesThatMightBeIncluded`
-    // to see if it is allowed.
-    if (includingFileNode != nullptr)
-    {
-        for (auto& fileThatMightBeIncluded: includingFileNode->m_FilesThatMightBeIncluded)
-        {
-            if (PathCompare(includedFile, fileThatMightBeIncluded.m_Filename.Get()) == 0)
-                return true;
-        }
-    }
-
-    auto heap = validateIncludeData->m_Heap;
-    IncludingIncludedPair pair;
-    pair.m_IncludedFile = StrDup(heap, includedFile);
-    pair.m_IncludingFile = StrDup(heap, includingFile);
-    BufferAppendOne(validateIncludeData->m_GeneratedFilesIncludingVersionedFiles, heap, pair);
-    return true;
-}
-
 static bool CalculateInputSignature(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node)
 {
     auto& dagnode = node->m_DagNode;
@@ -371,20 +325,13 @@ static bool CalculateInputSignature(BuildQueue* queue, ThreadState* thread_state
     // file to the signature multiple times, so we would also like to deduplicate. We use a HashSet to collect all the
     // implicit inputs, both to ensure we have no duplicate entries, and also so we can sort all the inputs before we
     // add them to the signature.
-    HashSet<kFlagPathStrings> implicitDeps;
     if (scanner)
-        HashSetInit(&implicitDeps, &thread_state->m_LocalHeap);
+        HashSetInit(&node->m_ImplicitInputs, &thread_state->m_LocalHeap);
 
     bool force_use_timestamp = dagnode->m_Flags & Frozen::DagNode::kFlagBanContentDigestForInputs;
 
     // Roll back scratch allocator after all file scans
     MemAllocLinearScope alloc_scope(&thread_state->m_ScratchAlloc);
-
-
-    ValidateIncludeData vid;
-    vid.m_DagRuntimeData = &queue->m_Config.m_DagRuntimeData;
-    vid.m_GeneratedFilesIncludingVersionedFiles = &node->m_GeneratedFilesIncludingVersionedFiles;
-    vid.m_Heap = queue->m_Config.m_Heap;
 
     for (const FrozenFileAndHash &input : dagnode->m_InputFiles)
     {
@@ -412,17 +359,13 @@ static bool CalculateInputSignature(BuildQueue* queue, ThreadState* thread_state
 
             ScanOutput scan_output;
 
-            IncludeFilterCallback validateCallback;
-            validateCallback.userData = (void*)&vid;
-            validateCallback.callback = &ValidateInclude;
-
-            if (ScanImplicitDeps(stat_cache, &scan_input, &scan_output, &validateCallback))
+            if (ScanImplicitDeps(stat_cache, &scan_input, &scan_output, nullptr))
             {
                 for (int i = 0, count = scan_output.m_IncludedFileCount; i < count; ++i)
                 {
                     const FileAndHash &path = scan_output.m_IncludedFiles[i];
-                    if (!HashSetLookup(&implicitDeps, path.m_FilenameHash, path.m_Filename))
-                        HashSetInsert(&implicitDeps, path.m_FilenameHash, path.m_Filename);
+                    if (!HashSetLookup(&node->m_ImplicitInputs, path.m_FilenameHash, path.m_Filename))
+                        HashSetInsert(&node->m_ImplicitInputs, path.m_FilenameHash, path.m_Filename);
                 }
             }
         }
@@ -432,7 +375,7 @@ static bool CalculateInputSignature(BuildQueue* queue, ThreadState* thread_state
     {
         // Add path and timestamp of every indirect input file (#includes).
         // This will walk all the implicit dependencies in hash order.
-        HashSetWalk(&implicitDeps, [&](uint32_t, uint32_t hash, const char *filename) {
+        HashSetWalk(&node->m_ImplicitInputs, [&](uint32_t, uint32_t hash, const char *filename) {
             HashAddPath(&sighash, filename);
             ComputeFileSignature(
                 &sighash,
@@ -444,8 +387,6 @@ static bool CalculateInputSignature(BuildQueue* queue, ThreadState* thread_state
                 config.m_ShaDigestExtensionCount,
                 force_use_timestamp);
         });
-
-        HashSetDestroy(&implicitDeps);
     }
 
     for (const FrozenString &input : dagnode->m_AllowedOutputSubstrings)

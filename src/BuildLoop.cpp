@@ -184,15 +184,19 @@ static bool IsNodeCacheableByLeafInputs(RuntimeNode* node)
 
 static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, Mutex *queue_lock, ThreadState* thread_state, StatCache* stat_cache, const Frozen::DagDerived* dagDerived)
 {
+    if (IsNodeCacheableByLeafInputs(node))
+    {
+        bool stillTheSame = node->m_BuiltNode && node->m_BuiltNode->m_WasBuiltSuccessfully && node->m_BuiltNode->m_LeafInputSignature == node->m_CurrentLeafInputSignature;
+
+        if (!stillTheSame)
+            if (!VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLeafInputs(queue, thread_state, node, dagDerived))
+                return NodeBuildResult::kRanFailed;
+    }
+
     bool haveToRunAction = CheckInputSignatureToSeeNodeNeedsExecuting(queue, thread_state, node);
     if (!haveToRunAction)
         return NodeBuildResult::kUpToDate;
 
-    if (IsNodeCacheableByLeafInputs(node))
-    {
-        if (!VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLeafInputs(queue, thread_state, node, dagDerived))
-            return NodeBuildResult::kRanFailed;
-    }
 
     NodeBuildResult::Enum runActionResult = RunAction(queue, thread_state, node, queue_lock);
 

@@ -88,6 +88,12 @@ void HashSetDestroy(HashSet<kFlags> *self)
     HashSetInit(self, self->m_Heap);
 }
 
+template <uint32_t kFlags>
+bool HashSetIsInitialized(HashSet<kFlags> *self)
+{
+    return self->m_Heap != nullptr;
+}
+
 inline int FastCompareNoCase(const char *lhs, const char *rhs)
 {
     for (;;)

@@ -805,20 +805,12 @@ void DriverDestroy(Driver *self)
 
     for (auto &node: self->m_RuntimeNodes)
     {
-        for(auto& pair: node.m_GeneratedFilesIncludingVersionedFiles)
-        {
-            HeapFree(&self->m_Heap, pair.m_IncludingFile);
-            HeapFree(&self->m_Heap, pair.m_IncludedFile);
-        }
-        BufferDestroy(&node.m_GeneratedFilesIncludingVersionedFiles, &self->m_Heap);
-        if (node.m_ExplicitLeafInputs.m_Heap != nullptr)
-        {
+        if (HashSetIsInitialized(&node.m_ExplicitLeafInputs))
             HashSetDestroy(&node.m_ExplicitLeafInputs);
-            HashSetWalk(&node.m_ImplicitLeafInputs, [&](uint32_t index, uint32_t hash, const char* path) {
-                HeapFree(&self->m_Heap, path);
-            });
+        if (HashSetIsInitialized(&node.m_ImplicitLeafInputs))
             HashSetDestroy(&node.m_ImplicitLeafInputs);
-        }
+        if (HashSetIsInitialized(&node.m_ImplicitInputs))
+            HashSetDestroy(&node.m_ImplicitInputs);
     }
 
     BufferDestroy(&self->m_RuntimeNodes, &self->m_Heap);
@@ -1155,15 +1147,6 @@ bool DriverSaveAllBuiltNodes(Driver *self)
             BinarySegmentWriteNullPointer(built_nodes_seg);
         }
 
-        BinarySegmentWriteInt32(built_nodes_seg, runtime_node->m_GeneratedFilesIncludingVersionedFiles.m_Size);
-        BinarySegmentWritePointer(built_nodes_seg, BinarySegmentPosition(array_seg));
-        for(auto& pair: runtime_node->m_GeneratedFilesIncludingVersionedFiles)
-        {
-            WriteCommonStringPtr(array_seg, string_seg, pair.m_IncludingFile, &shared_strings, scratch);
-            WriteCommonStringPtr(array_seg, string_seg, pair.m_IncludedFile, &shared_strings, scratch);
-            BinarySegmentWriteUint32(array_seg, Djb2HashPath(pair.m_IncludedFile));
-        }
-
         const Frozen::BuiltNode* built_node = runtime_node->m_BuiltNode;
         //we cast the empty_frozen_array below here to a FrozenArray<uint32_t> that is empty, so the code below gets a lot simpler.
         const FrozenArray<uint32_t> &previous_dags = (built_node == nullptr) ? FrozenArray<uint32_t>::empty() : built_node->m_DagsWeHaveSeenThisNodeInPreviously;
@@ -1202,15 +1185,6 @@ bool DriverSaveAllBuiltNodes(Driver *self)
             BinarySegmentWriteUint64(array_seg, built_node->m_ImplicitInputFiles[i].m_Timestamp);
 
             WriteCommonStringPtr(array_seg, string_seg, built_node->m_ImplicitInputFiles[i].m_Filename, &shared_strings, &self->m_Allocator);
-        }
-
-        BinarySegmentWriteInt32(built_nodes_seg, built_node->m_VersionedFilesIncludedByGeneratedFiles.GetCount());
-        BinarySegmentWritePointer(built_nodes_seg, BinarySegmentPosition(array_seg));
-        for(auto& pair: built_node->m_VersionedFilesIncludedByGeneratedFiles)
-        {
-            WriteCommonStringPtr(array_seg, string_seg, pair.m_IncludingFile, &shared_strings, &self->m_Allocator);
-            WriteCommonStringPtr(array_seg, string_seg, pair.m_IncludedFile.m_Filename.Get(), &shared_strings, &self->m_Allocator);
-            BinarySegmentWriteUint32(array_seg, pair.m_IncludedFile.m_FilenameHash);
         }
 
         int32_t dag_count = built_node->m_DagsWeHaveSeenThisNodeInPreviously.GetCount();

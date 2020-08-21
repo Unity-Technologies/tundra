@@ -23,6 +23,9 @@ struct ScanInput
 struct ScanOutput
 {
     int m_IncludedFileCount;
+
+    //The memory management guarantee here is that the array this points to came from a scratch allocator, so it will dissapear on you,
+    //but the actual string payloads the const char*'s are pointing at are guaranteed to stay alive until the end of the build.
     const FileAndHash *m_IncludedFiles;
 };
 
