@@ -28,7 +28,11 @@
 #include <stdarg.h>
 #include <algorithm>
 #include <stdio.h>
-
+#if defined(TUNDRA_WIN32)
+#include <sys/utime.h>
+#else
+#include <utime.h>
+#endif
 
 
 
@@ -216,11 +220,26 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
 
         bool allowUnwrittenOutputFiles = (node_data->m_Flags & Frozen::DagNode::kFlagAllowUnwrittenOutputFiles);
         if (!allowUnwrittenOutputFiles)
+        {
+            uint64_t current_time = time(NULL);
+
             for (int i = 0; i < n_outputs; i++)
             {
                 FileInfo info = GetFileInfo(node_data->m_OutputFiles[i].m_Filename);
                 pre_timestamps[i] = info.m_Timestamp;
+
+                if (info.m_Timestamp == current_time)
+                {
+                    // This file has been created so recently that a very fast action might not
+                    // actually be recognised as modifying the timestamp on the file. To avoid
+                    // this, backdate the file by a second, so that any actual activity will definitely
+                    // cause the timestamp to change.
+                    struct utimbuf times;
+                    pre_timestamps[i] = times.actime = times.modtime = current_time - 1;
+                    utime(node_data->m_OutputFiles[i].m_Filename, &times);
+                }
             }
+        }
 
         if (isWriteFileAction)
             result = WriteTextFile(node_data->m_Action, node_data->m_OutputFiles[0].m_Filename, thread_state->m_Queue->m_Config.m_Heap);
