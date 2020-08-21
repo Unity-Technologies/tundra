@@ -40,6 +40,17 @@ static HashDigest CalculateLeafInputSignatureRuntime_Impl(
     HashState hashState;
     HashInit(&hashState);
 
+    const char* salt = getenv("BEE_CACHE_SALT");
+    if (salt != nullptr)
+    {
+        HashAddString(&hashState, salt);
+        if (ingredient_stream)
+            fprintf(ingredient_stream, "BEE_CACHE_SALT: %s\n", salt);
+    } else {
+        if (ingredient_stream)
+            fprintf(ingredient_stream, "BEE_CACHE_SALT: none\n");
+    }
+
     for (auto& dependentNodeThatIsCacheableItself: dagDerived->DependentNodesThatThemselvesAreLeafInputCacheableFor(dagNode->m_DagNodeIndex))
     {
         int childRuntimeNodeIndex = dagNodeIndexToRuntimeNodeIndex_Table[dependentNodeThatIsCacheableItself];
