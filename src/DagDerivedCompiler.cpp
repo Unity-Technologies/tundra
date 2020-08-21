@@ -140,8 +140,12 @@ struct CompileDagDerivedWorker
         {
             const Frozen::DagNode* generatingNode;
             if (!FindDagNodeForFile(&this->dagRuntimeData, file.m_FilenameHash, file.m_Filename, &generatingNode))
+            {
                 HashSetInsertIfNotPresent(&result, file.m_FilenameHash, file.m_Filename.Get());
-            else
+                continue;
+            }
+
+            if (generatingNode != nullptr)
                 CollectNonGeneratedFilesBeingOperatedOnByScanner(*generatingNode, result, generatingNode->m_FilesThatMightBeIncluded);
         }
     }
