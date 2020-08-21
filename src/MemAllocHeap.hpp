@@ -6,11 +6,15 @@
 
 #include <string.h>
 
-
+#if DEBUG_HEAP    
+#include <atomic>
+#endif
 
 struct MemAllocHeap
 {
-    size_t m_Size;
+#if DEBUG_HEAP    
+    std::atomic_size_t m_Size;
+#endif    
 };
 
 void HeapInit(MemAllocHeap *heap);
