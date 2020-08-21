@@ -331,11 +331,7 @@ struct CompileDagDerivedWorker
         {
             WriteArrayOfIndices(dependenciesArray_seg, combinedDependenciesBuffers[nodeIndex]);
             WriteArrayOfIndices(backlinksArray_seg, backlinksBuffers[nodeIndex]);
-
-            const Frozen::DagNode& dagNode = dag->m_DagNodes[nodeIndex];
-
             WriteIntoCacheableNodeDataArraysFor(nodeIndex);
-
         }
 
         DagRuntimeDataDestroy(&dagRuntimeData);
