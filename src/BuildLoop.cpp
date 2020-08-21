@@ -339,8 +339,12 @@ static void ProcessNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
     {
         if (!RuntimeNodeHasAttemptedCacheLookup(node))
         {
-            HashDigest currentLeafInputSignature = CalculateLeafInputSignatureRuntime(queue, thread_state, node);
-            node->m_CurrentLeafInputSignature = currentLeafInputSignature;
+            // Maybe the node's signature was already calculated as part of a parent's signature, then we can skip.
+            if (node->m_CurrentLeafInputSignature.m_Words64[0] == 0)
+            {
+                HashDigest currentLeafInputSignature = CalculateLeafInputSignatureRuntime(queue, thread_state, node);
+                node->m_CurrentLeafInputSignature = currentLeafInputSignature;
+            }
         }
 
         if (queue->m_Config.m_AttemptCacheReads)
