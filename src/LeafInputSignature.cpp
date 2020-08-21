@@ -250,9 +250,9 @@ void PrintLeafInputSignature(Driver* driver, const char **argv, int argc)
     }
 
     printf("OffLine ingredients to the leaf input hash\n");
-    std::function<const int32_t*(int)> arrayAccess = [=](int index){return driver->m_DagDerivedData->m_Dependencies[index].GetArray();};
-    std::function<size_t(int)> sizeAccess = [=](int index){return driver->m_DagDerivedData->m_Dependencies[index].GetCount();};
-    CalculateLeafInputHashOffline(dag, arrayAccess, sizeAccess, requestedNode, &driver->m_Heap, stdout);
+    std::function<const int32_t*(int)> funcToGetDependenciesForNode = [=](int index){return driver->m_DagDerivedData->m_Dependencies[index].GetArray();};
+    std::function<size_t(int)> funcToGetDependenciesCountForNode = [=](int index){return driver->m_DagDerivedData->m_Dependencies[index].GetCount();};
+    CalculateLeafInputHashOffline(dag, funcToGetDependenciesForNode, funcToGetDependenciesCountForNode, requestedNode, &driver->m_Heap, stdout);
 
     printf("\n\n\nRuntime ingredients to the leaf input hash\n");
     MemAllocLinear scratch;

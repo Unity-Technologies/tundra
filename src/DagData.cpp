@@ -2,7 +2,8 @@
 #include "Buffer.hpp"
 #include "HashTable.hpp"
 
-static void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* dag, std::function<const int32_t*(int)>& arrayAccess, std::function<size_t(int)>& sizeAccess, std::function<bool(int,int)>& shouldProcess, int32_t* searchRootIndices, int32_t searchRootCount, Buffer<int32_t>& results)
+
+static void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* dag, std::function<const int32_t*(int)>& funcToGetDependenciesForNode, std::function<size_t(int)>& funcToGetDependenciesCountForNode, std::function<bool(int,int)>& shouldProcess, int32_t* searchRootIndices, int32_t searchRootCount, Buffer<int32_t>& results)
 {
     Buffer<int32_t> node_stack;
     BufferInitWithCapacity(&node_stack, heap, 1024);
@@ -29,8 +30,8 @@ static void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::
 
             // Stash node dependencies on the work queue to keep iterating
 
-            int dependencyCount = sizeAccess(dag_index);
-            const int32_t* dependencyArray = arrayAccess(dag_index);
+            int dependencyCount = funcToGetDependenciesCountForNode(dag_index);
+            const int32_t* dependencyArray = funcToGetDependenciesForNode(dag_index);
 
             for (int i=0; i!=dependencyCount; i++)
             {
@@ -47,15 +48,15 @@ static void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::
 
 void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* dag, const Frozen::DagDerived* dagDerived, int32_t* searchRootIndices, int32_t searchRootCount, Buffer<int32_t>& results)
 {
-    std::function<const int32_t*(int)> arrayAccess = [=](int index){return dagDerived->m_Dependencies[index].GetArray();};
-    std::function<size_t(int)> sizeAccess = [=](int index){return dagDerived->m_Dependencies[index].GetCount();};
+    std::function<const int32_t*(int)> funcToGetDependenciesForNode = [=](int index){return dagDerived->m_Dependencies[index].GetArray();};
+    std::function<size_t(int)> funcToGetDependenciesCountForNode = [=](int index){return dagDerived->m_Dependencies[index].GetCount();};
     std::function<bool(int,int)> alwaysTrue = [](int,int) { return true; };
-    FindDependentNodesFromRootIndices(heap, dag, arrayAccess, sizeAccess, alwaysTrue, searchRootIndices, searchRootCount, results);
+    FindDependentNodesFromRootIndices(heap, dag, funcToGetDependenciesForNode, funcToGetDependenciesCountForNode, alwaysTrue, searchRootIndices, searchRootCount, results);
 }
 
-void FindDependentNodesFromRootIndex(MemAllocHeap* heap, const Frozen::Dag* dag, std::function<const int32_t*(int)>& arrayAccess, std::function<size_t(int)>& sizeAccess, std::function<bool(int,int)>& shouldProcess, int32_t rootIndex, Buffer<int32_t>& results)
+void FindDependentNodesFromRootIndex(MemAllocHeap* heap, const Frozen::Dag* dag, std::function<const int32_t*(int)>& funcToGetDependenciesForNode, std::function<size_t(int)>& funcToGetDependenciesCountForNode, std::function<bool(int,int)>& shouldProcess, int32_t rootIndex, Buffer<int32_t>& results)
 {
-    FindDependentNodesFromRootIndices(heap, dag, arrayAccess, sizeAccess, shouldProcess, &rootIndex, 1, results);
+    FindDependentNodesFromRootIndices(heap, dag, funcToGetDependenciesForNode, funcToGetDependenciesCountForNode, shouldProcess, &rootIndex, 1, results);
 }
 
 void FindDependentNodesFromRootIndex(MemAllocHeap* heap, const Frozen::Dag* dag, const Frozen::DagDerived* dagDerived, int32_t rootIndex, Buffer<int32_t>& results)

@@ -4,7 +4,7 @@
 
 
 //This function calculates the offline part of the signature, which we store in the dag-derived file
-HashDigest CalculateLeafInputHashOffline(const Frozen::Dag* dag, std::function<const int32_t*(int)>& arrayAccess, std::function<size_t(int)>& sizeAccess, int32_t nodeIndex, MemAllocHeap* heap, FILE* ingredient_stream)
+HashDigest CalculateLeafInputHashOffline(const Frozen::Dag* dag, std::function<const int32_t*(int)>& funcToGetDependenciesForNode, std::function<size_t(int)>& funcToGetDependenciesCounForNode, int32_t nodeIndex, MemAllocHeap* heap, FILE* ingredient_stream)
 {
     HashDigest hashResult = {};
 
@@ -16,7 +16,7 @@ HashDigest CalculateLeafInputHashOffline(const Frozen::Dag* dag, std::function<c
         bool isCacheable = dag->m_DagNodes[childIndex].m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs;
         return !isCacheable;
     };
-    FindDependentNodesFromRootIndex(heap, dag, arrayAccess, sizeAccess, filterLeafInputCacheable, nodeIndex, all_dependent_nodes);
+    FindDependentNodesFromRootIndex(heap, dag, funcToGetDependenciesForNode, funcToGetDependenciesCounForNode, filterLeafInputCacheable, nodeIndex, all_dependent_nodes);
 
     HashState hashState;
     HashInit(&hashState);
