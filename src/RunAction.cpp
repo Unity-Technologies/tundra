@@ -79,6 +79,8 @@ static ExecResult WriteTextFile(const char *payload, const char *target_file, Me
 
 NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node, Mutex *queue_lock)
 {
+    MemAllocLinearScope allocScope(&thread_state->m_ScratchAlloc);
+
     const Frozen::DagNode *node_data = node->m_DagNode;
     const bool isWriteFileAction = node->m_DagNode->m_Flags & Frozen::DagNode::kFlagIsWriteTextFileAction;
     const char *cmd_line = node_data->m_Action;

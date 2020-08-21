@@ -36,7 +36,7 @@ static void ThreadStateInit(ThreadState *self, BuildQueue *queue, size_t scratch
 
 static void ThreadStateDestroy(ThreadState *self)
 {
-    LinearAllocDestroy(&self->m_ScratchAlloc);
+    LinearAllocDestroy(&self->m_ScratchAlloc, true);
     HeapDestroy(&self->m_LocalHeap);
 }
 

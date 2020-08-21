@@ -784,7 +784,6 @@ static bool CompileDag(const JsonObjectValue *root, BinaryWriter *writer, MemAll
     BinarySegmentWriteUint32(main_seg, Djb2Hash(identifier));
 
     // Compute node guids and index remapping table.
-    // FIXME: this just leaks
     int32_t *remap_table = HeapAllocateArray<int32_t>(heap, nodes->m_Count);
     TempNodeGuid *guid_table = HeapAllocateArray<TempNodeGuid>(heap, nodes->m_Count);
 
@@ -907,6 +906,9 @@ static bool CompileDag(const JsonObjectValue *root, BinaryWriter *writer, MemAll
     WriteStringPtr(main_seg, str_seg, FindStringValue(root, "StructuredLogFileName"));
 
     HashTableDestroy(&shared_strings);
+
+    HeapFree(heap, remap_table);
+    HeapFree(heap, guid_table);
 
     //write magic number again at the end to pretect against writing too much / too little data and not noticing.
     BinarySegmentWriteUint32(main_seg, Frozen::Dag::MagicNumber);
