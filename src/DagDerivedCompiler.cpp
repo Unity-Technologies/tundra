@@ -269,6 +269,8 @@ struct CompileDagDerivedWorker
 
     bool WriteStreams(const char* dagderived_filename)
     {
+        MemAllocLinearScope scratchScope(scratch);
+
         combinedDependenciesBuffers = HeapAllocateArrayZeroed<Buffer<int32_t>>(heap, node_count);
         for (int32_t i = 0; i < node_count; ++i)
         {
