@@ -38,13 +38,19 @@ void HeapFree(MemAllocHeap *heap, const void *_ptr)
     if (_ptr == nullptr)
         return;
     size_t* ptr = (size_t*)_ptr;
+#if DEBUG_HEAP    
     ptr--;
+#ifdef LOG_ALLOC    
+    printf("%p %p HeapFree %zu\n", heap, ptr, *ptr);
+#endif    
     heap->m_Size -= *ptr;
+#endif    
     free(ptr);
 }
 
 void *HeapReallocate(MemAllocHeap *heap, void *_ptr, size_t size)
 {
+#if DEBUG_HEAP    
     if (_ptr == nullptr)
         return HeapAllocate(heap, size);
 
@@ -52,12 +58,22 @@ void *HeapReallocate(MemAllocHeap *heap, void *_ptr, size_t size)
     ptr--;
     heap->m_Size -= *ptr;
     size_t* new_ptr = (size_t*)realloc(ptr, size + sizeof(size_t));
+#ifdef LOG_ALLOC    
+    printf("%p %p HeapFree (reallocate)\n", heap, ptr);
+    printf("%p %p HeapAllocate (reallocate) %zu\n", heap, new_ptr, size);
+#endif    
     if (!new_ptr)
         Croak("out of memory reallocating %d bytes at %p", (int)size, ptr);
 
     *new_ptr = size;
     heap->m_Size += size;
     return new_ptr + 1;
+#else
+    void* new_ptr = realloc(_ptr, size);
+    if (!new_ptr)
+        Croak("out of memory reallocating %d bytes at %p", (int)size, _ptr);
+    return new_ptr;
+#endif
 }
 
 
