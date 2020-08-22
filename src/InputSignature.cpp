@@ -88,11 +88,9 @@ static void ReportChangedInputFiles(JsonWriter *msg, const FrozenArray<Frozen::N
 {
     for (const Frozen::NodeInputFileData &input : files)
     {
-        uint32_t filenameHash = Djb2HashPath(input.m_Filename);
-
         CheckAndReportChangedInputFile(msg,
                                        input.m_Filename,
-                                       filenameHash,
+                                       input.m_FilenameHash,
                                        input.m_Timestamp,
                                        dependencyType,
                                        digest_cache,
@@ -243,7 +241,7 @@ static void ReportInputSignatureChanges(
         {
             for (const Frozen::NodeInputFileData &implicitInput : previously_built_node->m_ImplicitInputFiles)
             {
-                bool *visited = HashTableLookup(&implicitDependencies, Djb2HashPath(implicitInput.m_Filename), implicitInput.m_Filename);
+                bool *visited = HashTableLookup(&implicitDependencies, implicitInput.m_FilenameHash, implicitInput.m_Filename);
                 if (!visited)
                 {
                     implicitFilesListChanged = true;

@@ -307,6 +307,8 @@ struct HeaderValidationError
 
 bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLeafInputs(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node, const Frozen::DagDerived* dagDerived)
 {
+    HashSet<kFlagPathStrings> alreadyFound;
+    HashSetInit(&alreadyFound, &thread_state->m_LocalHeap);
     Buffer<HeaderValidationError> illegalIncludesToReport;
     BufferInit(&illegalIncludesToReport);
 
@@ -333,12 +335,18 @@ bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLe
             case NodeBuildResult::kUpToDate:
                 for (auto& includedFile: runtimeNodeWithScanner->m_BuiltNode->m_ImplicitInputFiles)
                 {
-                    if (!IsGeneratedOrIsLeafInput(Djb2HashPath(includedFile.m_Filename.Get()), includedFile.m_Filename.Get()))
+                    uint32_t pathHash = includedFile.m_FilenameHash;
+                    const char* fileName = includedFile.m_Filename.Get();
+
+                    if (!IsGeneratedOrIsLeafInput(pathHash, fileName))
                     {
-                        HeaderValidationError error;
-                        error.runtimeNode = runtimeNodeWithScanner;
-                        error.included_file = includedFile.m_Filename.Get();;
-                        BufferAppendOne(&illegalIncludesToReport, &thread_state->m_LocalHeap, error);
+                        if (HashSetInsertIfNotPresent(&alreadyFound, pathHash, fileName))
+                        {
+                            HeaderValidationError error;
+                            error.runtimeNode = runtimeNodeWithScanner;
+                            error.included_file = fileName;
+                            BufferAppendOne(&illegalIncludesToReport, &thread_state->m_LocalHeap, error);
+                        }
                     }
                 }
 
@@ -362,13 +370,6 @@ bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLe
         }
     }
 
-    if (illegalIncludesToReport.m_Size > 1)
-    {
-        printf("//Add the following includes to a versioned file\n");
-        for(auto& error: illegalIncludesToReport)
-            printf("#include \"%s\"\n", error.included_file);
-    }
-
     if (illegalIncludesToReport.m_Size > 0)
     {
         auto error = illegalIncludesToReport[0];
@@ -378,34 +379,65 @@ bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLe
 
         InitOutputBuffer(&result.m_OutputBuffer, &thread_state->m_LocalHeap);
 
-        const char* formatString =
-        "This node '%s' is marked as leaf input cacheable.\n"
-        "It has a dependency node '%s' whose inputfile is being scanned for includes.\n"
-        "It was found including the non-generated file '%s'.\n"
-        "Because '%s' is exclusively included by generated files,\n"
-        "this node cannot be safely cached.\n"
-        "You can fix this by either:\n"
-        "- Making '%s' not be included by the generated files including it currently.\n"
-        "- By ensuring that this build has a non-generated file that also includes '%s'.\n"
-        "- By using the filesThatMightBeIncluded feature.\n";
+        {
+            MemAllocLinearScope scope(&thread_state->m_ScratchAlloc);
 
-        char buffer[4096];
-        snprintf(buffer,sizeof(buffer), formatString,
-            node->m_DagNode->m_Annotation.Get(),
-            error.runtimeNode->m_DagNode->m_Annotation.Get(),
-            error.included_file,
-            error.included_file,
-            error.included_file,
-            error.included_file
-        );
 
-        result.m_FrozenNodeData = node->m_DagNode;
-        EmitOutputBytesToDestination(&result, buffer, strlen(buffer));
+            const char* formatString =
+            "This node '%s' is marked as leaf input cacheable.\n"
+            "%d implicit input files have been discovered that were not statically known ahead of time.\n"
+            "For example:\n"
+            "The dependency node '%s' ends up including '%s'.\n"
+            "This usually only happens if a file is only included by generated files.\n"
+            "You can fix this by either:\n"
+            "- Making '%s' not be included by the generated files including it currently.\n"
+            "- By ensuring that this build has a non-generated file that also includes '%s'.\n"
+            "- Adding this headerfile to the .Sources property of your NativeProgram.\n";
 
-        MutexLock(&queue->m_Lock);
-        PrintNodeResult(&result, node->m_DagNode, "No command was run. Files were scanned for includes in preparation of running.", queue, thread_state, false, TimerGet(), ValidationResult::Pass, nullptr, true);
-        MutexUnlock(&queue->m_Lock);
+            const int kStoragePerInclude = kMaxPathLength + 50;
+            size_t errorStorageSize = strlen(formatString)*2 + illegalIncludesToReport.m_Size * kStoragePerInclude;
+            char* errorStorage = LinearAllocateArray<char>(&thread_state->m_ScratchAlloc,errorStorageSize);
 
+            char* endPtr = errorStorage + errorStorageSize;
+
+            int written = snprintf(errorStorage,errorStorageSize, formatString,
+                node->m_DagNode->m_Annotation.Get(),
+                illegalIncludesToReport.m_Size,
+                error.runtimeNode->m_DagNode->m_Annotation.Get(),
+                error.included_file,
+                error.included_file,
+                error.included_file
+            );
+            char* cursor = errorStorage + written;
+
+            auto appendToError = [&](const char* msg)
+            {
+                int remaining = endPtr - cursor;
+                cursor += snprintf(cursor, remaining, "%s", msg);
+            };
+
+            appendToError("The full list of not statically known included files is:\n");
+            for(auto& e: illegalIncludesToReport)
+            {
+                char tmp[kStoragePerInclude];
+                snprintf(tmp, sizeof(tmp), "#include \"%s\"\n", e.included_file);
+                char* c = tmp;
+                while(*c != 0)
+                {
+                    if (*c == '\\')
+                        *c = '/';
+                    c++;
+                }
+                appendToError(tmp);
+            }
+
+            result.m_FrozenNodeData = node->m_DagNode;
+            EmitOutputBytesToDestination(&result, errorStorage, strlen(errorStorage));
+
+            MutexLock(&queue->m_Lock);
+            PrintNodeResult(&result, node->m_DagNode, "Implicit input validation error", queue, thread_state, false, TimerGet(), ValidationResult::Pass, nullptr, true);
+            MutexUnlock(&queue->m_Lock);
+        }
         BufferDestroy(&illegalIncludesToReport, &thread_state->m_LocalHeap);
         ExecResultFreeMemory(&result);
         return false;

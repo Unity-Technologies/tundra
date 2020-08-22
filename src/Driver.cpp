@@ -1083,13 +1083,15 @@ bool DriverSaveAllBuiltNodes(Driver *self)
         for (int32_t i = 0; i < file_count; ++i)
         {
             uint64_t timestamp = 0;
-            FileInfo fileInfo = StatCacheStat(&self->m_StatCache, dag_node->m_InputFiles[i].m_Filename, dag_node->m_InputFiles[i].m_FilenameHash);
+            uint32_t filenameHash = dag_node->m_InputFiles[i].m_FilenameHash;
+            const FrozenString& filename = dag_node->m_InputFiles[i].m_Filename;
+            FileInfo fileInfo = StatCacheStat(&self->m_StatCache, filename, filenameHash);
             if (fileInfo.Exists())
                 timestamp = fileInfo.m_Timestamp;
 
             BinarySegmentWriteUint64(array_seg, timestamp);
-
-            WriteCommonStringPtr(array_seg, string_seg, dag_node->m_InputFiles[i].m_Filename, &shared_strings, scratch);
+            BinarySegmentWriteUint32(array_seg, filenameHash);
+            WriteCommonStringPtr(array_seg, string_seg, filename, &shared_strings, scratch);
         }
 
         if (dag_node->m_ScannerIndex != -1)
@@ -1104,7 +1106,7 @@ bool DriverSaveAllBuiltNodes(Driver *self)
                     timestamp = fileInfo.m_Timestamp;
 
                 BinarySegmentWriteUint64(array_seg, timestamp);
-
+                BinarySegmentWriteUint32(array_seg, hash);
                 WriteCommonStringPtr(array_seg, string_seg, filename, &shared_strings, scratch);
             });
         }
@@ -1140,7 +1142,7 @@ bool DriverSaveAllBuiltNodes(Driver *self)
         for (int32_t i = 0; i < file_count; ++i)
         {
             BinarySegmentWriteUint64(array_seg, built_node->m_InputFiles[i].m_Timestamp);
-
+            BinarySegmentWriteUint32(array_seg, built_node->m_InputFiles[i].m_FilenameHash);
             WriteCommonStringPtr(array_seg, string_seg, built_node->m_InputFiles[i].m_Filename, &shared_strings, &self->m_Allocator);
         }
 
@@ -1150,7 +1152,7 @@ bool DriverSaveAllBuiltNodes(Driver *self)
         for (int32_t i = 0; i < file_count; ++i)
         {
             BinarySegmentWriteUint64(array_seg, built_node->m_ImplicitInputFiles[i].m_Timestamp);
-
+            BinarySegmentWriteUint32(array_seg, built_node->m_ImplicitInputFiles[i].m_FilenameHash);
             WriteCommonStringPtr(array_seg, string_seg, built_node->m_ImplicitInputFiles[i].m_Filename, &shared_strings, &self->m_Allocator);
         }
 

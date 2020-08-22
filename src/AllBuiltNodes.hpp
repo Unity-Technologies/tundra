@@ -12,16 +12,11 @@ struct NodeInputFileData
 {
     uint64_t m_Timestamp;
     FrozenString m_Filename;
+    uint32_t m_FilenameHash;
 };
 #pragma pack(pop)
 
-static_assert(sizeof(NodeInputFileData) == 12, "struct layout");
-
-struct IncludingIncludedPair
-{
-    FrozenString m_IncludingFile;
-    FrozenFileAndHash m_IncludedFile;
-};
+static_assert(sizeof(NodeInputFileData) == 16, "struct layout");
 
 struct BuiltNode
 {
@@ -38,7 +33,7 @@ struct BuiltNode
 
 struct AllBuiltNodes
 {
-    static const uint32_t MagicNumber = 0xc1aacdc2 ^ kTundraHashMagic;
+    static const uint32_t MagicNumber = 0xc1532dc2 ^ kTundraHashMagic;
 
     uint32_t m_MagicNumber;
 
