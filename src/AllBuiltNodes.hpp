@@ -11,8 +11,8 @@ namespace Frozen
 struct NodeInputFileData
 {
     uint64_t m_Timestamp;
-    FrozenString m_Filename;
     uint32_t m_FilenameHash;
+    FrozenString m_Filename;
 };
 #pragma pack(pop)
 
@@ -33,7 +33,7 @@ struct BuiltNode
 
 struct AllBuiltNodes
 {
-    static const uint32_t MagicNumber = 0xc1532dc2 ^ kTundraHashMagic;
+    static const uint32_t MagicNumber = 0x53532dc2 ^ kTundraHashMagic;
 
     uint32_t m_MagicNumber;
 
