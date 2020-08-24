@@ -181,9 +181,6 @@ static LeafInputSignatureData* CalculateLeafInputSignatureRuntime_Impl(
 void DestroyLeafInputSignatureData(MemAllocHeap *heap, LeafInputSignatureData *data)
 {
     HashSetDestroy(&data->m_ExplicitLeafInputs);
-    HashSetWalk(&data->m_ImplicitLeafInputs, [&](uint32_t index, uint32_t hash, const char* path) {
-        HeapFree(heap, path);
-    });
     HashSetDestroy(&data->m_ImplicitLeafInputs);
     HeapFree(heap, data);
 }
