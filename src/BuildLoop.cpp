@@ -199,13 +199,13 @@ static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, M
     if (runActionResult == NodeBuildResult::kRanSuccesfully && queue->m_Config.m_AttemptCacheWrites && IsNodeCacheableByLeafInputs(node))
     {
         uint64_t time_exec_started = TimerGet();
-        auto writeResult = CacheClient::AttemptWrite(queue->m_Config.m_Dag, node->m_DagNode, node->m_CurrentLeafInputSignature, stat_cache, queue_lock, thread_state);
+        auto writeResult = CacheClient::AttemptWrite(queue->m_Config.m_Dag, node->m_DagNode, node->m_CurrentLeafInputSignature->digest, stat_cache, queue_lock, thread_state);
         uint64_t now = TimerGet();
         double duration = TimerDiffSeconds(time_exec_started, now);
 
         MutexLock(&queue->m_Lock);
         char digestString[kDigestStringSize];
-        DigestToString(digestString, node->m_CurrentLeafInputSignature);
+        DigestToString(digestString, node->m_CurrentLeafInputSignature->digest);
 
         PrintMessage(writeResult == CacheResult::Success ? MessageStatusLevel::Success : MessageStatusLevel::Warning, duration, "%s [CacheWrite %s]", node->m_DagNode->m_Annotation.Get(), digestString);
         MutexUnlock(&queue->m_Lock);
@@ -222,7 +222,7 @@ static bool AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(RuntimeNode* 
 
     if (node->m_BuiltNode)
     {
-        if (node->m_BuiltNode->m_LeafInputSignature == node->m_CurrentLeafInputSignature && !OutputFilesMissingFor(node->m_BuiltNode, queue->m_Config.m_StatCache) && node->m_BuiltNode->m_WasBuiltSuccessfully)
+        if (node->m_BuiltNode->m_LeafInputSignature == node->m_CurrentLeafInputSignature->digest && !OutputFilesMissingFor(node->m_BuiltNode, queue->m_Config.m_StatCache) && node->m_BuiltNode->m_WasBuiltSuccessfully)
         {
             node->m_BuildResult = NodeBuildResult::kUpToDate;
             FinishNode(queue, node);
@@ -234,13 +234,13 @@ static bool AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(RuntimeNode* 
 
     uint64_t time_exec_started = TimerGet();
     MutexUnlock(&queue->m_Lock);
-    auto cacheReadResult = CacheClient::AttemptRead(queue->m_Config.m_Dag, node->m_DagNode, node->m_CurrentLeafInputSignature, queue->m_Config.m_StatCache, &queue->m_Lock, thread_state);
+    auto cacheReadResult = CacheClient::AttemptRead(queue->m_Config.m_Dag, node->m_DagNode, node->m_CurrentLeafInputSignature->digest, queue->m_Config.m_StatCache, &queue->m_Lock, thread_state);
     MutexLock(&queue->m_Lock);
 
     uint64_t now = TimerGet();
     double duration = TimerDiffSeconds(time_exec_started, now);
     char digestString[kDigestStringSize];
-    DigestToString(digestString, node->m_CurrentLeafInputSignature);
+    DigestToString(digestString, node->m_CurrentLeafInputSignature->digest);
 
     auto printMsg = [=](MessageStatusLevel::Enum statusLevel, const char* msg)
     {
@@ -340,11 +340,8 @@ static void ProcessNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
         if (!RuntimeNodeHasAttemptedCacheLookup(node))
         {
             // Maybe the node's signature was already calculated as part of a parent's signature, then we can skip.
-            if (node->m_CurrentLeafInputSignature.m_Words64[0] == 0)
-            {
-                HashDigest currentLeafInputSignature = CalculateLeafInputSignatureRuntime(queue, thread_state, node);
-                node->m_CurrentLeafInputSignature = currentLeafInputSignature;
-            }
+            if (node->m_CurrentLeafInputSignature == nullptr)
+                CalculateLeafInputSignature(queue, thread_state, node);
         }
 
         if (queue->m_Config.m_AttemptCacheReads)

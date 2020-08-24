@@ -34,6 +34,7 @@ namespace Frozen
 }
 
 struct SinglyLinkedPathList;
+struct LeafInputSignatureData;
 
 struct IncludingIncludedPair
 {
@@ -54,12 +55,10 @@ struct RuntimeNode
     NodeBuildResult::Enum m_BuildResult;
     bool m_Finished;
     HashDigest m_CurrentInputSignature;
-    HashDigest m_CurrentLeafInputSignature;
 
     SinglyLinkedPathList* m_DynamicallyDiscoveredOutputFiles;
+    LeafInputSignatureData* m_CurrentLeafInputSignature;
 
-    HashSet<kFlagPathStrings> m_ExplicitLeafInputs;
-    HashSet<kFlagPathStrings> m_ImplicitLeafInputs;
     Buffer<IncludingIncludedPair> m_GeneratedFilesIncludingVersionedFiles;
 };
 

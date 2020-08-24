@@ -23,6 +23,7 @@
 #include "DynamicOutputDirectories.hpp"
 #include "PathUtil.hpp"
 #include "CacheClient.hpp"
+#include "LeafInputSignature.hpp"
 
 #include <time.h>
 #include <stdio.h>
@@ -808,14 +809,8 @@ void DriverDestroy(Driver *self)
             HeapFree(&self->m_Heap, pair.m_IncludedFile);
         }
         BufferDestroy(&node.m_GeneratedFilesIncludingVersionedFiles, &self->m_Heap);
-        if (node.m_ExplicitLeafInputs.m_Heap != nullptr)
-        {
-            HashSetDestroy(&node.m_ExplicitLeafInputs);
-            HashSetWalk(&node.m_ImplicitLeafInputs, [&](uint32_t index, uint32_t hash, const char* path) {
-                HeapFree(&self->m_Heap, path);
-            });
-            HashSetDestroy(&node.m_ImplicitLeafInputs);
-        }
+        if (node.m_CurrentLeafInputSignature != nullptr)
+            DestroyLeafInputSignatureData(&self->m_Heap, node.m_CurrentLeafInputSignature);
     }
 
     BufferDestroy(&self->m_RuntimeNodes, &self->m_Heap);
@@ -1080,7 +1075,13 @@ bool DriverSaveAllBuiltNodes(Driver *self)
 
         bool nodeWasBuiltSuccessfully = runtime_node->m_BuildResult == NodeBuildResult::kRanSuccesfully || runtime_node->m_BuildResult == NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun;
 
-        save_node_sharedcode(nodeWasBuiltSuccessfully, &runtime_node->m_CurrentInputSignature, &runtime_node->m_CurrentLeafInputSignature, runtime_node->m_DagNode, guid, segments, runtime_node->m_DynamicallyDiscoveredOutputFiles);
+        HashDigest leafInputSignatureDigest;
+        if (runtime_node->m_CurrentLeafInputSignature)
+            leafInputSignatureDigest = runtime_node->m_CurrentLeafInputSignature->digest;
+        else
+            memset(&leafInputSignatureDigest, 0, sizeof(leafInputSignatureDigest));
+
+        save_node_sharedcode(nodeWasBuiltSuccessfully, &runtime_node->m_CurrentInputSignature, &leafInputSignatureDigest, runtime_node->m_DagNode, guid, segments, runtime_node->m_DynamicallyDiscoveredOutputFiles);
 
         HashSet<kFlagPathStrings> implicitDependencies;
         if (dag_node->m_ScannerIndex != -1)
