@@ -252,6 +252,8 @@ static void DumpState(const Frozen::AllBuiltNodes *data)
         printf("  m_WasBuiltSuccessfully: %d\n", node.m_WasBuiltSuccessfully);
         DigestToString(digest_str, node.m_InputSignature);
         printf("  input_signature: %s\n", digest_str);
+        DigestToString(digest_str, node.m_LeafInputSignature);
+        printf("  leafinputsignature: %s\n", digest_str);
         printf("  outputs:\n");
         for (const FrozenFileAndHash& fileAndHash : node.m_OutputFiles)
             printf("    (0x%08x) %s\n", fileAndHash.m_FilenameHash, fileAndHash.m_Filename.Get());
@@ -266,10 +268,6 @@ static void DumpState(const Frozen::AllBuiltNodes *data)
         printf("  Implicit inputs:\n");
         for (int i=0; i!=node.m_ImplicitInputFiles.GetCount(); i++)
             printf("    %lld %s\n", node.m_ImplicitInputFiles[i].m_Timestamp, node.m_ImplicitInputFiles[i].m_Filename.Get());
-
-        printf("  GeneratedFilesIncludingVersionedFiles:\n");
-        for (int i=0; i!=node.m_VersionedFilesIncludedByGeneratedFiles.GetCount(); i++)
-            printf("    %s includes %s\n", node.m_VersionedFilesIncludedByGeneratedFiles[i].m_IncludingFile.Get(), node.m_VersionedFilesIncludedByGeneratedFiles[i].m_IncludedFile.m_Filename.Get());
 
         printf("\n");
     }

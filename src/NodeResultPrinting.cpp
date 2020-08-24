@@ -468,7 +468,7 @@ void PrintNodeResult(
 {
     int processedNodeCount = queue->m_FinishedNodeCount;
     bool failed = result->m_ReturnCode != 0 || result->m_WasSignalled || validationResult >= ValidationResult::UnexpectedConsoleOutputFail;
-    bool verbose = (failed && !result->m_WasAborted) || always_verbose;
+    bool verbose = (failed && !result->m_WasAborted && !was_preparation_error) || always_verbose;
 
     int duration = TimerDiffSeconds(time_exec_started, TimerGet());
 

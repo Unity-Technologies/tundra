@@ -9,6 +9,8 @@
 #if defined(_MSC_VER)
 #include <malloc.h>
 #include <intrin.h>
+#include <string>
+#include <wchar.h>
 #elif defined(TUNDRA_WIN32_MINGW)
 #include <malloc.h>
 #elif defined(TUNDRA_UNIX)
@@ -41,7 +43,8 @@
 #define TD_ALIGN(v, alignment) (((v) + (alignment)-1) & ~((alignment)-1))
 
 #if TUNDRA_WIN32
-int LongPathToPrefixedWidePath(const char* path, wchar_t* buffer, int bufferSize);
+std::wstring ToWideString(const char* input);
+bool ConvertToLongPath(std::wstring* path);
 #endif
 
 

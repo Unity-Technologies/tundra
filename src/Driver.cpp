@@ -687,7 +687,10 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
     {
         const Frozen::DagNode *dag_node = dag_nodes + node_stack[i];
         for (auto usageDep : dag_node->m_DependenciesConsumedDuringUsageOnly)
-            BufferAppendOne(&node_stack, heap, usageDep);
+        {
+            if (!BufferContains(&node_stack, usageDep))
+                BufferAppendOne(&node_stack, heap, usageDep);
+        }
     }
 
     self->m_AmountOfRuntimeNodesSpecificallyRequested = node_stack.m_Size;
@@ -803,14 +806,10 @@ void DriverDestroy(Driver *self)
 
     for (auto &node: self->m_RuntimeNodes)
     {
-        for(auto& pair: node.m_GeneratedFilesIncludingVersionedFiles)
-        {
-            HeapFree(&self->m_Heap, pair.m_IncludingFile);
-            HeapFree(&self->m_Heap, pair.m_IncludedFile);
-        }
-        BufferDestroy(&node.m_GeneratedFilesIncludingVersionedFiles, &self->m_Heap);
         if (node.m_CurrentLeafInputSignature != nullptr)
             DestroyLeafInputSignatureData(&self->m_Heap, node.m_CurrentLeafInputSignature);
+        if (HashSetIsInitialized(&node.m_ImplicitInputs))
+            HashSetDestroy(&node.m_ImplicitInputs);
     }
 
     BufferDestroy(&self->m_RuntimeNodes, &self->m_Heap);
@@ -965,12 +964,12 @@ static void save_node_sharedcode(bool nodeWasBuiltSuccesfully, const HashDigest 
 {
     //we're writing to two arrays in one go.  the FrozenArray<HashDigest> m_NodeGuids and the FrozenArray<BuiltNode> m_BuiltNodes
     //the hashdigest is quick
-    BinarySegmentWrite(segments.guid, (const char *)guid, sizeof(HashDigest));
+    BinarySegmentWriteHashDigest(segments.guid, *guid);
 
     //the rest not so much
     BinarySegmentWriteInt32(segments.built_nodes, nodeWasBuiltSuccesfully ? 1 : 0);
-    BinarySegmentWrite(segments.built_nodes, (const char *)input_signature, sizeof(HashDigest));
-    BinarySegmentWrite(segments.built_nodes, (const char *)leafinput_signature, sizeof(HashDigest));
+    BinarySegmentWriteHashDigest(segments.built_nodes, *input_signature);
+    BinarySegmentWriteHashDigest(segments.built_nodes, *leafinput_signature);
 
     auto WriteFrozenFileAndHashIntoBuiltNodesStream = [segments](const FrozenFileAndHash& f) -> void {
         BinarySegmentWritePointer(segments.array, BinarySegmentPosition(segments.string));
@@ -1073,7 +1072,7 @@ bool DriverSaveAllBuiltNodes(Driver *self)
 
         const Frozen::DagNode* dag_node = runtime_node->m_DagNode;
 
-        bool nodeWasBuiltSuccessfully = runtime_node->m_BuildResult == NodeBuildResult::kRanSuccesfully || runtime_node->m_BuildResult == NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun;
+        bool nodeWasBuiltSuccessfully = runtime_node->m_BuildResult != NodeBuildResult::kRanFailed;
 
         HashDigest leafInputSignatureDigest;
         if (runtime_node->m_CurrentLeafInputSignature)
@@ -1083,83 +1082,43 @@ bool DriverSaveAllBuiltNodes(Driver *self)
 
         save_node_sharedcode(nodeWasBuiltSuccessfully, &runtime_node->m_CurrentInputSignature, &leafInputSignatureDigest, runtime_node->m_DagNode, guid, segments, runtime_node->m_DynamicallyDiscoveredOutputFiles);
 
-        HashSet<kFlagPathStrings> implicitDependencies;
-        if (dag_node->m_ScannerIndex != -1)
-            HashSetInit(&implicitDependencies, &self->m_Heap);
-
         int32_t file_count = dag_node->m_InputFiles.GetCount();
         BinarySegmentWriteInt32(built_nodes_seg, file_count);
         BinarySegmentWritePointer(built_nodes_seg, BinarySegmentPosition(array_seg));
         for (int32_t i = 0; i < file_count; ++i)
         {
             uint64_t timestamp = 0;
-            FileInfo fileInfo = StatCacheStat(&self->m_StatCache, dag_node->m_InputFiles[i].m_Filename, dag_node->m_InputFiles[i].m_FilenameHash);
+            uint32_t filenameHash = dag_node->m_InputFiles[i].m_FilenameHash;
+            const FrozenString& filename = dag_node->m_InputFiles[i].m_Filename;
+            FileInfo fileInfo = StatCacheStat(&self->m_StatCache, filename, filenameHash);
             if (fileInfo.Exists())
                 timestamp = fileInfo.m_Timestamp;
 
             BinarySegmentWriteUint64(array_seg, timestamp);
-
-            WriteCommonStringPtr(array_seg, string_seg, dag_node->m_InputFiles[i].m_Filename, &shared_strings, scratch);
-
-            if (dag_node->m_ScannerIndex != -1)
-            {
-                MemAllocLinearScope alloc_scope(scratch);
-
-                ScanInput scan_input;
-                scan_input.m_ScannerConfig = self->m_DagData->m_Scanners[dag_node->m_ScannerIndex];
-                scan_input.m_ScratchAlloc = scratch;
-                scan_input.m_ScratchHeap = &self->m_Heap;
-                scan_input.m_FileName = dag_node->m_InputFiles[i].m_Filename;
-                scan_input.m_ScanCache = &self->m_ScanCache;
-                scan_input.m_SafeToScanBeforeDependenciesAreProduced = false;
-
-                ScanOutput scan_output;
-
-                // It looks like we're re-running the scanner here, but the scan results should all be cached already, so it
-                // should be fast.
-                if (ScanImplicitDeps(&self->m_StatCache, &scan_input, &scan_output))
-                {
-                    for (int i = 0, count = scan_output.m_IncludedFileCount; i < count; ++i)
-                    {
-                        const FileAndHash &path = scan_output.m_IncludedFiles[i];
-                        if (!HashSetLookup(&implicitDependencies, path.m_FilenameHash, path.m_Filename))
-                            HashSetInsert(&implicitDependencies, path.m_FilenameHash, path.m_Filename);
-                    }
-                }
-            }
+            BinarySegmentWriteUint32(array_seg, filenameHash);
+            WriteCommonStringPtr(array_seg, string_seg, filename, &shared_strings, scratch);
         }
 
         if (dag_node->m_ScannerIndex != -1)
         {
-            BinarySegmentWriteInt32(built_nodes_seg, implicitDependencies.m_RecordCount);
+            BinarySegmentWriteInt32(built_nodes_seg, runtime_node->m_ImplicitInputs.m_RecordCount);
             BinarySegmentWritePointer(built_nodes_seg, BinarySegmentPosition(array_seg));
 
-            HashSetWalk(&implicitDependencies, [=, &shared_strings](uint32_t index, uint32_t hash, const char *filename) {
+            HashSetWalk(&runtime_node->m_ImplicitInputs, [=, &shared_strings](uint32_t index, uint32_t hash, const char *filename) {
                 uint64_t timestamp = 0;
                 FileInfo fileInfo = StatCacheStat(&self->m_StatCache, filename, hash);
                 if (fileInfo.Exists())
                     timestamp = fileInfo.m_Timestamp;
 
                 BinarySegmentWriteUint64(array_seg, timestamp);
-
+                BinarySegmentWriteUint32(array_seg, hash);
                 WriteCommonStringPtr(array_seg, string_seg, filename, &shared_strings, scratch);
             });
-
-            HashSetDestroy(&implicitDependencies);
         }
         else
         {
             BinarySegmentWriteInt32(built_nodes_seg, 0);
             BinarySegmentWriteNullPointer(built_nodes_seg);
-        }
-
-        BinarySegmentWriteInt32(built_nodes_seg, runtime_node->m_GeneratedFilesIncludingVersionedFiles.m_Size);
-        BinarySegmentWritePointer(built_nodes_seg, BinarySegmentPosition(array_seg));
-        for(auto& pair: runtime_node->m_GeneratedFilesIncludingVersionedFiles)
-        {
-            WriteCommonStringPtr(array_seg, string_seg, pair.m_IncludingFile, &shared_strings, scratch);
-            WriteCommonStringPtr(array_seg, string_seg, pair.m_IncludedFile, &shared_strings, scratch);
-            BinarySegmentWriteUint32(array_seg, Djb2HashPath(pair.m_IncludedFile));
         }
 
         const Frozen::BuiltNode* built_node = runtime_node->m_BuiltNode;
@@ -1188,7 +1147,7 @@ bool DriverSaveAllBuiltNodes(Driver *self)
         for (int32_t i = 0; i < file_count; ++i)
         {
             BinarySegmentWriteUint64(array_seg, built_node->m_InputFiles[i].m_Timestamp);
-
+            BinarySegmentWriteUint32(array_seg, built_node->m_InputFiles[i].m_FilenameHash);
             WriteCommonStringPtr(array_seg, string_seg, built_node->m_InputFiles[i].m_Filename, &shared_strings, &self->m_Allocator);
         }
 
@@ -1198,17 +1157,8 @@ bool DriverSaveAllBuiltNodes(Driver *self)
         for (int32_t i = 0; i < file_count; ++i)
         {
             BinarySegmentWriteUint64(array_seg, built_node->m_ImplicitInputFiles[i].m_Timestamp);
-
+            BinarySegmentWriteUint32(array_seg, built_node->m_ImplicitInputFiles[i].m_FilenameHash);
             WriteCommonStringPtr(array_seg, string_seg, built_node->m_ImplicitInputFiles[i].m_Filename, &shared_strings, &self->m_Allocator);
-        }
-
-        BinarySegmentWriteInt32(built_nodes_seg, built_node->m_VersionedFilesIncludedByGeneratedFiles.GetCount());
-        BinarySegmentWritePointer(built_nodes_seg, BinarySegmentPosition(array_seg));
-        for(auto& pair: built_node->m_VersionedFilesIncludedByGeneratedFiles)
-        {
-            WriteCommonStringPtr(array_seg, string_seg, pair.m_IncludingFile, &shared_strings, &self->m_Allocator);
-            WriteCommonStringPtr(array_seg, string_seg, pair.m_IncludedFile.m_Filename.Get(), &shared_strings, &self->m_Allocator);
-            BinarySegmentWriteUint32(array_seg, pair.m_IncludedFile.m_FilenameHash);
         }
 
         int32_t dag_count = built_node->m_DagsWeHaveSeenThisNodeInPreviously.GetCount();
@@ -1230,8 +1180,8 @@ bool DriverSaveAllBuiltNodes(Driver *self)
         switch(runtime_node->m_BuildResult)
         {
             case NodeBuildResult::kDidNotRun:
-            case NodeBuildResult::kUpToDate:
                 return false;
+            case NodeBuildResult::kUpToDate:
             case NodeBuildResult::kRanSuccesfully:
             case NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun:
             case NodeBuildResult::kRanFailed:

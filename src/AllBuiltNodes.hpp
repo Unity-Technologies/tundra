@@ -11,17 +11,12 @@ namespace Frozen
 struct NodeInputFileData
 {
     uint64_t m_Timestamp;
+    uint32_t m_FilenameHash;
     FrozenString m_Filename;
 };
 #pragma pack(pop)
 
-static_assert(sizeof(NodeInputFileData) == 12, "struct layout");
-
-struct IncludingIncludedPair
-{
-    FrozenString m_IncludingFile;
-    FrozenFileAndHash m_IncludedFile;
-};
+static_assert(sizeof(NodeInputFileData) == 16, "struct layout");
 
 struct BuiltNode
 {
@@ -33,13 +28,12 @@ struct BuiltNode
     FrozenString m_Action;
     FrozenArray<NodeInputFileData> m_InputFiles;
     FrozenArray<NodeInputFileData> m_ImplicitInputFiles;
-    FrozenArray<IncludingIncludedPair> m_VersionedFilesIncludedByGeneratedFiles;
     FrozenArray<uint32_t> m_DagsWeHaveSeenThisNodeInPreviously;
 };
 
 struct AllBuiltNodes
 {
-    static const uint32_t MagicNumber = 0xc1a24bc2 ^ kTundraHashMagic;
+    static const uint32_t MagicNumber = 0x53532dc2 ^ kTundraHashMagic;
 
     uint32_t m_MagicNumber;
 

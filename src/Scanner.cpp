@@ -45,19 +45,6 @@ static bool IncludeSetAddNoDuplicateString(IncludeSet *self, const char *string,
     return true;
 }
 
-static bool IncludeSetAddDuplicateString(IncludeSet *self, const char *string, uint32_t hash)
-{
-    if (HashSetLookup(&self->m_HashTable, hash, string))
-    {
-        return false;
-    }
-
-    // Allocate a new cell
-    HashSetInsert(&self->m_HashTable, hash, StrDup(self->m_LinearAlloc, string));
-
-    return true;
-}
-
 static bool FindFile(
     StatCache *stat_cache,
     PathBuffer *buffer,
@@ -139,6 +126,7 @@ static void ScanFile(
     }
 }
 
+
 bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput *output, IncludeFilterCallback* includeFilterCallback)
 {
     auto invokeFilterCallback = [includeFilterCallback](const char* includingFile, const char* includedFile) -> bool
@@ -176,10 +164,13 @@ bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput 
 
         ComputeScanCacheKey(&scan_key, fn, input->m_ScannerConfig->m_ScannerGuid, input->m_SafeToScanBeforeDependenciesAreProduced);
 
-        ScanCacheLookupResult cache_result;
-
-        if (ScanCacheLookup(scan_cache, scan_key, info.m_Timestamp, &cache_result, scratch_alloc))
+        auto DoScanCacheLookupAndMakeResults = [&]() -> bool
         {
+            ScanCacheLookupResult cache_result;
+
+            if (!ScanCacheLookup(scan_cache, scan_key, info.m_Timestamp, &cache_result, scratch_alloc))
+                return false;
+
             int file_count = cache_result.m_IncludedFileCount;
             const FileAndHash *files = cache_result.m_IncludedFiles;
 
@@ -195,8 +186,10 @@ bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput 
                     }
                 }
             }
-        }
-        else
+            return true;
+        };
+
+        if (!DoScanCacheLookupAndMakeResults())
         {
             // Reset buffer
             BufferClear(&found_includes);
@@ -240,21 +233,11 @@ bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput 
 
             // Insert result into scan cache
             ScanCacheInsert(scan_cache, scan_key, info.m_Timestamp, found_includes.m_Storage, (int)found_includes.m_Size);
-
-            for (const char *file : found_includes)
-            {
-                if (invokeFilterCallback(fn, file))
-                {
-                    if (IncludeSetAddDuplicateString(&incset, file, Djb2HashPath(file)))
-                    {
-                        // This was a new file, schedule it for scanning as well.
-                        BufferAppendOne(&filename_stack, scratch_heap, file);
-                    }
-                }
-            }
-
             HeapFree(scratch_heap, buffer);
             fclose(f);
+
+            if (!DoScanCacheLookupAndMakeResults())
+                Croak("Failed to get results from scancache that we inserted just now.");
         }
     }
 
