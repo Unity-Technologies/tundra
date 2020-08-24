@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#if TUNDRA_WIN32
+#if defined(TUNDRA_WIN32)
 #include "DbgHelp.h"
 #endif
 
