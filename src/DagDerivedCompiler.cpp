@@ -114,9 +114,6 @@ struct CompileDagDerivedWorker
 
     void FindAllDependenciesAndSelfStoppingAtCacheableNodesFor(int dagNodeIndex, Buffer<int32_t>& resulting_dependencies, Buffer<int32_t>& resulting_dependencies_cacheable_themselves)
     {
-        std::function<const int32_t*(int)> funcToGetDependenciesForNode = [=](int index){return combinedDependenciesBuffers[index].begin();};
-        std::function<size_t(int)> funcToGetDependenciesCountForNode = [=](int index){return combinedDependenciesBuffers[index].m_Size;};
-
         std::function<bool(int,int)> filterAndCollectLeafInputCacheable = [&](int parentIndex, int childIndex)
         {
             if (IsLeafInputCacheable(dag->m_DagNodes[childIndex]))
@@ -129,7 +126,7 @@ struct CompileDagDerivedWorker
             return true;
         };
 
-        FindDependentNodesFromRootIndex(heap, dag, funcToGetDependenciesForNode, funcToGetDependenciesCountForNode, filterAndCollectLeafInputCacheable, dagNodeIndex, resulting_dependencies);
+        FindDependentNodesFromRootIndices(heap, dag, combinedDependenciesBuffers, &filterAndCollectLeafInputCacheable, &dagNodeIndex, 1, resulting_dependencies);
         BufferAppendOne(&resulting_dependencies, heap, dagNodeIndex);
     };
 

@@ -16,7 +16,8 @@ HashDigest CalculateLeafInputHashOffline(const Frozen::Dag* dag, std::function<c
         bool isCacheable = dag->m_DagNodes[childIndex].m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs;
         return !isCacheable;
     };
-    FindDependentNodesFromRootIndex(heap, dag, funcToGetDependenciesForNode, funcToGetDependenciesCounForNode, filterLeafInputCacheable, nodeIndex, all_dependent_nodes);
+
+    FindDependentNodesFromRootIndices(heap, dag, dagDerived, &filterLeafInputCacheable, &nodeIndex, 1, all_dependent_nodes);
 
     HashState hashState;
     HashInit(&hashState);

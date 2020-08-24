@@ -696,7 +696,7 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
 
     Buffer<int32_t> node_indices;
     BufferInitWithCapacity(&node_indices, heap, 1024);
-    FindDependentNodesFromRootIndices(heap, dag, self->m_DagDerivedData, &node_stack[0], node_stack.m_Size, node_indices);
+    FindDependentNodesFromRootIndices(heap, dag, self->m_DagDerivedData, nullptr, &node_stack[0], node_stack.m_Size, node_indices);
 
     int node_count = node_indices.m_Size;
     // Allocate space for nodes

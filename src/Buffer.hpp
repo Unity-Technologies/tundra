@@ -23,6 +23,10 @@ struct Buffer
     // support indexing
     T &operator[](size_t index) { return m_Storage[index]; }
     const T &operator[](size_t index) const { return m_Storage[index]; }
+
+    //accessors to make a Buffer have the same API as a FrozenArray, so it's possible to write code targetting both
+    size_t GetCount() { return m_Size; }
+    T* GetArray() { return m_Storage; }
 };
 
 template <typename T>
