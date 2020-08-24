@@ -3,17 +3,15 @@
 #include "Common.hpp"
 #include "Thread.hpp"
 #include "Mutex.hpp"
-
+#include "Atomic.hpp"
 #include <string.h>
 
-#if DEBUG_HEAP    
-#include <atomic>
-#endif
+#define DEBUG_HEAP 1
 
 struct MemAllocHeap
 {
 #if DEBUG_HEAP    
-    std::atomic_size_t m_Size;
+    uint64_t m_Size;
 #endif    
 };
 
