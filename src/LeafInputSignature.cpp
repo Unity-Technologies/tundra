@@ -12,6 +12,7 @@
 #include "AllBuiltNodes.hpp"
 #include "Atomic.hpp"
 #include <time.h>
+#include "DbgHelp.h"
 #if !TUNDRA_WIN32
 #include <unistd.h>
 #endif
@@ -157,13 +158,11 @@ static void CalculateLeafInputSignatureRuntime_Impl(
 
     HashFinalize(&hashState, &result->digest);
 
-    if (runtimeNode != nullptr)
-        if (AtomicCompareExchange((void**)&runtimeNode->m_CurrentLeafInputSignature, result, nullptr) != nullptr)
-            DestroyLeafInputSignatureData(heap, result);
+    if (runtimeNode == nullptr || AtomicCompareExchange((void**)&runtimeNode->m_CurrentLeafInputSignature, result, nullptr) != nullptr)
+        DestroyLeafInputSignatureData(heap, result);
 
     LinearAllocDestroy(&scanResults);
 }
-
 
 void DestroyLeafInputSignatureData(MemAllocHeap *heap, LeafInputSignatureData *data)
 {
@@ -328,6 +327,8 @@ bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLe
                 Croak("Unexpected build node result of dependent node while verifying headers");
         }
     }
+
+    HashSetDestroy(&alreadyFound);
 
     if (illegalIncludesToReport.m_Size > 0)
     {
