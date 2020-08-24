@@ -26,7 +26,7 @@ void *HeapAllocate(MemAllocHeap *heap, size_t size)
     print_trace();
 #endif
     *ptr = size;
-    heap->m_Size += size;
+    AtomicAdd(&heap->m_Size, size);
     return ptr + 1;
 #else
     return malloc(size);
@@ -43,7 +43,7 @@ void HeapFree(MemAllocHeap *heap, const void *_ptr)
 #ifdef LOG_ALLOC    
     printf("%p %p HeapFree %zu\n", heap, ptr, *ptr);
 #endif    
-    heap->m_Size -= *ptr;
+    AtomicAdd(&heap->m_Size, -*ptr);
 #endif    
     free(ptr);
 }
@@ -56,7 +56,7 @@ void *HeapReallocate(MemAllocHeap *heap, void *_ptr, size_t size)
 
     size_t* ptr = (size_t*)_ptr;
     ptr--;
-    heap->m_Size -= *ptr;
+    AtomicAdd(&heap->m_Size, -*ptr);
     size_t* new_ptr = (size_t*)realloc(ptr, size + sizeof(size_t));
 #ifdef LOG_ALLOC    
     printf("%p %p HeapFree (reallocate)\n", heap, ptr);
@@ -66,7 +66,7 @@ void *HeapReallocate(MemAllocHeap *heap, void *_ptr, size_t size)
         Croak("out of memory reallocating %d bytes at %p", (int)size, ptr);
 
     *new_ptr = size;
-    heap->m_Size += size;
+    AtomicAdd(&heap->m_Size, size);
     return new_ptr + 1;
 #else
     void* new_ptr = realloc(_ptr, size);

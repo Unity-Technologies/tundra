@@ -246,6 +246,7 @@ struct CompileDagDerivedWorker
 
             WriteIndexArray(dependentNodesWithScannersArray_seg, dependentNodesWithScanners);
             BufferDestroy(&dependentNodesWithScanners, heap);
+            BufferDestroy(&filesAffectedByScanners, heap);
         }
         BufferDestroy(&dependenciesAndSelf, heap);
     }

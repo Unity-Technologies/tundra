@@ -10,6 +10,7 @@
 #include "Exec.hpp"
 #include "NodeResultPrinting.hpp"
 #include "AllBuiltNodes.hpp"
+#include "Atomic.hpp"
 #include <time.h>
 #if !TUNDRA_WIN32
 #include <unistd.h>
@@ -21,7 +22,7 @@ static bool FilterOutGeneratedIncludedFiles(void* _userData, const char* includi
     return !IsFileGenerated((DagRuntimeData*)_userData, Djb2HashPath(includedFile), includedFile);
 }
 
-static HashDigest CalculateLeafInputSignatureRuntime_Impl(
+static void CalculateLeafInputSignatureRuntime_Impl(
     BuildQueue* buildQueue,
     const Frozen::DagNode* dagNode,
     RuntimeNode* runtimeNode,
@@ -55,17 +56,16 @@ static HashDigest CalculateLeafInputSignatureRuntime_Impl(
         auto& childRuntimeNode = runtimeNodesArray[childRuntimeNodeIndex];
         const auto& childDagNode = dag->m_DagNodes[dependentNodeThatIsCacheableItself];
 
-        if (childRuntimeNode.m_CurrentLeafInputSignature.m_Words64[0] == 0)
+        if (childRuntimeNode.m_CurrentLeafInputSignature == nullptr)
         {
-            //this is racy, but it should be okay(tm). It's possible the leaf input signature isn't stored yet, but another thread is already calculating it.
-            //in that case we calculate it too, and both threads will just store the same value.
-            childRuntimeNode.m_CurrentLeafInputSignature = CalculateLeafInputSignatureRuntime_Impl(buildQueue, &childDagNode, &childRuntimeNode, heap, scratch, profilerThreadId, nullptr);
+            CalculateLeafInputSignatureRuntime_Impl(buildQueue, &childDagNode, &childRuntimeNode, heap, scratch, profilerThreadId, nullptr);
+            CHECK(childRuntimeNode.m_CurrentLeafInputSignature != nullptr);
         }
 
         if (ingredient_stream)
         {
             char childLeafInputSignatureStr[kDigestStringSize];
-            DigestToString(childLeafInputSignatureStr, childRuntimeNode.m_CurrentLeafInputSignature);
+            DigestToString(childLeafInputSignatureStr, childRuntimeNode.m_CurrentLeafInputSignature->digest);
             fprintf(ingredient_stream, "cacheabledependentnode: %s %s\n", childLeafInputSignatureStr, childDagNode.m_Annotation.Get());
         }
         HashUpdate(&hashState, &childRuntimeNode.m_CurrentLeafInputSignature, sizeof(HashDigest));
@@ -79,11 +79,9 @@ static HashDigest CalculateLeafInputSignatureRuntime_Impl(
 
     const FrozenArray<FrozenFileAndHash>& leafInputs = dagDerived->LeafInputsFor(dagNode->m_DagNodeIndex);
 
-    HashSet<kFlagPathStrings> localExplicitLeafInputs;
-    HashSet<kFlagPathStrings> localImplicitLeafInputs;
-
-    auto& explicitLeafInputs = runtimeNode == nullptr ? localExplicitLeafInputs : runtimeNode->m_ExplicitLeafInputs;
-    auto& implicitLeafInputs = runtimeNode == nullptr ? localImplicitLeafInputs : runtimeNode->m_ImplicitLeafInputs;
+    auto result = (LeafInputSignatureData*)HeapAllocate(heap, sizeof(LeafInputSignatureData));
+    auto& explicitLeafInputs = result->m_ExplicitLeafInputs;
+    auto& implicitLeafInputs = result->m_ImplicitLeafInputs;
 
     HashSetInit(&explicitLeafInputs, heap);
     HashSetInit(&implicitLeafInputs, heap);
@@ -157,21 +155,24 @@ static HashDigest CalculateLeafInputSignatureRuntime_Impl(
         addFileContentsToHash(filename, hash, "implicitLeafInput");
     });
 
-    HashDigest result;
-    HashFinalize(&hashState, &result);
+    HashFinalize(&hashState, &result->digest);
 
-    if (runtimeNode == nullptr)
-    {
-        HashSetDestroy(&localExplicitLeafInputs);
-        HashSetDestroy(&localImplicitLeafInputs);
-    }
+    if (runtimeNode != nullptr)
+        if (AtomicCompareExchange((void**)&runtimeNode->m_CurrentLeafInputSignature, result, nullptr) != nullptr)
+            DestroyLeafInputSignatureData(heap, result);
 
     LinearAllocDestroy(&scanResults);
-
-    return result;
 }
 
-HashDigest CalculateLeafInputSignatureRuntime(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node, FILE* ingredient_stream)
+
+void DestroyLeafInputSignatureData(MemAllocHeap *heap, LeafInputSignatureData *data)
+{
+    HashSetDestroy(&data->m_ExplicitLeafInputs);
+    HashSetDestroy(&data->m_ImplicitLeafInputs);
+    HeapFree(heap, data);
+}
+
+void CalculateLeafInputSignatureRuntime(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node, FILE* ingredient_stream)
 {
     if (ingredient_stream)
     {
@@ -203,7 +204,8 @@ HashDigest CalculateLeafInputSignatureRuntime(BuildQueue* queue, ThreadState* th
 
     if (ingredient_stream)
         fprintf(ingredient_stream, "Hot hash ingredients:\n");
-    HashDigest res = CalculateLeafInputSignatureRuntime_Impl(
+
+   CalculateLeafInputSignatureRuntime_Impl(
             queue,
             node->m_DagNode,
             node,
@@ -211,11 +213,6 @@ HashDigest CalculateLeafInputSignatureRuntime(BuildQueue* queue, ThreadState* th
             &thread_state->m_ScratchAlloc,
             thread_state->m_ProfilerThreadId,
             ingredient_stream);
-
-    char digestString[kDigestStringSize];
-    DigestToString(digestString, res);
-
-    return res;
 }
 
 static const Frozen::DagNode& FindRequestedNode(BuildQueue* queue)
@@ -285,9 +282,9 @@ bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLe
             if (FindDagNodeForFile(&queue->m_Config.m_DagRuntimeData, hash, filename, &generatingNode))
                 return true;
 
-            if (HashSetLookup(&node->m_ExplicitLeafInputs, hash,filename))
+            if (HashSetLookup(&node->m_CurrentLeafInputSignature->m_ExplicitLeafInputs, hash,filename))
                 return true;
-            if (HashSetLookup(&node->m_ImplicitLeafInputs, hash,filename))
+            if (HashSetLookup(&node->m_CurrentLeafInputSignature->m_ImplicitLeafInputs, hash,filename))
                 return true;
             return false;
         };

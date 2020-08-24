@@ -14,7 +14,7 @@ inline uint32_t AtomicIncrement(uint32_t *value)
     return InterlockedIncrement((long *)value);
 }
 
-inline uint64_t AtomicAdd(uint64_t *ptr, uint64_t value)
+inline uint64_t AtomicAdd(uint64_t *ptr, int64_t value)
 {
 #if defined(TUNDRA_WIN32_MINGW)
     // Crappy mingw doesn't have InterlockedExchangeAdd64
@@ -39,12 +39,21 @@ inline uint64_t AtomicAdd(uint64_t *ptr, uint64_t value)
 #endif // TUNDRA_WIN32_MINGW
 }
 
+inline void* AtomicCompareExchange(void **ptr, void* newPtr, void* comparePtr)
+{
+#if defined(TUNDRA_WIN32_MINGW)
+    #error not implemented
+#else
+    return InterlockedCompareExchangePointer(ptr, newPtr, comparePtr);
+#endif    
+}
+
 #elif defined(__GNUC__)
 inline uint32_t AtomicIncrement(uint32_t *value)
 {
     return __sync_add_and_fetch(value, 1);
 }
-inline uint64_t AtomicAdd(uint64_t *ptr, uint64_t value)
+inline uint64_t AtomicAdd(uint64_t *ptr, int64_t value)
 {
 #if defined(__powerpc__)
     // Not implemented on PPC. I only have a single core PPC anyway.
@@ -53,6 +62,11 @@ inline uint64_t AtomicAdd(uint64_t *ptr, uint64_t value)
 #else
     return __sync_add_and_fetch(ptr, value);
 #endif
+}
+
+inline void* AtomicCompareExchange(void **ptr, void* newPtr, void* comparePtr)
+{
+    return __sync_val_compare_and_swap(ptr, comparePtr, newPtr);
 }
 #endif // __GNUC__
 

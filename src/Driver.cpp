@@ -812,10 +812,8 @@ void DriverDestroy(Driver *self)
 
     for (auto &node: self->m_RuntimeNodes)
     {
-        if (HashSetIsInitialized(&node.m_ExplicitLeafInputs))
-            HashSetDestroy(&node.m_ExplicitLeafInputs);
-        if (HashSetIsInitialized(&node.m_ImplicitLeafInputs))
-            HashSetDestroy(&node.m_ImplicitLeafInputs);
+        if (node.m_CurrentLeafInputSignature != nullptr)
+            DestroyLeafInputSignatureData(&self->m_Heap, node.m_CurrentLeafInputSignature);
         if (HashSetIsInitialized(&node.m_ImplicitInputs))
             HashSetDestroy(&node.m_ImplicitInputs);
     }
@@ -1089,7 +1087,13 @@ bool DriverSaveAllBuiltNodes(Driver *self)
 
         bool nodeWasBuiltSuccessfully = runtime_node->m_BuildResult != NodeBuildResult::kRanFailed;
 
-        save_node_sharedcode(nodeWasBuiltSuccessfully, &runtime_node->m_CurrentInputSignature, &runtime_node->m_CurrentLeafInputSignature, runtime_node->m_DagNode, guid, segments, runtime_node->m_DynamicallyDiscoveredOutputFiles);
+        HashDigest leafInputSignatureDigest;
+        if (runtime_node->m_CurrentLeafInputSignature)
+            leafInputSignatureDigest = runtime_node->m_CurrentLeafInputSignature->digest;
+        else
+            memset(&leafInputSignatureDigest, 0, sizeof(leafInputSignatureDigest));
+
+        save_node_sharedcode(nodeWasBuiltSuccessfully, &runtime_node->m_CurrentInputSignature, &leafInputSignatureDigest, runtime_node->m_DagNode, guid, segments, runtime_node->m_DynamicallyDiscoveredOutputFiles);
 
         int32_t file_count = dag_node->m_InputFiles.GetCount();
         BinarySegmentWriteInt32(built_nodes_seg, file_count);

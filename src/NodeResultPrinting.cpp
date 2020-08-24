@@ -3,6 +3,7 @@
 #include "BuildQueue.hpp"
 #include "Exec.hpp"
 #include "JsonWriter.hpp"
+#include "LeafInputSignature.hpp"
 #include <stdio.h>
 #include <sstream>
 #include <ctime>
@@ -423,7 +424,7 @@ static void PrintCacheOperationIntoStructuredLog(ThreadState* thread_state, Runt
 
         JsonWriteKeyName(&msg, "leafInputSignature");
         char hash[kDigestStringSize];
-        DigestToString(hash, node->m_CurrentLeafInputSignature);
+        DigestToString(hash, node->m_CurrentLeafInputSignature->digest);
         JsonWriteValueString(&msg, hash);
 
         JsonWriteEndObject(&msg);
@@ -447,7 +448,7 @@ void PrintCacheHit(BuildQueue* queue, ThreadState *thread_state, double duration
 
     char buffer[1024];
     char hash[kDigestStringSize];
-    DigestToString(hash, node->m_CurrentLeafInputSignature);
+    DigestToString(hash, node->m_CurrentLeafInputSignature->digest);
     int written = snprintf(buffer, sizeof(buffer), "%s [CacheHit %s]", node->m_DagNode->m_Annotation.Get(), hash);
     if (written >0 && written < sizeof(buffer))
         PrintMessage(MessageStatusLevel::Success, queue->m_FinishedNodeCount, queue->m_AmountOfNodesEverQueued, duration, buffer);
