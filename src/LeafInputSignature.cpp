@@ -12,7 +12,7 @@
 #include "AllBuiltNodes.hpp"
 #include "Atomic.hpp"
 #include <time.h>
-#include "DbgHelp.h"
+
 #if !TUNDRA_WIN32
 #include <unistd.h>
 #endif
