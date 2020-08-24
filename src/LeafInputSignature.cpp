@@ -68,7 +68,7 @@ static void CalculateLeafInputSignatureRuntime_Impl(
             DigestToString(childLeafInputSignatureStr, childRuntimeNode.m_CurrentLeafInputSignature->digest);
             fprintf(ingredient_stream, "cacheabledependentnode: %s %s\n", childLeafInputSignatureStr, childDagNode.m_Annotation.Get());
         }
-        HashUpdate(&hashState, &childRuntimeNode.m_CurrentLeafInputSignature, sizeof(HashDigest));
+        HashAddHashDigest(&hashState, childRuntimeNode.m_CurrentLeafInputSignature->digest);
     }
 
     //starting the profiler scope late here, because we do not support nested profiler scope, and at the top of this function we recurse.
