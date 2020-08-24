@@ -14,6 +14,6 @@ struct MemAllocHeap;
 struct BuildQueue;
 struct Driver;
 
-HashDigest CalculateLeafInputSignatureRuntime(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node);
+HashDigest CalculateLeafInputSignatureRuntime(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node, FILE* ingredient_stream);
 bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLeafInputs(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node, const Frozen::DagDerived* dagDerived);
-void PrintLeafInputSignature(Driver* driver, const char **argv, int argc);
+void PrintLeafInputSignature(BuildQueue* buildQueue);

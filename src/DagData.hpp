@@ -165,7 +165,6 @@ struct Dag
 
     int32_t m_DaysToKeepUnreferencedNodesAround;
 
-    FrozenString m_CacheSignatureDirectoryName;
     FrozenString m_StateFileName;
     FrozenString m_StateFileNameTmp;
     FrozenString m_ScanCacheFileName;

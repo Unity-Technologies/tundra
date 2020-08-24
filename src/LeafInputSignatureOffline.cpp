@@ -1,11 +1,14 @@
 #include "LeafInputSignatureOffline.hpp"
 #include "Hash.hpp"
 #include "DagData.hpp"
-
+#include "BuildQueue.hpp"
 
 //This function calculates the offline part of the signature, which we store in the dag-derived file
-HashDigest CalculateLeafInputHashOffline(const Frozen::Dag* dag, std::function<const int32_t*(int)>& funcToGetDependenciesForNode, std::function<size_t(int)>& funcToGetDependenciesCounForNode, int32_t nodeIndex, MemAllocHeap* heap, FILE* ingredient_stream)
+HashDigest CalculateLeafInputHashOffline(const BuildQueueConfig& queueConfig, int32_t nodeIndex, MemAllocHeap* heap, FILE* ingredient_stream)
 {
+    auto& dag = queueConfig.m_Dag;
+    auto& dagDerived = queueConfig.m_DagDerived;
+
     HashDigest hashResult = {};
 
     Buffer<int32_t> all_dependent_nodes;

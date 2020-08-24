@@ -23,6 +23,7 @@
 #include "DynamicOutputDirectories.hpp"
 #include "PathUtil.hpp"
 #include "CacheClient.hpp"
+#include "LeafInputSignature.hpp"
 
 #include <time.h>
 #include <stdio.h>
@@ -681,10 +682,12 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
     BufferInitWithCapacity(&node_stack, heap, 1024);
 
     DriverSelectNodes(dag, targets, target_count, &node_stack, heap);
+    int explicitelyRequestedCount = node_stack.m_Size;
 
     for (int i = 0; i < node_stack.m_Size; ++i)
     {
         const Frozen::DagNode *dag_node = dag_nodes + node_stack[i];
+
         for (auto usageDep : dag_node->m_DependenciesConsumedDuringUsageOnly)
         {
             if (!BufferContains(&node_stack, usageDep))
@@ -714,7 +717,11 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
         for (int j = 0; j < node_stack.m_Size; ++j)
         {
             if (node_indices[i] == node_stack[j])
+            {
                 RuntimeNodeSetExplicitlyRequested(&out_nodes[i]);
+                if (j>=explicitelyRequestedCount)
+                    RuntimeNodeSetExplicitlyRequestedThroughUseDependency(&out_nodes[i]);
+            }
         }
     }
 
@@ -898,6 +905,12 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count)
 
     BuildResult::Enum build_result = BuildResult::kOk;
 
+    if (self->m_Options.m_JustPrintLeafInputSignature)
+    {
+        PrintLeafInputSignature(&build_queue);
+        goto leave;
+    }
+
     build_result = BuildQueueBuild(&build_queue, &self->m_Allocator);
 
     if (self->m_Options.m_DebugSigning)
@@ -908,6 +921,7 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count)
 
     *out_finished_node_count = build_queue.m_FinishedNodeCount;
 
+leave:
     // Shut down build queue
     BuildQueueDestroy(&build_queue);
 

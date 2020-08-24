@@ -248,24 +248,6 @@ struct CompileDagDerivedWorker
             BufferDestroy(&dependentNodesWithScanners, heap);
         }
         BufferDestroy(&dependenciesAndSelf, heap);
-
-
-        {  //write out offline leaf input hash parts
-            char path[kMaxPathLength];
-            snprintf(path, sizeof(path), "%s/offline-%d", dag->m_CacheSignatureDirectoryName.Get(), node.m_DagNodeIndex);
-            PathBuffer output;
-            PathInit(&output, path);
-            MakeDirectoriesForFile(stat_cache, output);
-
-            FILE *sig = fopen(path, "w");
-            if (sig == NULL)
-                CroakErrno("Failed opening offline signature ingredients for writing.");
-
-            std::function<const int32_t*(int)> funcToGetDependenciesForNode = [=](int index){return combinedDependenciesBuffers[index].begin();};
-            std::function<size_t(int)> funcToGetDependenciesCountForNode = [=](int index){return combinedDependenciesBuffers[index].m_Size;};
-            BinarySegmentWriteHashDigest(leafInputHashOfflineArray_seg, CalculateLeafInputHashOffline(dag, funcToGetDependenciesForNode, funcToGetDependenciesCountForNode, node.m_DagNodeIndex, heap, sig));
-            fclose(sig);
-        }
     }
 
 

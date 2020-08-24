@@ -175,7 +175,6 @@ static void FinishNode(BuildQueue* queue, RuntimeNode* node)
     EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(queue, node);
 }
 
-
 static bool IsNodeCacheableByLeafInputsAndCachingEnabled(BuildQueue* queue, RuntimeNode* node)
 {
     if (!queue->m_Config.m_AttemptCacheReads && !queue->m_Config.m_AttemptCacheWrites)
@@ -183,6 +182,38 @@ static bool IsNodeCacheableByLeafInputsAndCachingEnabled(BuildQueue* queue, Runt
     return 0 != (node->m_DagNode->m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs);
 }
 
+static void AttemptCacheWrite(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node)
+{
+    uint64_t time_exec_started = TimerGet();
+
+    char path[kMaxPathLength];
+    char digestString[kDigestStringSize];
+    DigestToString(digestString, node->m_CurrentLeafInputSignature);
+    snprintf(path, sizeof(path), "%s", digestString);
+    FILE *sig = fopen(path, "w");
+    if (sig == NULL)
+    {
+        printf("Failed to open file for signature ingredient writing. Skipping CacheWrite.\n");
+        return;
+    }
+
+    //we already calculated the leaf input signature before, but we'll do it again because now we want to have the ingredient stream written out to disk.
+    HashDigest digest = CalculateLeafInputSignatureRuntime(queue, thread_state, node, sig);
+    if (digest != node->m_CurrentLeafInputSignature)
+        Croak("Calculating leaf input signature the second time returned a different value from the first time.");
+
+    auto writeResult = CacheClient::AttemptWrite(queue->m_Config.m_Dag, node->m_DagNode, node->m_CurrentLeafInputSignature, queue->m_Config.m_StatCache, &queue->m_Lock, thread_state, path);
+
+    fclose(sig);
+    remove(path);
+
+    uint64_t now = TimerGet();
+    double duration = TimerDiffSeconds(time_exec_started, now);
+
+    MutexLock(&queue->m_Lock);
+    PrintMessage(writeResult == CacheResult::Success ? MessageStatusLevel::Success : MessageStatusLevel::Warning, duration, "%s [CacheWrite %s]", node->m_DagNode->m_Annotation.Get(), digestString);
+    MutexUnlock(&queue->m_Lock);
+}
 
 static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, Mutex *queue_lock, ThreadState* thread_state, StatCache* stat_cache, const Frozen::DagDerived* dagDerived)
 {
@@ -199,27 +230,13 @@ static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, M
     if (!haveToRunAction)
         return NodeBuildResult::kUpToDate;
 
-
     NodeBuildResult::Enum runActionResult = RunAction(queue, thread_state, node, queue_lock);
 
     if (runActionResult == NodeBuildResult::kRanSuccesfully && queue->m_Config.m_AttemptCacheWrites && IsNodeCacheableByLeafInputsAndCachingEnabled(queue,node))
-    {
-        uint64_t time_exec_started = TimerGet();
-        auto writeResult = CacheClient::AttemptWrite(queue->m_Config.m_Dag, node->m_DagNode, node->m_CurrentLeafInputSignature, stat_cache, queue_lock, thread_state);
-        uint64_t now = TimerGet();
-        double duration = TimerDiffSeconds(time_exec_started, now);
-
-        MutexLock(&queue->m_Lock);
-        char digestString[kDigestStringSize];
-        DigestToString(digestString, node->m_CurrentLeafInputSignature);
-
-        PrintMessage(writeResult == CacheResult::Success ? MessageStatusLevel::Success : MessageStatusLevel::Warning, duration, "%s [CacheWrite %s]", node->m_DagNode->m_Annotation.Get(), digestString);
-        MutexUnlock(&queue->m_Lock);
-    }
+        AttemptCacheWrite(queue,thread_state,node);
 
     return runActionResult;
 }
-
 
 static bool AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(RuntimeNode* node, BuildQueue* queue, ThreadState* thread_state)
 {
@@ -345,7 +362,7 @@ static void ProcessNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
     {
         if (!RuntimeNodeHasAttemptedCacheLookup(node))
         {
-            HashDigest currentLeafInputSignature = CalculateLeafInputSignatureRuntime(queue, thread_state, node);
+            HashDigest currentLeafInputSignature = CalculateLeafInputSignatureRuntime(queue, thread_state, node, nullptr);
             node->m_CurrentLeafInputSignature = currentLeafInputSignature;
         }
 

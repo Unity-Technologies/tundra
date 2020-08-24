@@ -465,13 +465,6 @@ int main(int argc, char *argv[])
         goto leave;
     }
 
-    if (driver.m_Options.m_JustPrintLeafInputSignature)
-    {
-        PrintLeafInputSignature(&driver, (const char **)argv, argc);
-        build_result = BuildResult::kOk;
-        goto leave;
-    }
-
     DriverRemoveStaleOutputs(&driver);
 
     build_result = DriverBuild(&driver, &finished_node_count);
