@@ -337,6 +337,7 @@ void PrintLeafInputSignature(Driver* driver, const char **argv, int argc)
 
     DagRuntimeDataDestroy(&runtimeData);
     LinearAllocDestroy(&scratch);
+    BufferDestroy(&requestedNodes, &driver->m_Heap);
 }
 
 struct HeaderValidationError
