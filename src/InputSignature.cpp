@@ -324,7 +324,7 @@ static bool CalculateInputSignature(BuildQueue* queue, ThreadState* thread_state
     // implicit inputs, both to ensure we have no duplicate entries, and also so we can sort all the inputs before we
     // add them to the signature.
     if (scanner)
-        HashSetInit(&node->m_ImplicitInputs, &thread_state->m_LocalHeap);
+        HashSetInit(&node->m_ImplicitInputs, queue->m_Config.m_Heap);
 
     bool force_use_timestamp = dagnode->m_Flags & Frozen::DagNode::kFlagBanContentDigestForInputs;
 
