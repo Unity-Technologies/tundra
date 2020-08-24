@@ -1087,11 +1087,9 @@ bool DriverSaveAllBuiltNodes(Driver *self)
 
         bool nodeWasBuiltSuccessfully = runtime_node->m_BuildResult != NodeBuildResult::kRanFailed;
 
-        HashDigest leafInputSignatureDigest;
+        HashDigest leafInputSignatureDigest = {};
         if (runtime_node->m_CurrentLeafInputSignature)
             leafInputSignatureDigest = runtime_node->m_CurrentLeafInputSignature->digest;
-        else
-            memset(&leafInputSignatureDigest, 0, sizeof(leafInputSignatureDigest));
 
         save_node_sharedcode(nodeWasBuiltSuccessfully, &runtime_node->m_CurrentInputSignature, &leafInputSignatureDigest, runtime_node->m_DagNode, guid, segments, runtime_node->m_DynamicallyDiscoveredOutputFiles);
 
