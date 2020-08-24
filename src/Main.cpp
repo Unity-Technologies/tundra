@@ -550,6 +550,8 @@ leave:
 
     SetStructuredLogFileName(nullptr);
 
+    HeapVerifyNoLeaks();
+
     return build_result;
 
     // Match up nodes to nodes in the build state
