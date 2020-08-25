@@ -13,7 +13,10 @@ void HeapDestroy(MemAllocHeap *heap)
 {
 #if DEBUG_HEAP    
     if (heap->m_Size != 0)
-        Croak("Destroying heap %p which still contains %zu bytes of allocated memory, which indicates a memory leak.", heap, (size_t)heap->m_Size);
+    {
+        if (getenv("BEE_ENABLE_TUNDRA_HEAP_VALIDATION"))
+            Croak("Destroying heap %p which still contains %zu bytes of allocated memory, which indicates a memory leak.", heap, (size_t)heap->m_Size);
+    }
 #endif        
 }
 
