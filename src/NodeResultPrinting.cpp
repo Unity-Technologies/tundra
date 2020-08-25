@@ -456,6 +456,22 @@ void PrintCacheHit(BuildQueue* queue, ThreadState *thread_state, double duration
         PrintMessage(MessageStatusLevel::Success, queue->m_FinishedNodeCount, queue->m_AmountOfNodesEverQueued, duration, buffer);
 }
 
+
+
+static char *StrDupN(MemAllocHeap *allocator, const char *str, size_t len)
+{
+    size_t sz = len + 1;
+    char *buffer = static_cast<char *>(HeapAllocate(allocator, sz));
+    memcpy(buffer, str, sz - 1);
+    buffer[sz - 1] = '\0';
+    return buffer;
+}
+
+static char *StrDup(MemAllocHeap *allocator, const char *str)
+{
+    return StrDupN(allocator, str, strlen(str));
+}
+
 void PrintNodeResult(
     ExecResult *result,
     const Frozen::DagNode *node_data,
