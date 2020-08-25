@@ -20,7 +20,7 @@ namespace CacheResult
 struct CacheClient
 {
     static CacheResult::Enum AttemptRead(const Frozen::Dag* dag, const Frozen::DagNode* dagNode, HashDigest signature, StatCache* stat_cache, Mutex* queue_lock, ThreadState* thread_state);
-    static CacheResult::Enum AttemptWrite(const Frozen::Dag* dag, const Frozen::DagNode* dagNode, HashDigest signature, StatCache* stat_cache, Mutex* queue_lock, ThreadState* thread_state);
+    static CacheResult::Enum AttemptWrite(const Frozen::Dag* dag, const Frozen::DagNode* dagNode, HashDigest signature, StatCache* stat_cache, Mutex* queue_lock, ThreadState* thread_state, const char* ingredients_file);
 };
 
 void GetCachingBehaviourSettingsFromEnvironment(bool* attemptReads, bool* attemptWrites);

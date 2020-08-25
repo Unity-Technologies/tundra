@@ -1,8 +1,8 @@
 #pragma once
 #include "Hash.hpp"
-#include "HashTable.hpp"
 #include "Buffer.hpp"
 #include <functional>
+#include "HashTable.hpp"
 
 namespace Frozen
 {
@@ -23,6 +23,7 @@ struct LeafInputSignatureData
 };
 
 void DestroyLeafInputSignatureData(MemAllocHeap *heap, LeafInputSignatureData *data);
-void CalculateLeafInputSignature(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node);
+
+void CalculateLeafInputSignatureRuntime(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node, FILE* ingredient_stream);
 bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLeafInputs(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node, const Frozen::DagDerived* dagDerived);
-void PrintLeafInputSignature(Driver* driver, const char **argv, int argc);
+void PrintLeafInputSignature(BuildQueue* buildQueue);

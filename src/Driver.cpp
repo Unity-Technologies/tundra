@@ -682,10 +682,12 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
     BufferInitWithCapacity(&node_stack, heap, 1024);
 
     DriverSelectNodes(dag, targets, target_count, &node_stack, heap);
+    int explicitelyRequestedCount = node_stack.m_Size;
 
     for (int i = 0; i < node_stack.m_Size; ++i)
     {
         const Frozen::DagNode *dag_node = dag_nodes + node_stack[i];
+
         for (auto usageDep : dag_node->m_DependenciesConsumedDuringUsageOnly)
         {
             if (!BufferContains(&node_stack, usageDep))
@@ -697,7 +699,7 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
 
     Buffer<int32_t> node_indices;
     BufferInitWithCapacity(&node_indices, heap, 1024);
-    FindDependentNodesFromRootIndices(heap, dag, self->m_DagDerivedData, &node_stack[0], node_stack.m_Size, node_indices);
+    FindDependentNodesFromRootIndices(heap, dag, self->m_DagDerivedData, nullptr, &node_stack[0], node_stack.m_Size, node_indices);
 
     int node_count = node_indices.m_Size;
     // Allocate space for nodes
@@ -715,7 +717,11 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
         for (int j = 0; j < node_stack.m_Size; ++j)
         {
             if (node_indices[i] == node_stack[j])
+            {
                 RuntimeNodeSetExplicitlyRequested(&out_nodes[i]);
+                if (j>=explicitelyRequestedCount)
+                    RuntimeNodeSetExplicitlyRequestedThroughUseDependency(&out_nodes[i]);
+            }
         }
     }
 
@@ -897,6 +903,12 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count)
 
     BuildResult::Enum build_result = BuildResult::kOk;
 
+    if (self->m_Options.m_JustPrintLeafInputSignature)
+    {
+        PrintLeafInputSignature(&build_queue);
+        goto leave;
+    }
+
     build_result = BuildQueueBuild(&build_queue, &self->m_Allocator);
 
     if (self->m_Options.m_DebugSigning)
@@ -907,6 +919,7 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count)
 
     *out_finished_node_count = build_queue.m_FinishedNodeCount;
 
+leave:
     // Shut down build queue
     BuildQueueDestroy(&build_queue);
 
@@ -1074,11 +1087,9 @@ bool DriverSaveAllBuiltNodes(Driver *self)
 
         bool nodeWasBuiltSuccessfully = runtime_node->m_BuildResult != NodeBuildResult::kRanFailed;
 
-        HashDigest leafInputSignatureDigest;
+        HashDigest leafInputSignatureDigest = {};
         if (runtime_node->m_CurrentLeafInputSignature)
             leafInputSignatureDigest = runtime_node->m_CurrentLeafInputSignature->digest;
-        else
-            memset(&leafInputSignatureDigest, 0, sizeof(leafInputSignatureDigest));
 
         save_node_sharedcode(nodeWasBuiltSuccessfully, &runtime_node->m_CurrentInputSignature, &leafInputSignatureDigest, runtime_node->m_DagNode, guid, segments, runtime_node->m_DynamicallyDiscoveredOutputFiles);
 

@@ -175,7 +175,6 @@ static void FinishNode(BuildQueue* queue, RuntimeNode* node)
     EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(queue, node);
 }
 
-
 static bool IsNodeCacheableByLeafInputsAndCachingEnabled(BuildQueue* queue, RuntimeNode* node)
 {
     if (!queue->m_Config.m_AttemptCacheReads && !queue->m_Config.m_AttemptCacheWrites)
@@ -183,11 +182,42 @@ static bool IsNodeCacheableByLeafInputsAndCachingEnabled(BuildQueue* queue, Runt
     return 0 != (node->m_DagNode->m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs);
 }
 
+static void AttemptCacheWrite(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node)
+{
+    uint64_t time_exec_started = TimerGet();
+
+    char path[kMaxPathLength];
+    char digestString[kDigestStringSize];
+    DigestToString(digestString, node->m_CurrentLeafInputSignature->digest);
+    snprintf(path, sizeof(path), "%s", digestString);
+    FILE *sig = fopen(path, "w");
+    if (sig == NULL)
+    {
+        printf("Failed to open file for signature ingredient writing. Skipping CacheWrite.\n");
+        return;
+    }
+
+    //we already calculated the leaf input signature before, but we'll do it again because now we want to have the ingredient stream written out to disk.
+    CalculateLeafInputSignatureRuntime(queue, thread_state, node, sig);
+
+    auto writeResult = CacheClient::AttemptWrite(queue->m_Config.m_Dag, node->m_DagNode, node->m_CurrentLeafInputSignature->digest, queue->m_Config.m_StatCache, &queue->m_Lock, thread_state, path);
+
+    fclose(sig);
+    remove(path);
+
+    uint64_t now = TimerGet();
+    double duration = TimerDiffSeconds(time_exec_started, now);
+
+    MutexLock(&queue->m_Lock);
+    PrintMessage(writeResult == CacheResult::Success ? MessageStatusLevel::Success : MessageStatusLevel::Warning, duration, "%s [CacheWrite %s]", node->m_DagNode->m_Annotation.Get(), digestString);
+    MutexUnlock(&queue->m_Lock);
+}
 
 static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, Mutex *queue_lock, ThreadState* thread_state, StatCache* stat_cache, const Frozen::DagDerived* dagDerived)
 {
     if (IsNodeCacheableByLeafInputsAndCachingEnabled(queue,node))
     {
+        CHECK(node->m_CurrentLeafInputSignature != nullptr);
         bool stillTheSame = node->m_BuiltNode && node->m_BuiltNode->m_WasBuiltSuccessfully && node->m_BuiltNode->m_LeafInputSignature == node->m_CurrentLeafInputSignature->digest;
 
         if (!stillTheSame)
@@ -199,27 +229,13 @@ static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, M
     if (!haveToRunAction)
         return NodeBuildResult::kUpToDate;
 
-
     NodeBuildResult::Enum runActionResult = RunAction(queue, thread_state, node, queue_lock);
 
     if (runActionResult == NodeBuildResult::kRanSuccesfully && queue->m_Config.m_AttemptCacheWrites && IsNodeCacheableByLeafInputsAndCachingEnabled(queue,node))
-    {
-        uint64_t time_exec_started = TimerGet();
-        auto writeResult = CacheClient::AttemptWrite(queue->m_Config.m_Dag, node->m_DagNode, node->m_CurrentLeafInputSignature->digest, stat_cache, queue_lock, thread_state);
-        uint64_t now = TimerGet();
-        double duration = TimerDiffSeconds(time_exec_started, now);
-
-        MutexLock(&queue->m_Lock);
-        char digestString[kDigestStringSize];
-        DigestToString(digestString, node->m_CurrentLeafInputSignature->digest);
-
-        PrintMessage(writeResult == CacheResult::Success ? MessageStatusLevel::Success : MessageStatusLevel::Warning, duration, "%s [CacheWrite %s]", node->m_DagNode->m_Annotation.Get(), digestString);
-        MutexUnlock(&queue->m_Lock);
-    }
+        AttemptCacheWrite(queue,thread_state,node);
 
     return runActionResult;
 }
-
 
 static bool AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(RuntimeNode* node, BuildQueue* queue, ThreadState* thread_state)
 {
@@ -335,8 +351,6 @@ static void ProcessNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
 {
     Log(kSpam, "T=%d, Advancing %s\n", thread_state->m_ThreadIndex, node->m_DagNode->m_Annotation.Get());
 
-
-
     CHECK(!node->m_Finished);
     CHECK(RuntimeNodeIsActive(node));
     CHECK(!RuntimeNodeIsQueued(node));
@@ -347,7 +361,7 @@ static void ProcessNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
         {
             // Maybe the node's signature was already calculated as part of a parent's signature, then we can skip.
             if (node->m_CurrentLeafInputSignature == nullptr)
-                CalculateLeafInputSignature(queue, thread_state, node);
+                CalculateLeafInputSignatureRuntime(queue, thread_state, node, nullptr);
         }
 
         if (queue->m_Config.m_AttemptCacheReads)

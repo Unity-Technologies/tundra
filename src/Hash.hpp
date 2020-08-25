@@ -192,6 +192,9 @@ inline void HashAddPath(HashState *self, const char *path)
 // Add binary integer data to be hashed.
 void HashAddInteger(HashState *h, uint64_t value);
 
+// Add binary integer data to be hashed.
+void HashAddHashDigest(HashState *h, const HashDigest& value);
+
 // Add a separator (zero byte) to keep runs of separate data apart.
 void HashAddSeparator(HashState *h);
 

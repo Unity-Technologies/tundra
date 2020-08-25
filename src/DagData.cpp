@@ -2,8 +2,8 @@
 #include "Buffer.hpp"
 #include "HashTable.hpp"
 
-
-static void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* dag, std::function<const int32_t*(int)>& funcToGetDependenciesForNode, std::function<size_t(int)>& funcToGetDependenciesCountForNode, std::function<bool(int,int)>& shouldProcess, int32_t* searchRootIndices, int32_t searchRootCount, Buffer<int32_t>& results)
+template<typename TDependenciesLookup>
+void FindDependentNodesFromRootIndices_Shared(MemAllocHeap* heap, const Frozen::Dag* dag, TDependenciesLookup dependenciesLookup, std::function<bool(int,int)>* shouldProcess, int32_t* searchRootIndices, int32_t searchRootCount, Buffer<int32_t>& results)
 {
     Buffer<int32_t> node_stack;
     BufferInitWithCapacity(&node_stack, heap, 1024);
@@ -29,14 +29,9 @@ static void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::
             ++node_count;
 
             // Stash node dependencies on the work queue to keep iterating
-
-            int dependencyCount = funcToGetDependenciesCountForNode(dag_index);
-            const int32_t* dependencyArray = funcToGetDependenciesForNode(dag_index);
-
-            for (int i=0; i!=dependencyCount; i++)
+            for(uint32_t childIndex: dependenciesLookup.For(dag_index))
             {
-                int childIndex = dependencyArray[i];
-                if (shouldProcess(dag_index, childIndex))
+                if (shouldProcess == nullptr || (*shouldProcess)(dag_index, childIndex))
                     BufferAppendOne(&node_stack, heap, childIndex);
             }
         }
@@ -47,22 +42,31 @@ static void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::
     node_visited_bits = nullptr;
 }
 
-void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* dag, const Frozen::DagDerived* dagDerived, int32_t* searchRootIndices, int32_t searchRootCount, Buffer<int32_t>& results)
+void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* dag, const Frozen::DagDerived* dagDerived, std::function<bool(int,int)>* shouldProcess, int32_t* searchRootIndices, int32_t searchRootCount, Buffer<int32_t>& results)
 {
-    std::function<const int32_t*(int)> funcToGetDependenciesForNode = [=](int index){return dagDerived->m_Dependencies[index].GetArray();};
-    std::function<size_t(int)> funcToGetDependenciesCountForNode = [=](int index){return dagDerived->m_Dependencies[index].GetCount();};
-    std::function<bool(int,int)> alwaysTrue = [](int,int) { return true; };
-    FindDependentNodesFromRootIndices(heap, dag, funcToGetDependenciesForNode, funcToGetDependenciesCountForNode, alwaysTrue, searchRootIndices, searchRootCount, results);
+    struct LookupDependenciesFromFrozen
+    {
+        const Frozen::DagDerived* dagDerived;
+        const FrozenArray<int32_t>& For(int i) { return dagDerived->m_Dependencies[i];}
+    } dependencyLookup;
+
+    dependencyLookup.dagDerived = dagDerived;
+
+    FindDependentNodesFromRootIndices_Shared(heap,dag,dependencyLookup, shouldProcess, searchRootIndices, searchRootCount, results);
+    return;
 }
 
-void FindDependentNodesFromRootIndex(MemAllocHeap* heap, const Frozen::Dag* dag, std::function<const int32_t*(int)>& funcToGetDependenciesForNode, std::function<size_t(int)>& funcToGetDependenciesCountForNode, std::function<bool(int,int)>& shouldProcess, int32_t rootIndex, Buffer<int32_t>& results)
+void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* dag, Buffer<int32_t>* dependencyBuffers, std::function<bool(int,int)>* shouldProcess, int32_t* searchRootIndices, int32_t searchRootCount, Buffer<int32_t>& results)
 {
-    FindDependentNodesFromRootIndices(heap, dag, funcToGetDependenciesForNode, funcToGetDependenciesCountForNode, shouldProcess, &rootIndex, 1, results);
-}
+    struct LookupDependenciesFromBuffers
+    {
+        Buffer<int32_t> *buffers;
+        const Buffer<int32_t>& For(int i) { return buffers[i];}
+    } dependencyLookup;
 
-void FindDependentNodesFromRootIndex(MemAllocHeap* heap, const Frozen::Dag* dag, const Frozen::DagDerived* dagDerived, int32_t rootIndex, Buffer<int32_t>& results)
-{
-    FindDependentNodesFromRootIndices(heap, dag, dagDerived, &rootIndex, 1, results);
+    dependencyLookup.buffers = dependencyBuffers;
+    FindDependentNodesFromRootIndices_Shared(heap,dag,dependencyLookup, shouldProcess, searchRootIndices, searchRootCount, results);
+    return;
 }
 
 void FindAllOutputFiles(const Frozen::Dag* dag, HashSet<kFlagPathStrings>& outputFiles)

@@ -13,6 +13,7 @@ struct RuntimeNode;
 struct ThreadState;
 struct MemAllocHeap;
 struct BuildQueue;
+struct BuildQueueConfig;
 struct Driver;
 
-HashDigest CalculateLeafInputHashOffline(const Frozen::Dag* dag, std::function<const int32_t*(int)>& funcToGetDependenciesForNode, std::function<size_t(int)>& funcToGetDependenciesCountForNode, int32_t nodeIndex, MemAllocHeap* heap, FILE* ingredient_stream);
+HashDigest CalculateLeafInputHashOffline(const BuildQueueConfig& queueConfig, int32_t nodeIndex, MemAllocHeap* heap, FILE* ingredient_stream);

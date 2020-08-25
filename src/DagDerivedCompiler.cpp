@@ -114,9 +114,6 @@ struct CompileDagDerivedWorker
 
     void FindAllDependenciesAndSelfStoppingAtCacheableNodesFor(int dagNodeIndex, Buffer<int32_t>& resulting_dependencies, Buffer<int32_t>& resulting_dependencies_cacheable_themselves)
     {
-        std::function<const int32_t*(int)> funcToGetDependenciesForNode = [=](int index){return combinedDependenciesBuffers[index].begin();};
-        std::function<size_t(int)> funcToGetDependenciesCountForNode = [=](int index){return combinedDependenciesBuffers[index].m_Size;};
-
         std::function<bool(int,int)> filterAndCollectLeafInputCacheable = [&](int parentIndex, int childIndex)
         {
             if (IsLeafInputCacheable(dag->m_DagNodes[childIndex]))
@@ -129,7 +126,7 @@ struct CompileDagDerivedWorker
             return true;
         };
 
-        FindDependentNodesFromRootIndex(heap, dag, funcToGetDependenciesForNode, funcToGetDependenciesCountForNode, filterAndCollectLeafInputCacheable, dagNodeIndex, resulting_dependencies);
+        FindDependentNodesFromRootIndices(heap, dag, combinedDependenciesBuffers, &filterAndCollectLeafInputCacheable, &dagNodeIndex, 1, resulting_dependencies);
         BufferAppendOne(&resulting_dependencies, heap, dagNodeIndex);
     };
 
@@ -252,24 +249,6 @@ struct CompileDagDerivedWorker
             BufferDestroy(&filesAffectedByScanners, heap);
         }
         BufferDestroy(&dependenciesAndSelf, heap);
-
-
-        {  //write out offline leaf input hash parts
-            char path[kMaxPathLength];
-            snprintf(path, sizeof(path), "%s/offline-%d", dag->m_CacheSignatureDirectoryName.Get(), node.m_DagNodeIndex);
-            PathBuffer output;
-            PathInit(&output, path);
-            MakeDirectoriesForFile(stat_cache, output);
-
-            FILE *sig = fopen(path, "w");
-            if (sig == NULL)
-                CroakErrno("Failed opening offline signature ingredients for writing.");
-
-            std::function<const int32_t*(int)> funcToGetDependenciesForNode = [=](int index){return combinedDependenciesBuffers[index].begin();};
-            std::function<size_t(int)> funcToGetDependenciesCountForNode = [=](int index){return combinedDependenciesBuffers[index].m_Size;};
-            BinarySegmentWriteHashDigest(leafInputHashOfflineArray_seg, CalculateLeafInputHashOffline(dag, funcToGetDependenciesForNode, funcToGetDependenciesCountForNode, node.m_DagNodeIndex, heap, sig));
-            fclose(sig);
-        }
     }
 
 

@@ -10,14 +10,14 @@
 
 struct MemAllocHeap
 {
-#if DEBUG_HEAP    
+#if DEBUG_HEAP
     uint64_t m_Size;
-#endif    
+#endif
 };
 
 void HeapInit(MemAllocHeap *heap);
 void HeapDestroy(MemAllocHeap *heap);
-
+void HeapVerifyNoLeaks();
 void *HeapAllocate(MemAllocHeap *heap, size_t size);
 void *HeapAllocateAligned(MemAllocHeap *heap, size_t size, size_t alignment);
 

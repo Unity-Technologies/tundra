@@ -24,6 +24,7 @@ static bool SharedResourceExecute(const Frozen::SharedResourceData *sharedResour
     uint64_t time_exec_started = TimerGet();
     ExecResult result = ExecuteProcess(action, envVarsCount, envVars, heap, 0, false);
     PrintMessage(result.m_ReturnCode == 0 ? MessageStatusLevel::Success : MessageStatusLevel::Failure, (int)TimerDiffSeconds(time_exec_started, TimerGet()), &result, fullAnnotation);
+    ExecResultFreeMemory(&result);
     return result.m_ReturnCode == 0;
 }
 
