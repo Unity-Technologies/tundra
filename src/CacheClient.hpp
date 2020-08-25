@@ -10,6 +10,7 @@ namespace CacheResult
 {
     enum Enum
     {
+        DidNotTry,
         Failure,
         CacheMiss,
         Success,

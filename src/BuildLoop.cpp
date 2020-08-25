@@ -284,6 +284,8 @@ static bool AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(RuntimeNode* 
 
     switch (cacheReadResult)
     {
+        case CacheResult::DidNotTry:
+            break;
         case CacheResult::Failure:
             printMsg(MessageStatusLevel::Warning, "CacheRead");
             break;
