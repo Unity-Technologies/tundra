@@ -67,7 +67,6 @@ void BuildQueueInit(BuildQueue *queue, const BuildQueueConfig *config)
     CondInit(&queue->m_MaxJobsChangedConditionalVariable);
     CondInit(&queue->m_BuildFinishedConditionalVariable);
     MutexInit(&queue->m_BuildFinishedMutex);
-    MutexLock(&queue->m_BuildFinishedMutex);
 
     // Compute queue capacity. Allocate space for a power of two number of
     // indices that's at least one larger than the max number of nodes. Because
@@ -225,6 +224,7 @@ BuildResult::Enum BuildQueueBuild(BuildQueue *queue, MemAllocLinear* scratch)
 {
     // Make sure none of the build threads see in-progress state due to a spurious wakeup.
     MutexLock(&queue->m_Lock);
+    MutexLock(&queue->m_BuildFinishedMutex);
 
     // Initialize build queue with index range to build
     int32_t *build_queue = queue->m_Queue;
