@@ -247,9 +247,6 @@ static bool AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(RuntimeNode* 
 {
     CheckHasLock(&queue->m_Lock);
 
-    if (RuntimeNodeHasAttemptedCacheLookup(node))
-        return false;
-
     if (node->m_BuiltNode)
     {
         if (node->m_BuiltNode->m_LeafInputSignature == node->m_CurrentLeafInputSignature->digest && !OutputFilesMissingFor(node->m_BuiltNode, queue->m_Config.m_StatCache) && node->m_BuiltNode->m_WasBuiltSuccessfully)
@@ -272,28 +269,19 @@ static bool AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(RuntimeNode* 
     char digestString[kDigestStringSize];
     DigestToString(digestString, node->m_CurrentLeafInputSignature->digest);
 
-    auto printMsg = [=](MessageStatusLevel::Enum statusLevel, const char* msg)
-    {
-        PrintMessage(statusLevel
-                , duration
-                , "%s [%s %s]"
-                , node->m_DagNode->m_Annotation.Get()
-                , msg
-                , digestString);
-    };
-
     switch (cacheReadResult)
     {
         case CacheResult::DidNotTry:
             break;
+
         case CacheResult::Failure:
-            printMsg(MessageStatusLevel::Warning, "CacheRead");
+            PrintMessage(MessageStatusLevel::Warning, duration, "%s [CacheRead %s]", node->m_DagNode->m_Annotation.Get(), digestString);
             break;
+
         case CacheResult::Success:
             PrintCacheHit(queue, thread_state, duration, node);
             node->m_BuildResult = NodeBuildResult::kRanSuccesfully;
             FinishNode(queue, node);
-
             return true;
 
         case CacheResult::CacheMiss:
@@ -380,11 +368,11 @@ static void ProcessNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
                 CalculateLeafInputSignatureRuntime(queue, thread_state, node, nullptr);
                 MutexLock(queue_lock);
             }
-        }
 
-        if (queue->m_Config.m_AttemptCacheReads)
-            if (AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(node, queue, thread_state))
-                return;
+            if (queue->m_Config.m_AttemptCacheReads)
+                if (AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(node, queue, thread_state))
+                    return;
+        }
     }
 
     if (!AllDependenciesAreFinished(queue,node))

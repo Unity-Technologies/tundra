@@ -181,13 +181,13 @@ void GetCachingBehaviourSettingsFromEnvironment(bool* attemptReads, bool* attemp
         if (c == 0)
             break;
         if (c == 'R')
-    {
-        *attemptReads = true;
+        {
+            *attemptReads = true;
             continue;
-    }
+        }
         if (c == 'W')
         {
-        *attemptWrites = true;
+            *attemptWrites = true;
             continue;
         }
         Croak("The cache behaviour string provided: %s contains a character that is not R or W", behaviour);

@@ -239,4 +239,3 @@ bool IsFileGenerated(const DagRuntimeData* data, uint32_t filenameHash, const ch
 
 void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* dag, const Frozen::DagDerived* dagDerived, std::function<bool(int,int)>* shouldProcess, int32_t* searchRootIndices, int32_t searchRootCount, Buffer<int32_t>& results);
 void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* dag, Buffer<int32_t>* dependencyBuffers, std::function<bool(int,int)>* shouldProcess, int32_t* searchRootIndices, int32_t searchRootCount, Buffer<int32_t>& results);
-void FindAllOutputFiles(const Frozen::Dag* dag, HashSet<kFlagPathStrings>& outputFiles);

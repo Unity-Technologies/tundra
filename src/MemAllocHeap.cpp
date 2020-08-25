@@ -42,7 +42,7 @@ static bool GetStackWalk( std::string &outWalk )
         }
     }
 
-        ::SymCleanup( ::GetCurrentProcess() );
+    ::SymCleanup( ::GetCurrentProcess() );
 
     return true;
 }
@@ -112,7 +112,7 @@ void HeapFree(MemAllocHeap *heap, const void *_ptr)
 #endif
     AtomicAdd(&heap->m_Size, -*ptr);
 #endif
-    //free(ptr);
+    free(ptr);
 }
 
 void *HeapReallocate(MemAllocHeap *heap, void *_ptr, size_t size)

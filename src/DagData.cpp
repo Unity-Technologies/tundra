@@ -39,7 +39,6 @@ void FindDependentNodesFromRootIndices_Shared(MemAllocHeap* heap, const Frozen::
 
     HeapFree(heap, node_visited_bits);
     BufferDestroy(&node_stack, heap);
-    node_visited_bits = nullptr;
 }
 
 void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* dag, const Frozen::DagDerived* dagDerived, std::function<bool(int,int)>* shouldProcess, int32_t* searchRootIndices, int32_t searchRootCount, Buffer<int32_t>& results)
