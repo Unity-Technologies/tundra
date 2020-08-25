@@ -162,6 +162,8 @@ static void SignalMainThreadToStartCleaningUp(BuildQueue *queue)
 
 static void FinishNode(BuildQueue* queue, RuntimeNode* node)
 {
+    CheckHasLock(&queue->m_Lock);
+
     node->m_Finished = true;
     queue->m_FinishedNodeCount++;
 
@@ -184,6 +186,8 @@ static bool IsNodeCacheableByLeafInputsAndCachingEnabled(BuildQueue* queue, Runt
 
 static void AttemptCacheWrite(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node)
 {
+    CheckDoesNotHaveLock(&queue->m_Lock);
+
     uint64_t time_exec_started = TimerGet();
 
     char path[kMaxPathLength];
@@ -215,6 +219,8 @@ static void AttemptCacheWrite(BuildQueue* queue, ThreadState* thread_state, Runt
 
 static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, Mutex *queue_lock, ThreadState* thread_state, StatCache* stat_cache, const Frozen::DagDerived* dagDerived)
 {
+    CheckDoesNotHaveLock(&queue->m_Lock);
+
     if (IsNodeCacheableByLeafInputsAndCachingEnabled(queue,node))
     {
         CHECK(node->m_CurrentLeafInputSignature != nullptr);
@@ -239,6 +245,8 @@ static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, M
 
 static bool AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(RuntimeNode* node, BuildQueue* queue, ThreadState* thread_state)
 {
+    CheckHasLock(&queue->m_Lock);
+
     if (RuntimeNodeHasAttemptedCacheLookup(node))
         return false;
 
@@ -276,6 +284,8 @@ static bool AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(RuntimeNode* 
 
     switch (cacheReadResult)
     {
+        case CacheResult::DidNotTry:
+            break;
         case CacheResult::Failure:
             printMsg(MessageStatusLevel::Warning, "CacheRead");
             break;
@@ -325,6 +335,8 @@ void LogEnqueue(MemAllocLinear* scratch, RuntimeNode* enqueuedNode, RuntimeNode*
 
 static void EnqueueDependencies(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node)
 {
+    CheckHasLock(&queue->m_Lock);
+
     int enqueue_count = 0;
 
     for (int32_t depDagIndex : queue->m_Config.m_DagDerived->m_Dependencies[node->m_DagNodeIndex])
@@ -349,6 +361,8 @@ static void EnqueueDependencies(BuildQueue *queue, ThreadState *thread_state, Ru
 
 static void ProcessNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node, Mutex *queue_lock)
 {
+    CheckHasLock(&queue->m_Lock);
+
     Log(kSpam, "T=%d, Advancing %s\n", thread_state->m_ThreadIndex, node->m_DagNode->m_Annotation.Get());
 
     CHECK(!node->m_Finished);
@@ -361,7 +375,11 @@ static void ProcessNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
         {
             // Maybe the node's signature was already calculated as part of a parent's signature, then we can skip.
             if (node->m_CurrentLeafInputSignature == nullptr)
+            {
+                MutexUnlock(queue_lock);
                 CalculateLeafInputSignatureRuntime(queue, thread_state, node, nullptr);
+                MutexLock(queue_lock);
+            }
         }
 
         if (queue->m_Config.m_AttemptCacheReads)
@@ -400,6 +418,8 @@ static void ProcessNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
 
 static RuntimeNode *NextNode(BuildQueue *queue)
 {
+    CheckHasLock(&queue->m_Lock);
+
     int avail_count = AvailableNodeCount(queue);
 
     if (0 == avail_count)

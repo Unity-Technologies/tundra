@@ -56,8 +56,15 @@ static int AppendFileToCommandLine(int totalWritten, char* buffer, int bufferSiz
     return totalWritten + requiredSpace;
 }
 
+
+static uint32_t s_CacheClientFailureCount = 0;
+const uint32_t kMaxClientFailureCount = 5;
+
 static CacheResult::Enum Invoke_REAPI_Cache_Client(const HashDigest& digest, StatCache *stat_cache, const FrozenArray<FrozenFileAndHash>& outputFiles, ThreadState* thread_state, Operation operation, const Frozen::Dag* dag, const Frozen::DagNode* dagNode, Mutex* queue_lock, const char* ingredients_file)
 {
+    if (s_CacheClientFailureCount > kMaxClientFailureCount)
+        return CacheResult::DidNotTry;
+
     ProfilerScope profiler_scope("InvokeCacheMe", thread_state->m_ProfilerThreadId, outputFiles[0].m_Filename);
 
     const char* reapi_raw = getenv(kENV_REAPI_CACHE_CLIENT);
@@ -75,12 +82,18 @@ static CacheResult::Enum Invoke_REAPI_Cache_Client(const HashDigest& digest, Sta
     DigestToString(digestString, digest);
 
     const char* cmd = operation == kOperationRead ? "down" : "up";
-    totalWritten += snprintf(buffer, sizeof(buffer), "%s %s %s00000000000000000000000000000002", reapi, cmd, digestString);
+    totalWritten += snprintf(buffer, sizeof(buffer), "%s -v %s %s00000000000000000000000000000002", reapi, cmd, digestString);
 
-    auto printFailure = [queue_lock](const char* msg)
+    auto processFailure = [queue_lock](const char* msg)
     {
         MutexLock(queue_lock);
-        printf("Failure while invoking caching client: %s\n", msg);
+        printf("Failure while invoking caching client: %d %s\n", s_CacheClientFailureCount, msg);
+        s_CacheClientFailureCount++;
+        if (s_CacheClientFailureCount > kMaxClientFailureCount)
+        {
+            printf("We encountered %d cache client failures. The rest of the build will not attempt any more cache client operations\n", s_CacheClientFailureCount);
+        }
+
         MutexUnlock(queue_lock);
     };
 
@@ -93,7 +106,7 @@ static CacheResult::Enum Invoke_REAPI_Cache_Client(const HashDigest& digest, Sta
 
         if ((totalWritten = AppendFileToCommandLine(totalWritten, buffer, sizeof(buffer), it.m_Filename.Get())) == 0)
         {
-            printFailure("Not enough space in commandline buffer for all output files");
+            processFailure("Not enough space in commandline buffer for all output files");
             return CacheResult::Failure;;
         }
     }
@@ -102,7 +115,7 @@ static CacheResult::Enum Invoke_REAPI_Cache_Client(const HashDigest& digest, Sta
     {
         if ((totalWritten = AppendFileToCommandLine(totalWritten, buffer, sizeof(buffer), ingredients_file)) == 0)
         {
-            printFailure("Not enough space in commandline buffer for ingredients_file");
+            processFailure("Not enough space in commandline buffer for ingredients_file");
             return CacheResult::Failure;
         }
     }
@@ -127,7 +140,7 @@ static CacheResult::Enum Invoke_REAPI_Cache_Client(const HashDigest& digest, Sta
         cacheResult = CacheResult::CacheMiss;
     } else if (result.m_ReturnCode != 0)
     {
-        printFailure(result.m_OutputBuffer.buffer);
+        processFailure(result.m_OutputBuffer.buffer);
         cacheResult = CacheResult::Failure;
     }
     ExecResultFreeMemory(&result);

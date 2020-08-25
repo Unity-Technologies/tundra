@@ -295,6 +295,8 @@ static void ReportInputSignatureChanges(
 
 static bool CalculateInputSignature(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node)
 {
+    CheckDoesNotHaveLock(&queue->m_Lock);
+
     auto& dagnode = node->m_DagNode;
 
     ProfilerScope prof_scope("CheckInputSignature", thread_state->m_ProfilerThreadId, dagnode->m_Annotation);
@@ -399,6 +401,8 @@ static bool CalculateInputSignature(BuildQueue* queue, ThreadState* thread_state
 
 bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node)
 {
+    CheckDoesNotHaveLock(&queue->m_Lock);
+
     const Frozen::DagNode *dagnode = node->m_DagNode;
 
     CalculateInputSignature(queue, thread_state, node);
