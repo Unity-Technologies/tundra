@@ -33,4 +33,4 @@ void CalculateLeafInputSignature(
 
 
 bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLeafInputs(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node, const Frozen::DagDerived* dagDerived);
-void PrintLeafInputSignature(BuildQueue* buildQueue);
+void PrintLeafInputSignature(BuildQueue* buildQueue, const char* outputFile);
