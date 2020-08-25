@@ -236,8 +236,6 @@ void PrintLeafInputSignature(BuildQueue* buildQueue)
 
     MemAllocLinear scratch;
     LinearAllocInit(&scratch, buildQueue->m_Config.m_Heap, MB(16), "PrintLeafInputSignature");
-    DagRuntimeData runtimeData;
-    DagRuntimeDataInit(&runtimeData, dag, buildQueue->m_Config.m_Heap);
 
     CalculateLeafInputSignature(
         buildQueue,
@@ -247,7 +245,6 @@ void PrintLeafInputSignature(BuildQueue* buildQueue)
         0,
         stdout);
 
-    DagRuntimeDataDestroy(&runtimeData);
     LinearAllocDestroy(&scratch);
 }
 
