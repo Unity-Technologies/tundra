@@ -47,6 +47,21 @@ TEST(Win32_LongPaths, LongRelativePath_Resolved)
     ASSERT_STREQ(dstPath.c_str(), resultPath);
 }
 
+TEST(Win32_LongPaths, LongRelativePath_CreateDirectoryWSize)
+{
+    wchar_t srcPath[] = L"C:\\longs\\paths\\AppData\\Local\\Temp\\BeeTest\\BackendTests_Tundra.OutputWithLongPath_IsNotReb-n511prpy\\15charactername\\15charactername\\15charactername\\15charactername\\15charactername\\15charactername\\15charactername\\15charactername\\15charactername\\15charactername";
+    wchar_t resultPath[] = L"\\\\?\\C:\\longs\\paths\\AppData\\Local\\Temp\\BeeTest\\BackendTests_Tundra.OutputWithLongPath_IsNotReb-n511prpy\\15charactername\\15charactername\\15charactername\\15charactername\\15charactername\\15charactername\\15charactername\\15charactername\\15charactername\\15charactername";
+
+    const size_t srcLength = ::GetFullPathNameW(srcPath, 0, nullptr, nullptr);
+    ASSERT_LT(srcLength, MAX_PATH);
+
+    std::wstring dstPath = srcPath;
+
+    ASSERT_TRUE(ConvertToLongPath(&dstPath));
+    ASSERT_EQ(wcslen(resultPath), dstPath.length());
+    ASSERT_STREQ(dstPath.c_str(), resultPath);
+}
+
 TEST(Win32_LongPaths, LongAbsolutePath_WithExtendedPrefix)
 {
     wchar_t srcPath[] = L"C:\\long\\path\\abcdefghijklmnopqrstuvwxyz\\abcdefghijklmnopqrstuvwxyz\\abcdefghijklmnopqrstuvwxyz\\abcdefghijklmnopqrstuvwxyz\\abcdefghijklmnopqrstuvwxyz\\abcdefghijklmnopqrstuvwxyz\\abcdefghijklmnopqrstuvwxyz\\abcdefghijklmnopqrstuvwxyz\\abcdefghijklmnopqrstuvwxyz\\abcdefghijklmnopqrstuvwxyz";
