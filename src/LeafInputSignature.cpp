@@ -78,6 +78,15 @@ static void CalculateLeafInputSignatureRuntime_Impl(
     HashDigest offlinePart = dagDerived->LeafInputHashOfflineFor(dagNode->m_DagNodeIndex);
     HashUpdate(&hashState, &offlinePart, sizeof(HashDigest));
 
+    if (ingredient_stream)
+    {
+        //in the dagderived, we only store the leaf input signature hash. We do not store the full ingredient stream, as it's very big,
+        //and often it is not needed. If it is needed at runtime, we just calculate the offline part again with an ingredient stream.
+        HashDigest secondRun = CalculateLeafInputHashOffline_FromDagDerived(buildQueue->m_Config.m_Dag,buildQueue->m_Config.m_DagDerived, dagNode->m_DagNodeIndex, heap, ingredient_stream);
+        if (secondRun != offlinePart)
+            Croak("While recalculating the offline hash for %s for the second time, the results are different.", dagNode->m_Annotation.Get());
+    }
+
     const FrozenArray<FrozenFileAndHash>& leafInputs = dagDerived->LeafInputsFor(dagNode->m_DagNodeIndex);
 
     auto result = (LeafInputSignatureData*)HeapAllocate(heap, sizeof(LeafInputSignatureData));
@@ -158,6 +167,13 @@ static void CalculateLeafInputSignatureRuntime_Impl(
 
     HashFinalize(&hashState, &result->digest);
 
+    if (ingredient_stream)
+    {
+        char digest[kDigestStringSize];
+        DigestToString(digest, result->digest);
+        fprintf(ingredient_stream, "Resulting Combined Hash: %s\n", digest);
+    }
+
     if (runtimeNode == nullptr || AtomicCompareExchange((void**)&runtimeNode->m_CurrentLeafInputSignature, result, nullptr) != nullptr)
         DestroyLeafInputSignatureData(heap, result);
 
@@ -197,14 +213,6 @@ void CalculateLeafInputSignatureRuntime(BuildQueue* queue, ThreadState* thread_s
 #endif
     }
 
-    auto& dagDerived = queue->m_Config.m_DagDerived;
-    std::function<const int32_t*(int)> funcToGetDependenciesForNode = [=](int index){return dagDerived->m_Dependencies[index].GetArray();};
-    std::function<size_t(int)> funcToGetDependenciesCountForNode = [=](int index){return dagDerived->m_Dependencies[index].GetCount();};
-    CalculateLeafInputHashOffline(queue->m_Config, node->m_DagNodeIndex, &thread_state->m_LocalHeap, ingredient_stream);
-
-    if (ingredient_stream)
-        fprintf(ingredient_stream, "Hot hash ingredients:\n");
-
    CalculateLeafInputSignatureRuntime_Impl(
             queue,
             node->m_DagNode,
@@ -235,9 +243,6 @@ void PrintLeafInputSignature(BuildQueue* buildQueue)
     {
         Croak("Requested node %s is not cacheable by leaf inputs\n", dagNode.m_Annotation.Get());
     }
-
-    printf("OffLine ingredients to the leaf input hash\n");
-    CalculateLeafInputHashOffline(buildQueue->m_Config, dagNode.m_DagNodeIndex, buildQueue->m_Config.m_Heap, stdout);
 
     printf("\n\n\nRuntime ingredients to the leaf input hash\n");
     MemAllocLinear scratch;

@@ -236,6 +236,9 @@ struct CompileDagDerivedWorker
             HashSetDestroy(&leafInputFiles);
             HashSetDestroy(&ignoreSet);
 
+            HashDigest offlineHash = CalculateLeafInputHashOffline_FromDependencyBuffers(heap, dag, combinedDependenciesBuffers, nodeIndex);
+            BinarySegmentWriteHashDigest(this->leafInputHashOfflineArray_seg, offlineHash);
+
             BinarySegmentWriteInt32(scannersWithListOfFilesArray_seg, dag->m_Scanners.GetCount());
             BinarySegmentWritePointer(scannersWithListOfFilesArray_seg, BinarySegmentPosition(arraydata2_seg));
             for (int scannerIndex=0; scannerIndex != dag->m_Scanners.GetCount(); scannerIndex++)

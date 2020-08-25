@@ -3,27 +3,12 @@
 #include "DagData.hpp"
 #include "BuildQueue.hpp"
 
-//This function calculates the offline part of the signature, which we store in the dag-derived file
-HashDigest CalculateLeafInputHashOffline(const BuildQueueConfig& queueConfig, int32_t nodeIndex, MemAllocHeap* heap, FILE* ingredient_stream)
+static HashDigest CalculateLeafInputHashOffline_Shared(const Frozen::Dag* dag,int nodeIndex, Buffer<int32_t>& all_dependent_nodes, FILE* ingredient_stream)
 {
-    auto& dag = queueConfig.m_Dag;
-    auto& dagDerived = queueConfig.m_DagDerived;
-
-    HashDigest hashResult = {};
-
-    Buffer<int32_t> all_dependent_nodes;
-    BufferInit(&all_dependent_nodes);
-
-    std::function<bool(int,int)> filterLeafInputCacheable = [&](int parentIndex, int childIndex)
-    {
-        bool isCacheable = dag->m_DagNodes[childIndex].m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs;
-        return !isCacheable;
-    };
-
-    FindDependentNodesFromRootIndices(heap, dag, dagDerived, &filterLeafInputCacheable, &nodeIndex, 1, all_dependent_nodes);
-
     HashState hashState;
     HashInit(&hashState);
+
+    HashAddString(ingredient_stream, &hashState, "requested node", dag->m_DagNodes[nodeIndex].m_Annotation.Get());
 
     std::sort(all_dependent_nodes.begin(), all_dependent_nodes.end(), [dag](const int& a, const int& b) { return strcmp(dag->m_DagNodes[a].m_Annotation.Get(), dag->m_DagNodes[b].m_Annotation.Get()) < 0; });
 
@@ -53,8 +38,45 @@ HashDigest CalculateLeafInputHashOffline(const BuildQueueConfig& queueConfig, in
         if (relevantFlags != (Frozen::DagNode::kFlagOverwriteOutputs | Frozen::DagNode::kFlagAllowUnexpectedOutput))
             HashAddInteger(ingredient_stream, &hashState, "flags", relevantFlags);
     }
+
+    HashDigest hashResult;
     HashFinalize(&hashState, &hashResult);
 
-    BufferDestroy(&all_dependent_nodes, heap);
+    if (ingredient_stream)
+    {
+        char digest[kDigestStringSize];
+        DigestToString(digest, hashResult);
+        fprintf(ingredient_stream, "Resulting Offline Hash: %s\n", digest);
+    }
+
     return hashResult;
+}
+
+template<typename T>
+static HashDigest CalculateLeafInputHashOffline_FromT(MemAllocHeap* heap, const Frozen::Dag* dag, T* thingToGetDependenciesFrom, int nodeIndex)
+{
+    Buffer<int32_t> all_dependent_nodes;
+    BufferInit(&all_dependent_nodes);
+
+    std::function<bool(int,int)> filterLeafInputCacheable = [&](int parentIndex, int childIndex)
+    {
+        bool isCacheable = dag->m_DagNodes[childIndex].m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs;
+        return !isCacheable;
+    };
+
+    FindDependentNodesFromRootIndices(heap, dag, thingToGetDependenciesFrom, &filterLeafInputCacheable, &nodeIndex, 1, all_dependent_nodes);
+
+    HashDigest result = CalculateLeafInputHashOffline_Shared(dag, nodeIndex, all_dependent_nodes, nullptr);
+    BufferDestroy(&all_dependent_nodes, heap);
+    return result;
+}
+
+HashDigest CalculateLeafInputHashOffline_FromDependencyBuffers(MemAllocHeap* heap, const Frozen::Dag* dag, Buffer<int32_t>* dependencyBuffers, int nodeIndex)
+{
+    return CalculateLeafInputHashOffline_FromT(heap, dag, dependencyBuffers, nodeIndex);
+}
+
+HashDigest CalculateLeafInputHashOffline_FromDagDerived(const Frozen::Dag* dag, const Frozen::DagDerived* dagDerived, int32_t nodeIndex, MemAllocHeap* heap, FILE* ingredient_stream)
+{
+    return CalculateLeafInputHashOffline_FromT(heap, dag, dagDerived, nodeIndex);
 };
