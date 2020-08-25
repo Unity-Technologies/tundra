@@ -236,6 +236,9 @@ bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput 
             HeapFree(scratch_heap, buffer);
             fclose(f);
 
+            //we will recursively call ourselves, with the purpose of returning the cache entry we just inserted into the cache.
+            //this construct lets us guarantee that the string payload memory storage we return has a lifetime until the end of the build
+            //which simplifies a lot of memory management of the users of the scancache
             if (!DoScanCacheLookupAndMakeResults())
                 Croak("Failed to get results from scancache that we inserted just now.");
         }

@@ -317,6 +317,7 @@ void HashTableInsert(HashTable<T, kFlags> *self, uint32_t hash, const char *stri
 template <uint32_t kFlags>
 void HashSetInsert(HashSet<kFlags> *self, uint32_t hash, const char *string)
 {
+    //todo: we should really have a HashSetInitializeWithCapacity, as we often insert many known-ahead-of-time things
     HashTableBaseInsert(self, hash, string);
 }
 
