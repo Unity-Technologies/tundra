@@ -51,15 +51,10 @@ FileInfo GetFileInfo(const char *path)
     uint32_t flags = 0;
 
 #if defined(TUNDRA_UNIX)
+
     if (0 != lstat(path, &stbuf))
         goto Failure;
 
-    if ((stbuf.st_mode & S_IFMT) == S_IFLNK)
-    {
-        flags |= FileInfo::kFlagSymlink;
-        if (0 != stat(path, &stbuf))
-            goto Failure;
-    }
 #elif defined(TUNDRA_WIN32)
 
     DWORD attrs;
@@ -87,6 +82,10 @@ FileInfo GetFileInfo(const char *path)
         flags |= FileInfo::kFlagDirectory;
     else if ((stbuf.st_mode & S_IFMT) == S_IFREG)
         flags |= FileInfo::kFlagFile;
+#ifdef S_IFLNK
+    else if ((stbuf.st_mode & S_IFMT) == S_IFLNK)
+        flags |= FileInfo::kFlagSymlink;
+#endif
 
     result.m_Flags = flags;
     // Do not allow directories to expose real timestamps, as it's not reliable behaviour across platforms

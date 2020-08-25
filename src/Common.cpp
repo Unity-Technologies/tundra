@@ -393,7 +393,6 @@ bool IsNormalized(const std::wstring& path)
 {
     return path.empty() || IsDevice(path) || IsExtended(path) || IsUNCExtended(path);
 }
-
 std::wstring ToWideString(const char* input)
 {
     int size = MultiByteToWideChar(CP_UTF8, 0, input, strlen(input), 0, 0);
