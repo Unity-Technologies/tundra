@@ -104,8 +104,8 @@ struct DagNode
 
     FrozenString m_Action;
     FrozenString m_Annotation;
-    FrozenArray<int32_t> m_OriginalDependencies;
-    FrozenArray<int32_t> m_DependenciesConsumedDuringUsageOnly;
+    FrozenArray<int32_t> m_ToBuildDependencies;
+    FrozenArray<int32_t> m_ToUseDependencies;
     FrozenArray<FrozenFileAndHash> m_InputFiles;
     FrozenArray<FrozenFileAndHash> m_FilesThatMightBeIncluded;
     FrozenArray<FrozenFileAndHash> m_OutputFiles;

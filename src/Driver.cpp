@@ -688,7 +688,7 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
     {
         const Frozen::DagNode *dag_node = dag_nodes + node_stack[i];
 
-        for (auto usageDep : dag_node->m_DependenciesConsumedDuringUsageOnly)
+        for (auto usageDep : dag_node->m_ToUseDependencies)
         {
             if (!BufferContains(&node_stack, usageDep))
                 BufferAppendOne(&node_stack, heap, usageDep);

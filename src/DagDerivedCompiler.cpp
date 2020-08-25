@@ -61,12 +61,12 @@ struct CompileDagDerivedWorker
     Buffer<int32_t> *combinedDependenciesBuffers;
     Buffer<int32_t> *backlinksBuffers;
 
-    void AddUsedDependenciesOfDagNodeRecursive(const Frozen::DagNode* node, int i)
+    void AddToUseDependenciesOfDagNodeRecursive(const Frozen::DagNode* node, int i)
     {
-        for(int dep : node->m_DependenciesConsumedDuringUsageOnly)
+        for(int dep : node->m_ToUseDependencies)
         {
             BufferAppendOneIfNotPresent(&combinedDependenciesBuffers[i], heap, dep);
-            AddUsedDependenciesOfDagNodeRecursive(dag->m_DagNodes + dep, i);
+            AddToUseDependenciesOfDagNodeRecursive(dag->m_DagNodes + dep, i);
         }
     }
 
@@ -249,7 +249,7 @@ struct CompileDagDerivedWorker
         WriteIndexArray(dependentNodesWithScannersArray_seg, dependentNodesWithScanners);
         BufferDestroy(&dependentNodesWithScanners, heap);
         BufferDestroy(&filesAffectedByScanners, heap);
-        
+
         BufferDestroy(&dependenciesAndSelf, heap);
     }
 
@@ -262,10 +262,10 @@ struct CompileDagDerivedWorker
         combinedDependenciesBuffers = HeapAllocateArrayZeroed<Buffer<int32_t>>(heap, node_count);
         for (int32_t i = 0; i < node_count; ++i)
         {
-            for(int dep : dag->m_DagNodes[i].m_OriginalDependencies)
+            for(int dep : dag->m_DagNodes[i].m_ToBuildDependencies)
             {
                 BufferAppendOneIfNotPresent(&combinedDependenciesBuffers[i], heap, dep);
-                AddUsedDependenciesOfDagNodeRecursive(dag->m_DagNodes + dep, i);
+                AddToUseDependenciesOfDagNodeRecursive(dag->m_DagNodes + dep, i);
             }
         }
 
