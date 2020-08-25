@@ -84,10 +84,10 @@ static CacheResult::Enum Invoke_REAPI_Cache_Client(const HashDigest& digest, Sta
     const char* cmd = operation == kOperationRead ? "down" : "up";
     totalWritten += snprintf(buffer, sizeof(buffer), "%s -v %s %s00000000000000000000000000000002", reapi, cmd, digestString);
 
-    auto processFailure = [queue_lock](const char* msg)
+    auto processFailure = [queue_lock, dagNode](const char* msg)
     {
         MutexLock(queue_lock);
-        printf("Failure while invoking caching client: %d %s\n", s_CacheClientFailureCount, msg);
+        printf("Failure while invoking caching client: %s\n%s\n", dagNode->m_Annotation.Get(), s_CacheClientFailureCount, msg);
         s_CacheClientFailureCount++;
         if (s_CacheClientFailureCount > kMaxClientFailureCount)
         {
