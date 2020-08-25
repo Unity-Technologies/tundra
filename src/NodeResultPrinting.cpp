@@ -444,6 +444,8 @@ void PrintCacheMissIntoStructuredLog(ThreadState* thread_state, RuntimeNode* nod
 
 void PrintCacheHit(BuildQueue* queue, ThreadState *thread_state, double duration, RuntimeNode* node)
 {
+    CheckHasLock(&queue->m_Lock);
+
     PrintCacheHitIntoStructuredLog(thread_state, node);
 
     char buffer[1024];

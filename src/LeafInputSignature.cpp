@@ -173,6 +173,7 @@ void DestroyLeafInputSignatureData(MemAllocHeap *heap, LeafInputSignatureData *d
 
 void CalculateLeafInputSignatureRuntime(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node, FILE* ingredient_stream)
 {
+    CheckDoesNotHaveLock(&queue->m_Lock);
     if (ingredient_stream)
     {
         time_t rawtime;
@@ -265,6 +266,8 @@ struct HeaderValidationError
 
 bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLeafInputs(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node, const Frozen::DagDerived* dagDerived)
 {
+    CheckDoesNotHaveLock(&queue->m_Lock);
+
     HashSet<kFlagPathStrings> alreadyFound;
     HashSetInit(&alreadyFound, &thread_state->m_LocalHeap);
     Buffer<HeaderValidationError> illegalIncludesToReport;
