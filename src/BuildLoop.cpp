@@ -202,8 +202,7 @@ static void AttemptCacheWrite(BuildQueue* queue, ThreadState* thread_state, Runt
     }
 
     //we already calculated the leaf input signature before, but we'll do it again because now we want to have the ingredient stream written out to disk.
-    CalculateLeafInputSignatureRuntime(queue, thread_state, node, sig);
-
+    CalculateLeafInputSignature(queue, node->m_DagNode, node, &thread_state->m_ScratchAlloc, thread_state->m_ProfilerThreadId, sig);
     auto writeResult = CacheClient::AttemptWrite(queue->m_Config.m_Dag, node->m_DagNode, node->m_CurrentLeafInputSignature->digest, queue->m_Config.m_StatCache, &queue->m_Lock, thread_state, path);
 
     fclose(sig);
@@ -365,7 +364,7 @@ static void ProcessNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
             if (node->m_CurrentLeafInputSignature == nullptr)
             {
                 MutexUnlock(queue_lock);
-                CalculateLeafInputSignatureRuntime(queue, thread_state, node, nullptr);
+                CalculateLeafInputSignature(queue, node->m_DagNode, node, &thread_state->m_ScratchAlloc, thread_state->m_ProfilerThreadId, nullptr);
                 MutexLock(queue_lock);
             }
 

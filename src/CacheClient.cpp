@@ -87,7 +87,7 @@ static CacheResult::Enum Invoke_REAPI_Cache_Client(const HashDigest& digest, Sta
     auto processFailure = [queue_lock, dagNode](const char* msg)
     {
         MutexLock(queue_lock);
-        printf("Failure while invoking caching client: %s\n%s\n", dagNode->m_Annotation.Get(), s_CacheClientFailureCount, msg);
+        printf("Failure while invoking caching client: %s\n%s\n", dagNode->m_Annotation.Get(), msg);
         s_CacheClientFailureCount++;
         if (s_CacheClientFailureCount > kMaxClientFailureCount)
         {

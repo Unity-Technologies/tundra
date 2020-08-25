@@ -7,6 +7,7 @@
 namespace Frozen
 {
     struct DagDerived;
+    struct DagNode;
 }
 struct RuntimeNode;
 struct ThreadState;
@@ -21,6 +22,15 @@ struct LeafInputSignatureData
 };
 
 void DestroyLeafInputSignatureData(MemAllocHeap *heap, LeafInputSignatureData *data);
-void CalculateLeafInputSignatureRuntime(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node, FILE* ingredient_stream);
+
+void CalculateLeafInputSignature(
+    BuildQueue* buildQueue,
+    const Frozen::DagNode* dagNode,
+    RuntimeNode* runtimeNode,
+    MemAllocLinear* scratch,
+    int profilerThreadId,
+    FILE* ingredient_stream);
+
+
 bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLeafInputs(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node, const Frozen::DagDerived* dagDerived);
 void PrintLeafInputSignature(BuildQueue* buildQueue);
