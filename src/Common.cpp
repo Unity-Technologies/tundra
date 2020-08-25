@@ -367,6 +367,8 @@ double TimerDiffSeconds(uint64_t start, uint64_t end)
 
 #if defined(TUNDRA_WIN32)
 
+#define MAX_PATH_CREATEDIR 248
+
 const wchar_t  ExtendedPrefix[] = L"\\\\?\\";
 const wchar_t  DevicePathPrefix[] = L"\\\\.\\";
 const wchar_t  UNCExtendedPathPrefix[] = L"\\\\?\\UNC\\";
@@ -423,14 +425,17 @@ bool ConvertToLongPath(std::wstring* path)
     }
 
     std::wstring str;
-    if (size < MAX_PATH)
+    // This is 248 instead of 260 which is MAX_PATH because according to MSDN:
+    // For the ANSI version of CreateDirectoryW, there is a default string
+    // size limit for paths of 248 characters (MAX_PATH - enough room for a 8.3 filename).
+    if (size < MAX_PATH_CREATEDIR)
     {
         str.assign(buf);
     }
     else
     {
         str.resize(size + wcslen(UNCExtendedPathPrefix), 0);
-        size = ::GetFullPathNameW(path->c_str(), size, const_cast<LPWSTR>(str.data()), nullptr);
+        size = ::GetFullPathNameW(path->c_str(), str.length(), const_cast<LPWSTR>(str.data()), nullptr);
 
         if (size == 0)
         {
