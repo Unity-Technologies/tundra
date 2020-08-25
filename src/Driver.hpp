@@ -29,7 +29,6 @@ struct DriverOptions
     bool m_SilenceIfPossible;
     bool m_DontReusePreviousResults;
     bool m_DebugSigning;
-    bool m_JustPrintLeafInputSignature;
     bool m_ThrottleOnHumanActivity;
     int m_ThrottleInactivityPeriod;
     int m_ThrottledThreadsAmount;
@@ -43,6 +42,7 @@ struct DriverOptions
     const char *m_DAGFileName;
     const char *m_ProfileOutput;
     const char *m_IncludesOutput;
+    const char *m_JustPrintLeafInputSignature;
 };
 
 void DriverOptionsInit(DriverOptions *self);

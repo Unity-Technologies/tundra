@@ -905,7 +905,7 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count)
 
     if (self->m_Options.m_JustPrintLeafInputSignature)
     {
-        PrintLeafInputSignature(&build_queue);
+        PrintLeafInputSignature(&build_queue, self->m_Options.m_JustPrintLeafInputSignature);
         goto leave;
     }
 

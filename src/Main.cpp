@@ -55,7 +55,7 @@ static const struct OptionTemplate
     {'w', "spammy-verbose", OptionType::kBool, offsetof(DriverOptions, m_SpammyVerbose), "Enable spammy verbose build messages"},
     {'D', "debug", OptionType::kBool, offsetof(DriverOptions, m_DebugMessages), "Enable debug messages"},
     {'S', "debug-signing", OptionType::kBool, offsetof(DriverOptions, m_DebugSigning), "Generate an extensive log of signature generation"},
-    {'e', "just-print-leafinput-signature", OptionType::kBool, offsetof(DriverOptions, m_JustPrintLeafInputSignature), "Print to stdout the leaf input signature ingredients of the requested node"},
+    {'e', "just-print-leafinput-signature", OptionType::kString, offsetof(DriverOptions, m_JustPrintLeafInputSignature), "Print to the specified file the leaf input signature ingredients of the requested node"},
     {'r', "throttle", OptionType::kBool, offsetof(DriverOptions, m_ThrottleOnHumanActivity), "Throttles down amount of simultaneous jobs when mouse or keyboard activity has been detected."},
     {'\0', "throttle-time", OptionType::kInt, offsetof(DriverOptions, m_ThrottleInactivityPeriod), "Amount of inactive time after which we stop throttling. (if throttling behaviour is enabled)"},
     {'\0', "throttle-threads-amount", OptionType::kInt, offsetof(DriverOptions, m_ThrottledThreadsAmount), "Amount of threads used in throttled mode"},

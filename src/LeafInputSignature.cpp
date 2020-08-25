@@ -223,7 +223,7 @@ static const Frozen::DagNode& FindRequestedNode(BuildQueue* queue)
     Croak("Unable to find requested node for leaf input signature printing");
 }
 
-void PrintLeafInputSignature(BuildQueue* buildQueue)
+void PrintLeafInputSignature(BuildQueue* buildQueue, const char* outputFile)
 {
     const Frozen::Dag* dag = buildQueue->m_Config.m_Dag;
 
@@ -237,13 +237,21 @@ void PrintLeafInputSignature(BuildQueue* buildQueue)
     MemAllocLinear scratch;
     LinearAllocInit(&scratch, buildQueue->m_Config.m_Heap, MB(16), "PrintLeafInputSignature");
 
+    FILE *output_signature = fopen(outputFile, "w");
+    if (output_signature == nullptr)
+    {
+        Croak("Unable to open %s for writing of signature file\n", outputFile);
+        return;
+    }
+
     CalculateLeafInputSignature(
         buildQueue,
         &dagNode,
         nullptr,
         &scratch,
         0,
-        stdout);
+        output_signature);
+    fclose(output_signature);
 
     LinearAllocDestroy(&scratch);
 }
