@@ -3,7 +3,6 @@
 #include <ctime>
 #include "OutputValidation.hpp"
 #include <stdint.h>
-#include "Hash.hpp"
 
 struct ExecResult;
 namespace Frozen { struct DagNode; };

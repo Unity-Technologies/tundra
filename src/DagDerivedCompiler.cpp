@@ -184,73 +184,72 @@ struct CompileDagDerivedWorker
 
 
         /* find all leaf input files*/
+        HashSet<kFlagPathStrings> leafInputFiles;
+        HashSetInit(&leafInputFiles, heap);
+
+        HashSet<kFlagPathStrings> ignoreSet;
+        HashSetInit(&ignoreSet, heap);
+        for(auto& ignore: node.m_CachingInputIgnoreList)
+            HashSetInsertIfNotPresent(&ignoreSet, ignore.m_FilenameHash, ignore.m_Filename);
+
+        Buffer<HashSet<kFlagPathStrings>> filesAffectedByScanners;
+        BufferInit(&filesAffectedByScanners);
+        BufferAlloc(&filesAffectedByScanners, heap, dag->m_Scanners.GetCount());
+        for(auto& fileList: filesAffectedByScanners)
+            HashSetInit(&fileList, heap);
+
+        Buffer<int32_t> dependentNodesWithScanners;
+        BufferInit(&dependentNodesWithScanners);
+
+        auto AddToLeafInputsIfNotOnIgnoreList = [&leafInputFiles, ignoreSet](uint32_t filenameHash, const char* fileName) mutable
         {
-            HashSet<kFlagPathStrings> leafInputFiles;
-            HashSetInit(&leafInputFiles, heap);
+            if (!HashSetLookup(&ignoreSet, filenameHash, fileName))
+                HashSetInsertIfNotPresent(&leafInputFiles, filenameHash, fileName);
+        };
 
-            HashSet<kFlagPathStrings> ignoreSet;
-            HashSetInit(&ignoreSet, heap);
-            for(auto& ignore: node.m_CachingInputIgnoreList)
-                HashSetInsertIfNotPresent(&ignoreSet, ignore.m_FilenameHash, ignore.m_Filename);
+        auto AddToLeafInputsIfNonGeneratedAndNotOnIgnoreList = [=](const FrozenFileAndHash& file) mutable
+        {
+            const Frozen::DagNode* generatingNode;
+            if (FindDagNodeForFile(&this->dagRuntimeData, file.m_FilenameHash, file.m_Filename, &generatingNode))
+                return;
+            AddToLeafInputsIfNotOnIgnoreList(file.m_FilenameHash, file.m_Filename.Get());
+        };
 
-            Buffer<HashSet<kFlagPathStrings>> filesAffectedByScanners;
-            BufferInit(&filesAffectedByScanners);
-            BufferAlloc(&filesAffectedByScanners, heap, dag->m_Scanners.GetCount());
-            for(auto& fileList: filesAffectedByScanners)
-                HashSetInit(&fileList, heap);
+        for(int32_t dependencyDagIndex : dependenciesAndSelf)
+        {
+            const Frozen::DagNode& dependencyDagNode = dag->m_DagNodes[dependencyDagIndex];
 
-            Buffer<int32_t> dependentNodesWithScanners;
-            BufferInit(&dependentNodesWithScanners);
+            for (auto& file: dependencyDagNode.m_InputFiles)
+                AddToLeafInputsIfNonGeneratedAndNotOnIgnoreList(file);
+            for (auto& file: dependencyDagNode.m_FilesThatMightBeIncluded)
+                AddToLeafInputsIfNonGeneratedAndNotOnIgnoreList(file);
 
-            auto AddToLeafInputsIfNotOnIgnoreList = [&leafInputFiles, ignoreSet](uint32_t filenameHash, const char* fileName) mutable
+            if (dependencyDagNode.m_ScannerIndex != -1)
             {
-                if (!HashSetLookup(&ignoreSet, filenameHash, fileName))
-                    HashSetInsertIfNotPresent(&leafInputFiles, filenameHash, fileName);
-            };
-
-            auto AddToLeafInputsIfNonGeneratedAndNotOnIgnoreList = [=](const FrozenFileAndHash& file) mutable
-            {
-                const Frozen::DagNode* generatingNode;
-                if (FindDagNodeForFile(&this->dagRuntimeData, file.m_FilenameHash, file.m_Filename, &generatingNode))
-                    return;
-                AddToLeafInputsIfNotOnIgnoreList(file.m_FilenameHash, file.m_Filename.Get());
-            };
-
-            for(int32_t dependencyDagIndex : dependenciesAndSelf)
-            {
-                const Frozen::DagNode& dependencyDagNode = dag->m_DagNodes[dependencyDagIndex];
-
-                for (auto& file: dependencyDagNode.m_InputFiles)
-                   AddToLeafInputsIfNonGeneratedAndNotOnIgnoreList(file);
-                for (auto& file: dependencyDagNode.m_FilesThatMightBeIncluded)
-                   AddToLeafInputsIfNonGeneratedAndNotOnIgnoreList(file);
-
-                if (dependencyDagNode.m_ScannerIndex != -1)
-                {
-                    BufferAppendOne(&dependentNodesWithScanners, heap, dependencyDagNode.m_DagNodeIndex);
-                    CollectNonGeneratedFilesBeingOperatedOnByScanner(dependencyDagNode, filesAffectedByScanners[dependencyDagNode.m_ScannerIndex]);
-                }
+                BufferAppendOne(&dependentNodesWithScanners, heap, dependencyDagNode.m_DagNodeIndex);
+                CollectNonGeneratedFilesBeingOperatedOnByScanner(dependencyDagNode, filesAffectedByScanners[dependencyDagNode.m_ScannerIndex]);
             }
-
-            WriteSortedPathsHashSetAsFrozenFileAndHash(this->leafInputsArray_seg, leafInputFiles);
-            HashSetDestroy(&leafInputFiles);
-            HashSetDestroy(&ignoreSet);
-
-            HashDigest offlineHash = CalculateLeafInputHashOffline_FromDependencyBuffers(heap, dag, combinedDependenciesBuffers, nodeIndex);
-            BinarySegmentWriteHashDigest(this->leafInputHashOfflineArray_seg, offlineHash);
-
-            BinarySegmentWriteInt32(scannersWithListOfFilesArray_seg, dag->m_Scanners.GetCount());
-            BinarySegmentWritePointer(scannersWithListOfFilesArray_seg, BinarySegmentPosition(arraydata2_seg));
-            for (int scannerIndex=0; scannerIndex != dag->m_Scanners.GetCount(); scannerIndex++)
-                WriteSortedPathsHashSetAsFrozenFileAndHash(arraydata2_seg, filesAffectedByScanners[scannerIndex]);
-
-            for(auto& fileList: filesAffectedByScanners)
-                HashSetDestroy(&fileList);
-
-            WriteIndexArray(dependentNodesWithScannersArray_seg, dependentNodesWithScanners);
-            BufferDestroy(&dependentNodesWithScanners, heap);
-            BufferDestroy(&filesAffectedByScanners, heap);
         }
+
+        WriteSortedPathsHashSetAsFrozenFileAndHash(this->leafInputsArray_seg, leafInputFiles);
+        HashSetDestroy(&leafInputFiles);
+        HashSetDestroy(&ignoreSet);
+
+        HashDigest offlineHash = CalculateLeafInputHashOffline_FromDependencyBuffers(heap, dag, combinedDependenciesBuffers, nodeIndex);
+        BinarySegmentWriteHashDigest(this->leafInputHashOfflineArray_seg, offlineHash);
+
+        BinarySegmentWriteInt32(scannersWithListOfFilesArray_seg, dag->m_Scanners.GetCount());
+        BinarySegmentWritePointer(scannersWithListOfFilesArray_seg, BinarySegmentPosition(arraydata2_seg));
+        for (int scannerIndex=0; scannerIndex != dag->m_Scanners.GetCount(); scannerIndex++)
+            WriteSortedPathsHashSetAsFrozenFileAndHash(arraydata2_seg, filesAffectedByScanners[scannerIndex]);
+
+        for(auto& fileList: filesAffectedByScanners)
+            HashSetDestroy(&fileList);
+
+        WriteIndexArray(dependentNodesWithScannersArray_seg, dependentNodesWithScanners);
+        BufferDestroy(&dependentNodesWithScanners, heap);
+        BufferDestroy(&filesAffectedByScanners, heap);
+        
         BufferDestroy(&dependenciesAndSelf, heap);
     }
 

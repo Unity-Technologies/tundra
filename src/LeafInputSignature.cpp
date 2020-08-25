@@ -76,7 +76,7 @@ static void CalculateLeafInputSignatureRuntime_Impl(
     ProfilerScope profiler_scope("ComputeLeafInputSignature", profilerThreadId, dagNode->m_Annotation);
 
     HashDigest offlinePart = dagDerived->LeafInputHashOfflineFor(dagNode->m_DagNodeIndex);
-    HashUpdate(&hashState, &offlinePart, sizeof(HashDigest));
+    HashAddHashDigest(&hashState, offlinePart);
 
     if (ingredient_stream)
     {
@@ -150,7 +150,7 @@ static void CalculateLeafInputSignatureRuntime_Impl(
             DigestToString(digestString, digest);
             char buffer[kMaxPathLength];
             strncpy(buffer, filename, sizeof(buffer));
-            char*p = buffer;
+            char *p = buffer;
             for ( ; *p; ++p) *p = tolower(*p);
             fprintf(ingredient_stream, "%s: %s %s\n", label, digestString, buffer);
         }
@@ -288,7 +288,6 @@ bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLe
             const Frozen::DagNode* generatingNode;
             if (FindDagNodeForFile(&queue->m_Config.m_DagRuntimeData, hash, filename, &generatingNode))
                 return true;
-
             if (HashSetLookup(&node->m_CurrentLeafInputSignature->m_ExplicitLeafInputs, hash,filename))
                 return true;
             if (HashSetLookup(&node->m_CurrentLeafInputSignature->m_ImplicitLeafInputs, hash,filename))
@@ -315,10 +314,9 @@ bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLe
                         }
                     }
                 }
-
                 break;
-            case NodeBuildResult::kRanSuccesfully:
 
+            case NodeBuildResult::kRanSuccesfully:
                 HashSetWalk(&runtimeNodeWithScanner->m_ImplicitInputs, [&](uint32_t, uint32_t hash, const char *filename) {
                     if (!IsGeneratedOrIsLeafInput(hash, filename))
                     {
@@ -328,9 +326,8 @@ bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLe
                         BufferAppendOne(&illegalIncludesToReport, &thread_state->m_LocalHeap, error);
                     }
                 });
-
-
                 break;
+
             default:
                 Croak("Unexpected build node result of dependent node while verifying headers");
         }
@@ -349,7 +346,6 @@ bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLe
 
         {
             MemAllocLinearScope scope(&thread_state->m_ScratchAlloc);
-
 
             const char* formatString =
             "This node '%s' is marked as leaf input cacheable.\n"
@@ -385,12 +381,12 @@ bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLe
             };
 
             appendToError("The full list of not statically known included files is:\n");
-            for(auto& e: illegalIncludesToReport)
+            for (auto& e: illegalIncludesToReport)
             {
                 char tmp[kStoragePerInclude];
                 snprintf(tmp, sizeof(tmp), "#include \"%s\"\n", e.included_file);
                 char* c = tmp;
-                while(*c != 0)
+                while (*c != 0)
                 {
                     if (*c == '\\')
                         *c = '/';
@@ -406,6 +402,7 @@ bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLe
             PrintNodeResult(&result, node->m_DagNode, "Implicit input validation error", queue, thread_state, false, TimerGet(), ValidationResult::Pass, nullptr, true);
             MutexUnlock(&queue->m_Lock);
         }
+
         BufferDestroy(&illegalIncludesToReport, &thread_state->m_LocalHeap);
         ExecResultFreeMemory(&result);
         return false;

@@ -649,7 +649,7 @@ static void FindNodesByName(
     }
 }
 
-void DriverSelectNodes(const Frozen::Dag *dag, const char **targets, int target_count, Buffer<int32_t> *out_nodes, MemAllocHeap *heap)
+static void DriverSelectNodes(const Frozen::Dag *dag, const char **targets, int target_count, Buffer<int32_t> *out_nodes, MemAllocHeap *heap)
 {
     if (target_count > 0)
     {
