@@ -53,7 +53,7 @@ static HashDigest CalculateLeafInputHashOffline_Shared(const Frozen::Dag* dag,in
 }
 
 template<typename T>
-static HashDigest CalculateLeafInputHashOffline_FromT(MemAllocHeap* heap, const Frozen::Dag* dag, T* thingToGetDependenciesFrom, int nodeIndex)
+static HashDigest CalculateLeafInputHashOffline_FromT(MemAllocHeap* heap, const Frozen::Dag* dag, T* thingToGetDependenciesFrom, int nodeIndex, FILE* ingredient_stream)
 {
     Buffer<int32_t> all_dependent_nodes;
     BufferInit(&all_dependent_nodes);
@@ -66,17 +66,18 @@ static HashDigest CalculateLeafInputHashOffline_FromT(MemAllocHeap* heap, const 
 
     FindDependentNodesFromRootIndices(heap, dag, thingToGetDependenciesFrom, &filterLeafInputCacheable, &nodeIndex, 1, all_dependent_nodes);
 
-    HashDigest result = CalculateLeafInputHashOffline_Shared(dag, nodeIndex, all_dependent_nodes, nullptr);
+    HashDigest result = CalculateLeafInputHashOffline_Shared(dag, nodeIndex, all_dependent_nodes, ingredient_stream);
     BufferDestroy(&all_dependent_nodes, heap);
     return result;
 }
 
 HashDigest CalculateLeafInputHashOffline_FromDependencyBuffers(MemAllocHeap* heap, const Frozen::Dag* dag, Buffer<int32_t>* dependencyBuffers, int nodeIndex)
 {
-    return CalculateLeafInputHashOffline_FromT(heap, dag, dependencyBuffers, nodeIndex);
+    return CalculateLeafInputHashOffline_FromT(heap, dag, dependencyBuffers, nodeIndex, nullptr);
 }
 
 HashDigest CalculateLeafInputHashOffline_FromDagDerived(const Frozen::Dag* dag, const Frozen::DagDerived* dagDerived, int32_t nodeIndex, MemAllocHeap* heap, FILE* ingredient_stream)
 {
-    return CalculateLeafInputHashOffline_FromT(heap, dag, dagDerived, nodeIndex);
+    return CalculateLeafInputHashOffline_FromT(heap, dag, dagDerived, nodeIndex, ingredient_stream);
 };
+
