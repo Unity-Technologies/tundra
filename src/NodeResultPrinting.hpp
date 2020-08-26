@@ -39,7 +39,7 @@ void PrintNodeResult(
     ThreadState *thread_state,
     bool always_verbose,
     uint64_t time_exec_started,
-    ValidationResult validationResult,
+    ValidationResult::Enum validationResult,
     const bool *untouched_outputs,
     bool was_preparation_error);
 int PrintNodeInProgress(const Frozen::DagNode *node_data, uint64_t time_of_start, const BuildQueue *queue, const char* message = nullptr);

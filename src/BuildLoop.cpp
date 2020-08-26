@@ -278,6 +278,7 @@ static bool AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(RuntimeNode* 
             break;
 
         case CacheResult::Success:
+            PostRunActionBookkeeping(node, thread_state);
             PrintCacheHit(queue, thread_state, duration, node);
             node->m_BuildResult = NodeBuildResult::kRanSuccesfully;
             FinishNode(queue, node);

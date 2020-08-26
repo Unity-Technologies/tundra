@@ -23,7 +23,7 @@ struct NodeResultPrintData
     const char *cmd_line;
     bool verbose;
     int duration;
-    ValidationResult validation_result;
+    ValidationResult::Enum validation_result;
     const bool *untouched_outputs;
     const char *output_buffer;
     int processed_node_count;
@@ -480,7 +480,7 @@ void PrintNodeResult(
     ThreadState *thread_state,
     bool always_verbose,
     uint64_t time_exec_started,
-    ValidationResult validationResult,
+    ValidationResult::Enum validationResult,
     const bool *untouched_outputs,
     bool was_preparation_error)
 {

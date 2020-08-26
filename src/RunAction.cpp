@@ -79,25 +79,25 @@ static ExecResult WriteTextFile(const char *payload, const char *target_file, Me
     return result;
 }
 
-
-
-NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node, Mutex *queue_lock)
+static bool IsWriteFileAction(RuntimeNode* node)
 {
-    MemAllocLinearScope allocScope(&thread_state->m_ScratchAlloc);
+    return node->m_DagNode->m_Flags & Frozen::DagNode::kFlagIsWriteTextFileAction;
+}
 
-    const Frozen::DagNode *node_data = node->m_DagNode;
-    const bool isWriteFileAction = node->m_DagNode->m_Flags & Frozen::DagNode::kFlagIsWriteTextFileAction;
-    const char *cmd_line = node_data->m_Action;
+static bool AllowUnwrittenOutputFiles(RuntimeNode* node)
+{
+    return node->m_DagNode->m_Flags & Frozen::DagNode::kFlagAllowUnwrittenOutputFiles;
+}
 
-    if (!isWriteFileAction && (!cmd_line || cmd_line[0] == '\0'))
-        return NodeBuildResult::kRanSuccesfully;
+static ExecResult RunActualAction(RuntimeNode* node, ThreadState* thread_state, Mutex* queue_lock, ValidationResult::Enum* out_validationresult)
+{
+    auto& node_data = node->m_DagNode;
+    if (IsWriteFileAction(node))
+    {
+        *out_validationresult = ValidationResult::Pass;
+        return WriteTextFile(node_data->m_Action, node_data->m_OutputFiles[0].m_Filename, thread_state->m_Queue->m_Config.m_Heap);
+    }
 
-    StatCache *stat_cache = queue->m_Config.m_StatCache;
-    const char *annotation = node_data->m_Annotation;
-    int job_id = thread_state->m_ThreadIndex;
-    int profiler_thread_id = thread_state->m_ProfilerThreadId;
-    bool echo_cmdline = 0 != (queue->m_Config.m_Flags & BuildQueueConfig::kFlagEchoCommandLines);
-    const char *last_cmd_line = nullptr;
     // Repack frozen env to pointers on the stack.
     int env_count = node_data->m_EnvVars.GetCount();
     EnvVariable *env_vars = (EnvVariable *)alloca(env_count * sizeof(EnvVariable));
@@ -107,7 +107,88 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
         env_vars[i].m_Value = node_data->m_EnvVars[i].m_Value;
     }
 
-    ExecResult result = {0, false};
+    SlowCallbackData slowCallbackData;
+    slowCallbackData.node_data = node_data;
+    slowCallbackData.time_of_start = TimerGet();
+    slowCallbackData.queue_lock = queue_lock;
+    slowCallbackData.build_queue = thread_state->m_Queue;
+
+    int job_id = thread_state->m_ThreadIndex;
+    auto result = ExecuteProcess(node_data->m_Action, env_count, env_vars, thread_state->m_Queue->m_Config.m_Heap, job_id, false, SlowCallback, &slowCallbackData);
+    *out_validationresult = ValidateExecResultAgainstAllowedOutput(&result, node_data);
+    return result;
+};
+
+NodeBuildResult::Enum PostRunActionBookkeeping(RuntimeNode* node, ThreadState* thread_state)
+{
+    auto VerifyNodeGlobSignatures = [=]() -> bool {
+        for (const Frozen::DagGlobSignature &sig : node->m_DagNode->m_GlobSignatures)
+        {
+            HashDigest digest = CalculateGlobSignatureFor(sig.m_Path, sig.m_Filter, sig.m_Recurse, thread_state->m_Queue->m_Config.m_Heap, &thread_state->m_ScratchAlloc);
+
+            // Compare digest with the one stored in the signature block
+            if (0 != memcmp(&digest, &sig.m_Digest, sizeof digest))
+                return false;
+        }
+        return true;
+    };
+
+    auto VerifyFileSignatures = [=]() -> bool {
+        // Check timestamps of frontend files used to produce the DAG
+        for (const Frozen::DagFileSignature &sig : node->m_DagNode->m_FileSignatures)
+        {
+            const char *path = sig.m_Path;
+
+            uint64_t timestamp = sig.m_Timestamp;
+            FileInfo info = GetFileInfo(path);
+
+            if (info.m_Timestamp != timestamp)
+                return false;
+        }
+        return true;
+    };
+
+    bool requireFrontendRerun = false;
+    if (!VerifyNodeGlobSignatures())
+        requireFrontendRerun = true;
+    if (!VerifyFileSignatures())
+        requireFrontendRerun = true;
+
+    if (node->m_DagNode->m_OutputDirectories.GetCount() > 0)
+        node->m_DynamicallyDiscoveredOutputFiles = AllocateEmptyPathList(thread_state->m_ThreadIndex);
+
+    for(const auto& d: node->m_DagNode->m_OutputDirectories)
+    {
+        AppendDirectoryListingToList(d.m_Filename.Get(), thread_state->m_ThreadIndex, *node->m_DynamicallyDiscoveredOutputFiles);
+    }
+
+    auto& stat_cache = thread_state->m_Queue->m_Config.m_StatCache;
+    for (const FrozenFileAndHash &output : node->m_DagNode->m_OutputFiles)
+    {
+        StatCacheMarkDirty(stat_cache, output.m_Filename, output.m_FilenameHash);
+    }
+    return requireFrontendRerun
+        ? NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun
+        : NodeBuildResult::kRanSuccesfully;
+};
+
+NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node, Mutex *queue_lock)
+{
+    MemAllocLinearScope allocScope(&thread_state->m_ScratchAlloc);
+
+    const Frozen::DagNode *node_data = node->m_DagNode;
+
+    const char *cmd_line = node_data->m_Action;
+
+    if (!IsWriteFileAction(node) && (!cmd_line || cmd_line[0] == '\0'))
+        return NodeBuildResult::kRanSuccesfully;
+
+    StatCache *stat_cache = queue->m_Config.m_StatCache;
+    const char *annotation = node_data->m_Annotation;
+
+    int profiler_thread_id = thread_state->m_ProfilerThreadId;
+    bool echo_cmdline = 0 != (queue->m_Config.m_Flags & BuildQueueConfig::kFlagEchoCommandLines);
+    const char *last_cmd_line = nullptr;
 
     auto FailWithPreparationError = [thread_state,node_data, queue_lock](const char* formatString, ...) -> NodeBuildResult::Enum
     {
@@ -134,13 +215,6 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
         return NodeBuildResult::kRanFailed;
     };
 
-    for (int i = 0; i < node_data->m_SharedResources.GetCount(); ++i)
-    {
-        if (!SharedResourceAcquire(queue, &thread_state->m_LocalHeap, node_data->m_SharedResources[i]))
-        {
-            return FailWithPreparationError("failed to create shared resource %s", queue->m_Config.m_SharedResources[node_data->m_SharedResources[i]].m_Annotation.Get());
-        }
-    }
 
     // See if we need to remove the output files before running anything.
     if (0 == (node_data->m_Flags & Frozen::DagNode::kFlagOverwriteOutputs))
@@ -194,127 +268,72 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
         if (!EnsureParentDirExistsFor(output_file))
             return NodeBuildResult::kRanFailed;
 
-    uint64_t time_of_start = TimerGet();
 
-    SlowCallbackData slowCallbackData;
-    slowCallbackData.node_data = node_data;
-    slowCallbackData.time_of_start = time_of_start;
-    slowCallbackData.queue_lock = queue_lock;
-    slowCallbackData.build_queue = thread_state->m_Queue;
 
     size_t n_outputs = (size_t)node_data->m_OutputFiles.GetCount();
 
     bool *untouched_outputs = (bool *)LinearAllocate(&thread_state->m_ScratchAlloc, n_outputs, (size_t)sizeof(bool));
     memset(untouched_outputs, 0, n_outputs * sizeof(bool));
 
-    bool requireFrontendRerun = false;
+    auto passedOutputValidation = ValidationResult::Pass;
 
-    ValidationResult passedOutputValidation = ValidationResult::Pass;
-    if (0 == result.m_ReturnCode)
+    for (int i = 0; i < node_data->m_SharedResources.GetCount(); ++i)
     {
-        Log(kSpam, "Launching process");
-        TimingScope timing_scope(&g_Stats.m_ExecCount, &g_Stats.m_ExecTimeCycles);
-        ProfilerScope prof_scope(annotation, profiler_thread_id);
-
-        uint64_t *pre_timestamps = (uint64_t *)LinearAllocate(&thread_state->m_ScratchAlloc, n_outputs, (size_t)sizeof(uint64_t));
-
-        bool allowUnwrittenOutputFiles = (node_data->m_Flags & Frozen::DagNode::kFlagAllowUnwrittenOutputFiles);
-        if (!allowUnwrittenOutputFiles)
+        if (!SharedResourceAcquire(queue, &thread_state->m_LocalHeap, node_data->m_SharedResources[i]))
         {
-            uint64_t current_time = time(NULL);
-
-            for (int i = 0; i < n_outputs; i++)
-            {
-                FileInfo info = GetFileInfo(node_data->m_OutputFiles[i].m_Filename);
-                pre_timestamps[i] = info.m_Timestamp;
-
-                if (info.m_Timestamp == current_time)
-                {
-                    // This file has been created so recently that a very fast action might not
-                    // actually be recognised as modifying the timestamp on the file. To avoid
-                    // this, backdate the file by a second, so that any actual activity will definitely
-                    // cause the timestamp to change.
-                    struct utimbuf times;
-                    pre_timestamps[i] = times.actime = times.modtime = current_time - 1;
-                    utime(node_data->m_OutputFiles[i].m_Filename, &times);
-                }
-            }
+            return FailWithPreparationError("failed to create shared resource %s", queue->m_Config.m_SharedResources[node_data->m_SharedResources[i]].m_Annotation.Get());
         }
-
-        if (isWriteFileAction)
-            result = WriteTextFile(node_data->m_Action, node_data->m_OutputFiles[0].m_Filename, thread_state->m_Queue->m_Config.m_Heap);
-        else
-        {
-            last_cmd_line = cmd_line;
-            result = ExecuteProcess(cmd_line, env_count, env_vars, thread_state->m_Queue->m_Config.m_Heap, job_id, false, SlowCallback, &slowCallbackData);
-            passedOutputValidation = ValidateExecResultAgainstAllowedOutput(&result, node_data);
-        }
-
-        if (passedOutputValidation == ValidationResult::Pass && !allowUnwrittenOutputFiles)
-        {
-            for (int i = 0; i < n_outputs; i++)
-            {
-                FileInfo info = GetFileInfo(node_data->m_OutputFiles[i].m_Filename);
-                bool untouched = pre_timestamps[i] == info.m_Timestamp;
-                untouched_outputs[i] = untouched;
-                if (untouched)
-                    passedOutputValidation = ValidationResult::UnwrittenOutputFileFail;
-            }
-        }
-
-        auto VerifyNodeGlobSignatures = [=]() -> bool {
-            for (const Frozen::DagGlobSignature &sig : node->m_DagNode->m_GlobSignatures)
-            {
-                HashDigest digest = CalculateGlobSignatureFor(sig.m_Path, sig.m_Filter, sig.m_Recurse, thread_state->m_Queue->m_Config.m_Heap, &thread_state->m_ScratchAlloc);
-
-                // Compare digest with the one stored in the signature block
-                if (0 != memcmp(&digest, &sig.m_Digest, sizeof digest))
-                    return false;
-            }
-            return true;
-        };
-
-        auto VerifyFileSignatures = [=]() -> bool {
-            // Check timestamps of frontend files used to produce the DAG
-            for (const Frozen::DagFileSignature &sig : node->m_DagNode->m_FileSignatures)
-            {
-                const char *path = sig.m_Path;
-
-                uint64_t timestamp = sig.m_Timestamp;
-                FileInfo info = GetFileInfo(path);
-
-                if (info.m_Timestamp != timestamp)
-                    return false;
-            }
-            return true;
-        };
-
-        if (!VerifyNodeGlobSignatures())
-            requireFrontendRerun = true;
-        if (!VerifyFileSignatures())
-            requireFrontendRerun = true;
-
-
-        if (node->m_DagNode->m_OutputDirectories.GetCount() > 0)
-            node->m_DynamicallyDiscoveredOutputFiles = AllocateEmptyPathList(thread_state->m_ThreadIndex);
-
-        for(const auto& d: node->m_DagNode->m_OutputDirectories)
-        {
-            AppendDirectoryListingToList(d.m_Filename.Get(), thread_state->m_ThreadIndex, *node->m_DynamicallyDiscoveredOutputFiles);
-        }
-
-        Log(kSpam, "Process return code %d", result.m_ReturnCode);
     }
 
-    for (const FrozenFileAndHash &output : node_data->m_OutputFiles)
+    Log(kSpam, "Launching process");
+    TimingScope timing_scope(&g_Stats.m_ExecCount, &g_Stats.m_ExecTimeCycles);
+    ProfilerScope prof_scope(annotation, profiler_thread_id);
+
+    uint64_t *pre_timestamps = (uint64_t *)LinearAllocate(&thread_state->m_ScratchAlloc, n_outputs, (size_t)sizeof(uint64_t));
+
+    if (!AllowUnwrittenOutputFiles(node))
     {
-        StatCacheMarkDirty(stat_cache, output.m_Filename, output.m_FilenameHash);
+        uint64_t current_time = time(NULL);
+
+        for (int i = 0; i < n_outputs; i++)
+        {
+            FileInfo info = GetFileInfo(node_data->m_OutputFiles[i].m_Filename);
+            pre_timestamps[i] = info.m_Timestamp;
+
+            if (info.m_Timestamp == current_time)
+            {
+                // This file has been created so recently that a very fast action might not
+                // actually be recognised as modifying the timestamp on the file. To avoid
+                // this, backdate the file by a second, so that any actual activity will definitely
+                // cause the timestamp to change.
+                struct utimbuf times;
+                pre_timestamps[i] = times.actime = times.modtime = current_time - 1;
+                utime(node_data->m_OutputFiles[i].m_Filename, &times);
+            }
+        }
     }
+
+    uint64_t time_of_start = TimerGet();
+    ExecResult result = RunActualAction(node, thread_state, queue_lock, &passedOutputValidation);
+
+    if (passedOutputValidation == ValidationResult::Pass && !AllowUnwrittenOutputFiles(node))
+    {
+        for (int i = 0; i < n_outputs; i++)
+        {
+            FileInfo info = GetFileInfo(node_data->m_OutputFiles[i].m_Filename);
+            bool untouched = pre_timestamps[i] == info.m_Timestamp;
+            untouched_outputs[i] = untouched;
+            if (untouched)
+                passedOutputValidation = ValidationResult::UnwrittenOutputFileFail;
+        }
+    }
+
+    NodeBuildResult::Enum nodeBuildResult = PostRunActionBookkeeping(node, thread_state);
 
     //maybe consider changing this to use a dedicated lock for printing, instead of using the queuelock.
     MutexLock(queue_lock);
 
-    PrintNodeResult(&result, node_data, last_cmd_line, thread_state->m_Queue, thread_state, echo_cmdline, time_of_start, passedOutputValidation, untouched_outputs, false);
+    PrintNodeResult(&result, node_data, cmd_line, thread_state->m_Queue, thread_state, echo_cmdline, time_of_start, passedOutputValidation, untouched_outputs, false);
     MutexUnlock(queue_lock);
 
     ExecResultFreeMemory(&result);
@@ -325,7 +344,7 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
     }
 
     if (0 == result.m_ReturnCode && passedOutputValidation < ValidationResult::UnexpectedConsoleOutputFail)
-        return requireFrontendRerun ? NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun : NodeBuildResult::kRanSuccesfully;
+        return nodeBuildResult;
 
     // Clean up output files after a failed build unless they are precious,
     // or unless the failure was from failing to write one of them
