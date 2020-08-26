@@ -188,7 +188,6 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
 
     int profiler_thread_id = thread_state->m_ProfilerThreadId;
     bool echo_cmdline = 0 != (queue->m_Config.m_Flags & BuildQueueConfig::kFlagEchoCommandLines);
-    const char *last_cmd_line = nullptr;
 
     auto FailWithPreparationError = [thread_state,node_data, queue_lock](const char* formatString, ...) -> NodeBuildResult::Enum
     {
