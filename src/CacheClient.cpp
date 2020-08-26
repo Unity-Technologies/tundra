@@ -135,10 +135,11 @@ static CacheResult::Enum Invoke_REAPI_Cache_Client(const HashDigest& digest, Sta
 
     CacheResult::Enum cacheResult = CacheResult::Success;
 
-    if (operation == kOperationRead && result.m_ReturnCode == 404)
+    if (operation == kOperationRead && result.m_ReturnCode == 2)
     {
         cacheResult = CacheResult::CacheMiss;
-    } else if (result.m_ReturnCode != 0)
+    } 
+    else if (result.m_ReturnCode != 0)
     {
         processFailure(result.m_OutputBuffer.buffer);
         cacheResult = CacheResult::Failure;
