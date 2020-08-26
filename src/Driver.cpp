@@ -59,7 +59,7 @@ void DriverOptionsInit(DriverOptions *self)
     self->m_SilenceIfPossible = false;
     self->m_DontReusePreviousResults = false;
     self->m_DebugSigning = false;
-    self->m_JustPrintLeafInputSignature = false;
+    self->m_JustPrintLeafInputSignature = nullptr;
     self->m_ThrottleOnHumanActivity = false;
     self->m_ThrottleInactivityPeriod = 30;
     self->m_ThrottledThreadsAmount = 0;
