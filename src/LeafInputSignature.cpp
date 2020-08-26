@@ -225,8 +225,6 @@ static const Frozen::DagNode& FindRequestedNode(BuildQueue* queue)
 
 void PrintLeafInputSignature(BuildQueue* buildQueue, const char* outputFile)
 {
-    const Frozen::Dag* dag = buildQueue->m_Config.m_Dag;
-
     const Frozen::DagNode& dagNode = FindRequestedNode(buildQueue);
 
     if (0 == (dagNode.m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs))
