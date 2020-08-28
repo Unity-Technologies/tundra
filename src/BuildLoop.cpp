@@ -132,7 +132,7 @@ int EnqueueNodeWithoutWakingAwaiters(BuildQueue *queue, MemAllocLinear* scratch,
 
 static bool AllDependenciesAreFinished(BuildQueue *queue, RuntimeNode *runtime_node)
 {
-    for (int32_t dep_index : queue->m_Config.m_DagDerived->m_Dependencies[runtime_node->m_DagNodeIndex])
+    for (int32_t dep_index : queue->m_Config.m_DagDerived->m_CombinedDependencies[runtime_node->m_DagNodeIndex])
     {
         RuntimeNode *runtime_node = GetRuntimeNodeForDagNodeIndex(queue, dep_index);
         if (!runtime_node->m_Finished)
@@ -143,7 +143,7 @@ static bool AllDependenciesAreFinished(BuildQueue *queue, RuntimeNode *runtime_n
 
 static bool AllDependenciesAreSuccesful(BuildQueue *queue, RuntimeNode *runtime_node)
 {
-    for (int32_t dep_index : queue->m_Config.m_DagDerived->m_Dependencies[runtime_node->m_DagNodeIndex])
+    for (int32_t dep_index : queue->m_Config.m_DagDerived->m_CombinedDependencies[runtime_node->m_DagNodeIndex])
     {
         RuntimeNode *runtime_node = GetRuntimeNodeForDagNodeIndex(queue, dep_index);
         CHECK(runtime_node->m_Finished);
@@ -164,8 +164,6 @@ static void EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(BuildQueue *queue, T
     {
         if (RuntimeNode *waiter = GetRuntimeNodeForDagNodeIndex(queue, link))
         {
-
-
             //we should only enqueue nodes that depend on us that we are actually trying to build
             if (!RuntimeNodeHasEverBeenQueued(waiter))
                 continue;
@@ -328,7 +326,7 @@ static bool AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(RuntimeNode* 
     return false;
 }
 
-static void EnqueueDependencies(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node)
+static void EnqueueToBuildDependencies(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node)
 {
     CheckHasLock(&queue->m_Lock);
 
@@ -337,8 +335,6 @@ static void EnqueueDependencies(BuildQueue *queue, ThreadState *thread_state, Ru
 
     if (enqueue_count > 1)
         WakeWaiters(queue, enqueue_count-1);
-
-    RuntimeNodeFlagInactive(node);
 }
 
 static void ProcessNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node, Mutex *queue_lock)
@@ -371,7 +367,8 @@ static void ProcessNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
 
     if (!AllDependenciesAreFinished(queue,node))
     {
-        EnqueueDependencies(queue,thread_state,node);
+        EnqueueToBuildDependencies(queue,thread_state,node);
+        RuntimeNodeFlagInactive(node);
         return;
     }
 

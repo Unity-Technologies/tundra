@@ -106,7 +106,7 @@ void CalculateLeafInputSignature(
     {
         //in the dagderived, we only store the leaf input signature hash. We do not store the full ingredient stream, as it's very big,
         //and often it is not needed. If it is needed at runtime, we just calculate the offline part again with an ingredient stream.
-        HashDigest secondRun = CalculateLeafInputHashOffline_FromDagDerived(buildQueue->m_Config.m_Dag,buildQueue->m_Config.m_DagDerived, dagNode->m_DagNodeIndex, heap, ingredient_stream);
+        HashDigest secondRun = CalculateLeafInputHashOffline(heap, buildQueue->m_Config.m_Dag, dagNode->m_DagNodeIndex, ingredient_stream);
         if (secondRun != offlinePart)
             Croak("While recalculating the offline hash for %s for the second time, the results are different.", dagNode->m_Annotation.Get());
     }
@@ -224,7 +224,7 @@ static const Frozen::DagNode& FindRequestedNode(BuildQueue* queue)
 
 void PrintLeafInputSignature(BuildQueue* buildQueue, const char* outputFile)
 {
-    const Frozen::DagNode& dagNode = FindRequestedNode(buildQueue);
+    const Frozen::DagNode& dagNode = buildQueue->m_Config.m_DagNodes[buildQueue->m_Config.m_RequestedNodes[0]];
 
     if (0 == (dagNode.m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs))
     {

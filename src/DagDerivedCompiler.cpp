@@ -112,23 +112,6 @@ struct CompileDagDerivedWorker
     };
 
 
-    void FindAllDependenciesAndSelfStoppingAtCacheableNodesFor(int dagNodeIndex, Buffer<int32_t>& resulting_dependencies, Buffer<int32_t>& resulting_dependencies_cacheable_themselves)
-    {
-        std::function<bool(int,int)> filterAndCollectLeafInputCacheable = [&](int parentIndex, int childIndex)
-        {
-            if (IsLeafInputCacheable(dag->m_DagNodes[childIndex]))
-            {
-                if (std::find(resulting_dependencies_cacheable_themselves.begin(), resulting_dependencies_cacheable_themselves.end(), childIndex) == resulting_dependencies_cacheable_themselves.end())
-                    BufferAppendOne(&resulting_dependencies_cacheable_themselves, heap, childIndex);
-                return false;
-            }
-
-            return true;
-        };
-
-        FindDependentNodesFromRootIndices(heap, dag, combinedDependenciesBuffers, &filterAndCollectLeafInputCacheable, &dagNodeIndex, 1, resulting_dependencies);
-        BufferAppendOne(&resulting_dependencies, heap, dagNodeIndex);
-    };
 
 
     void CollectNonGeneratedFilesBeingOperatedOnByScanner(const Frozen::DagNode& dagNode, HashSet<kFlagPathStrings>& result, const FrozenArray<FrozenFileAndHash>& files)
@@ -178,7 +161,8 @@ struct CompileDagDerivedWorker
         BufferInit(&dependenciesThatAreLeafInputCacheableThemselves);
         BufferInit(&dependenciesAndSelf);
 
-        FindAllDependenciesAndSelfStoppingAtCacheableNodesFor(nodeIndex, dependenciesAndSelf, dependenciesThatAreLeafInputCacheableThemselves);
+        FindDependentNodesFromRootIndex_IncludingSelf_NotRecursingIntoCacheableNodes(heap, dag, dag->m_DagNodes[nodeIndex], dependenciesAndSelf, &dependenciesThatAreLeafInputCacheableThemselves);
+
         WriteIndexArray(dependentNodesThatThemselvesAreLeafInputCacheableArray_seg, dependenciesThatAreLeafInputCacheableThemselves);
         BufferDestroy(&dependenciesThatAreLeafInputCacheableThemselves, heap);
 
@@ -235,7 +219,7 @@ struct CompileDagDerivedWorker
         HashSetDestroy(&leafInputFiles);
         HashSetDestroy(&ignoreSet);
 
-        HashDigest offlineHash = CalculateLeafInputHashOffline_FromDependencyBuffers(heap, dag, combinedDependenciesBuffers, nodeIndex);
+        HashDigest offlineHash = CalculateLeafInputHashOffline(heap, dag, nodeIndex, nullptr);
         BinarySegmentWriteHashDigest(this->leafInputHashOfflineArray_seg, offlineHash);
 
         BinarySegmentWriteInt32(scannersWithListOfFilesArray_seg, dag->m_Scanners.GetCount());

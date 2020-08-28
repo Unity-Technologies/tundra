@@ -185,7 +185,11 @@ struct DagDerived
     uint32_t m_MagicNumber;
     uint32_t m_NodeCount;
 
-    FrozenArray<FrozenArray<int32_t>> m_Dependencies;
+
+    //this is an array of the node's direct tobuild dependencies + the usedependencies of its build dependencies.  It boils down to a flat
+    //list of everything that needs to have been produces for a node to start building.
+    FrozenArray<FrozenArray<int32_t>> m_CombinedDependencies;
+
     FrozenArray<FrozenArray<uint32_t>> m_NodeBacklinks;
 
 
@@ -237,5 +241,4 @@ void DagRuntimeDataDestroy(DagRuntimeData* data);
 bool FindDagNodeForFile(const DagRuntimeData* data, uint32_t filenameHash, const char* filename, const Frozen::DagNode **result);
 bool IsFileGenerated(const DagRuntimeData* data, uint32_t filenameHash, const char* filename);
 
-void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* dag, const Frozen::DagDerived* dagDerived, std::function<bool(int,int)>* shouldProcess, int32_t* searchRootIndices, int32_t searchRootCount, Buffer<int32_t>& results);
-void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* dag, Buffer<int32_t>* dependencyBuffers, std::function<bool(int,int)>* shouldProcess, int32_t* searchRootIndices, int32_t searchRootCount, Buffer<int32_t>& results);
+void FindDependentNodesFromRootIndex_IncludingSelf_NotRecursingIntoCacheableNodes(MemAllocHeap* heap, const Frozen::Dag* dag, const Frozen::DagNode& dagNode, Buffer<int32_t>& results, Buffer<int32_t>* dependenciesThatAreCacheableThemselves);

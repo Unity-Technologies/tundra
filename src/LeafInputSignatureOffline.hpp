@@ -11,5 +11,4 @@ namespace Frozen
 }
 struct MemAllocHeap;
 
-HashDigest CalculateLeafInputHashOffline_FromDependencyBuffers(MemAllocHeap* heap, const Frozen::Dag* dag, Buffer<int32_t>* dependencyBuffers, int nodeIndex);
-HashDigest CalculateLeafInputHashOffline_FromDagDerived(const Frozen::Dag* dag, const Frozen::DagDerived* dagDerived, int32_t nodeIndex, MemAllocHeap* heap, FILE* ingredient_stream);
+HashDigest CalculateLeafInputHashOffline(MemAllocHeap* heap, const Frozen::Dag* dag, int nodeIndex, FILE* ingredient_stream);
