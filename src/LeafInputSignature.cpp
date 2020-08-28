@@ -71,13 +71,12 @@ void CalculateLeafInputSignature(
     }
 
     auto& dagDerived = buildQueue->m_Config.m_DagDerived;
-    auto& dagNodeIndexToRuntimeNodeIndex_Table = buildQueue->m_Config.m_DagNodeIndexToRuntimeNodeIndex_Table;
     auto& runtimeNodesArray = buildQueue->m_Config.m_RuntimeNodes;
     auto& dag = buildQueue->m_Config.m_Dag;
 
     for (auto& dependentNodeThatIsCacheableItself: dagDerived->DependentNodesThatThemselvesAreLeafInputCacheableFor(dagNode->m_DagNodeIndex))
     {
-        int childRuntimeNodeIndex = dagNodeIndexToRuntimeNodeIndex_Table[dependentNodeThatIsCacheableItself];
+        int childRuntimeNodeIndex = dependentNodeThatIsCacheableItself;
         auto& childRuntimeNode = runtimeNodesArray[childRuntimeNodeIndex];
         const auto& childDagNode = dag->m_DagNodes[dependentNodeThatIsCacheableItself];
 
@@ -271,8 +270,7 @@ bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLe
 
     for(auto nodeWithScanner: dagDerived->DependentNodesWithScannerFor(node->m_DagNodeIndex))
     {
-        int runtimeNodeIndex = queue->m_Config.m_DagNodeIndexToRuntimeNodeIndex_Table[nodeWithScanner];
-        RuntimeNode* runtimeNodeWithScanner = &queue->m_Config.m_RuntimeNodes[runtimeNodeIndex];
+        RuntimeNode* runtimeNodeWithScanner = &queue->m_Config.m_RuntimeNodes[nodeWithScanner];
 
         auto IsGeneratedOrIsLeafInput = [=](uint32_t hash, const char* filename) -> bool
         {

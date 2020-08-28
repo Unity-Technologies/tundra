@@ -458,16 +458,10 @@ int main(int argc, char *argv[])
 
     DriverReportStartup(&driver, (const char **)argv, argc);
 
-    // Prepare list of nodes to build/clean/rebuild
-    if (!DriverPrepareNodes(&driver, (const char **)argv, argc))
-    {
-        Log(kError, "couldn't set up list of targets to build");
-        goto leave;
-    }
 
     DriverRemoveStaleOutputs(&driver);
 
-    build_result = DriverBuild(&driver, &finished_node_count);
+    build_result = DriverBuild(&driver, &finished_node_count, (const char**) argv, argc);
 
     if (!DriverSaveAllBuiltNodes(&driver))
         Log(kError, "Couldn't save AllBuiltNodes");

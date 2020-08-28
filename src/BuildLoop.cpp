@@ -43,16 +43,7 @@ static int AvailableNodeCount(BuildQueue *queue)
 
 static RuntimeNode *GetRuntimeNodeForDagNodeIndex(BuildQueue *queue, int32_t src_index)
 {
-    int32_t state_index = queue->m_Config.m_DagNodeIndexToRuntimeNodeIndex_Table[src_index];
-
-    if (state_index == -1)
-        return nullptr;
-
-    RuntimeNode *runtime_node = queue->m_Config.m_RuntimeNodes + state_index;
-
-    CHECK(int(runtime_node->m_DagNode - queue->m_Config.m_DagNodes) == src_index);
-
-    return runtime_node;
+    return queue->m_Config.m_RuntimeNodes + src_index;
 }
 
 static void WakeWaiters(BuildQueue *queue, int count)
@@ -63,14 +54,55 @@ static void WakeWaiters(BuildQueue *queue, int count)
         CondSignal(&queue->m_WorkAvailable);
 }
 
-static void Enqueue(BuildQueue *queue, RuntimeNode *runtime_node)
+
+static void LogFirstTimeEnqueue(MemAllocLinear* scratch, RuntimeNode* enqueuedNode, RuntimeNode* enqueueingNode)
 {
+    MemAllocLinearScope allocScope(scratch);
+
+    JsonWriter msg;
+    JsonWriteInit(&msg, scratch);
+    JsonWriteStartObject(&msg);
+
+    JsonWriteKeyName(&msg, "msg");
+    JsonWriteValueString(&msg, "enqueueNode");
+
+    JsonWriteKeyName(&msg, "enqueuedNodeAnnotation");
+    JsonWriteValueString(&msg, enqueuedNode->m_DagNode->m_Annotation);
+
+    JsonWriteKeyName(&msg, "enqueuedNodeIndex");
+    JsonWriteValueInteger(&msg, enqueuedNode->m_DagNode->m_OriginalIndex);
+
+    if (enqueueingNode != nullptr)
+    {
+        JsonWriteKeyName(&msg, "enqueueingNodeAnnotation");
+        JsonWriteValueString(&msg, enqueueingNode->m_DagNode->m_Annotation);
+
+        JsonWriteKeyName(&msg, "enqueueingNodeIndex");
+        JsonWriteValueInteger(&msg, enqueueingNode->m_DagNode->m_OriginalIndex);
+    }
+    JsonWriteEndObject(&msg);
+    LogStructured(&msg);
+}
+
+static int EnqueueNodeListWithoutWakingAwaiters(BuildQueue* queue, MemAllocLinear* scratch, const FrozenArray<int32_t>& nodesToEnqueue, RuntimeNode* enqueingNode)
+{
+    int enqueue_count = 0;
+    for (int32_t depDagIndex : nodesToEnqueue)
+    {
+        enqueue_count += EnqueueNodeWithoutWakingAwaiters(queue, scratch, &queue->m_Config.m_RuntimeNodes[depDagIndex], enqueingNode);
+    }
+    return enqueue_count;
+}
+
+int EnqueueNodeWithoutWakingAwaiters(BuildQueue *queue, MemAllocLinear* scratch, RuntimeNode *runtime_node, RuntimeNode* queueing_node)
+{
+    // Did someone else get to the node first?
+    if (RuntimeNodeIsQueued(runtime_node) || RuntimeNodeIsActive(runtime_node) || runtime_node->m_Finished)
+        return 0;
+
     uint32_t write_index = queue->m_QueueWriteIndex;
     const uint32_t queue_mask = queue->m_QueueCapacity - 1;
     int32_t *build_queue = queue->m_Queue;
-
-    CHECK(!RuntimeNodeIsQueued(runtime_node));
-    CHECK(!RuntimeNodeIsActive(runtime_node));
 
 #if ENABLED(CHECKED_BUILD)
     const int avail_init = AvailableNodeCount(queue);
@@ -83,11 +115,19 @@ static void Enqueue(BuildQueue *queue, RuntimeNode *runtime_node)
     queue->m_QueueWriteIndex = write_index;
 
     if (!RuntimeNodeHasEverBeenQueued(runtime_node))
+    {
+        LogFirstTimeEnqueue(scratch, runtime_node, queueing_node);
         queue->m_AmountOfNodesEverQueued++;
+    }
 
+    int enqueue_count = 1;
     RuntimeNodeFlagQueued(runtime_node);
 
     CHECK(AvailableNodeCount(queue) == 1 + avail_init);
+
+    enqueue_count += EnqueueNodeListWithoutWakingAwaiters(queue, scratch, runtime_node->m_DagNode->m_ToUseDependencies, runtime_node);
+
+    return enqueue_count;
 }
 
 static bool AllDependenciesAreFinished(BuildQueue *queue, RuntimeNode *runtime_node)
@@ -114,7 +154,7 @@ static bool AllDependenciesAreSuccesful(BuildQueue *queue, RuntimeNode *runtime_
     return true;
 }
 
-static void EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(BuildQueue *queue, RuntimeNode *node)
+static void EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(BuildQueue *queue, ThreadState* thread_state, RuntimeNode *node)
 {
     int enqueue_count = 0;
 
@@ -124,9 +164,7 @@ static void EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(BuildQueue *queue, R
     {
         if (RuntimeNode *waiter = GetRuntimeNodeForDagNodeIndex(queue, link))
         {
-            // Did someone else get to the node first?
-            if (RuntimeNodeIsQueued(waiter) || RuntimeNodeIsActive(waiter) || waiter->m_Finished)
-                continue;
+
 
             //we should only enqueue nodes that depend on us that we are actually trying to build
             if (!RuntimeNodeHasEverBeenQueued(waiter))
@@ -136,8 +174,7 @@ static void EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(BuildQueue *queue, R
             if (!AllDependenciesAreFinished(queue, waiter))
                 continue;
 
-            Enqueue(queue, waiter);
-            ++enqueue_count;
+            enqueue_count += EnqueueNodeWithoutWakingAwaiters(queue, &thread_state->m_ScratchAlloc, waiter, nullptr);
         }
     }
 
@@ -160,21 +197,18 @@ static void SignalMainThreadToStartCleaningUp(BuildQueue *queue)
     MutexUnlock(&queue->m_BuildFinishedMutex);
 }
 
-static void FinishNode(BuildQueue* queue, RuntimeNode* node)
+static void FinishNode(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node)
 {
     CheckHasLock(&queue->m_Lock);
 
     node->m_Finished = true;
     queue->m_FinishedNodeCount++;
 
-    if (RuntimeNodeIsExplicitlyRequested(node))
-        queue->m_FinishedRequestedNodeCount++;
-
     RuntimeNodeFlagInactive(node);
-    if (queue->m_FinishedRequestedNodeCount == queue->m_Config.m_AmountOfRuntimeNodesSpecificallyRequested)
+    if (queue->m_FinishedNodeCount == queue->m_AmountOfNodesEverQueued)
         SignalMainThreadToStartCleaningUp(queue);
 
-    EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(queue, node);
+    EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(queue, thread_state, node);
 }
 
 static bool IsNodeCacheableByLeafInputsAndCachingEnabled(BuildQueue* queue, RuntimeNode* node)
@@ -253,7 +287,7 @@ static bool AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(RuntimeNode* 
         if (node->m_BuiltNode->m_LeafInputSignature == node->m_CurrentLeafInputSignature->digest && !OutputFilesMissingFor(node->m_BuiltNode, queue->m_Config.m_StatCache) && node->m_BuiltNode->m_WasBuiltSuccessfully)
         {
             node->m_BuildResult = NodeBuildResult::kUpToDate;
-            FinishNode(queue, node);
+            FinishNode(queue, thread_state, node);
             return true;
         }
     }
@@ -283,7 +317,7 @@ static bool AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(RuntimeNode* 
             PostRunActionBookkeeping(node, thread_state);
             PrintCacheHit(queue, thread_state, duration, node);
             node->m_BuildResult = NodeBuildResult::kRanSuccesfully;
-            FinishNode(queue, node);
+            FinishNode(queue, thread_state, node);
             return true;
 
         case CacheResult::CacheMiss:
@@ -294,55 +328,13 @@ static bool AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(RuntimeNode* 
     return false;
 }
 
-void LogEnqueue(MemAllocLinear* scratch, RuntimeNode* enqueuedNode, RuntimeNode* enqueueingNode)
-{
-    MemAllocLinearScope allocScope(scratch);
-
-    JsonWriter msg;
-    JsonWriteInit(&msg, scratch);
-    JsonWriteStartObject(&msg);
-
-    JsonWriteKeyName(&msg, "msg");
-    JsonWriteValueString(&msg, "enqueueNode");
-
-    JsonWriteKeyName(&msg, "enqueuedNodeAnnotation");
-    JsonWriteValueString(&msg, enqueuedNode->m_DagNode->m_Annotation);
-
-    JsonWriteKeyName(&msg, "enqueuedNodeIndex");
-    JsonWriteValueInteger(&msg, enqueuedNode->m_DagNode->m_OriginalIndex);
-
-    if (enqueueingNode != nullptr)
-    {
-        JsonWriteKeyName(&msg, "enqueueingNodeAnnotation");
-        JsonWriteValueString(&msg, enqueueingNode->m_DagNode->m_Annotation);
-
-        JsonWriteKeyName(&msg, "enqueueingNodeIndex");
-        JsonWriteValueInteger(&msg, enqueueingNode->m_DagNode->m_OriginalIndex);
-    }
-    JsonWriteEndObject(&msg);
-    LogStructured(&msg);
-}
-
 static void EnqueueDependencies(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node)
 {
     CheckHasLock(&queue->m_Lock);
 
-    int enqueue_count = 0;
+    auto& dependencies = node->m_DagNode->m_ToBuildDependencies;
+    int enqueue_count = EnqueueNodeListWithoutWakingAwaiters(queue,&thread_state->m_ScratchAlloc, dependencies, node);
 
-    for (int32_t depDagIndex : queue->m_Config.m_DagDerived->m_Dependencies[node->m_DagNodeIndex])
-    {
-        if (RuntimeNode *dependentNode = GetRuntimeNodeForDagNodeIndex(queue, depDagIndex))
-        {
-            // Did someone else get to the node first?
-            if (RuntimeNodeHasEverBeenQueued(dependentNode))
-                continue;
-
-            LogEnqueue(&thread_state->m_ScratchAlloc, dependentNode, node);
-
-            Enqueue(queue, dependentNode);
-            ++enqueue_count;
-        }
-    }
     if (enqueue_count > 1)
         WakeWaiters(queue, enqueue_count-1);
 
@@ -403,7 +395,7 @@ static void ProcessNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
                 break;
         }
     }
-    FinishNode(queue, node);
+    FinishNode(queue, thread_state, node);
 }
 
 static RuntimeNode *NextNode(BuildQueue *queue)

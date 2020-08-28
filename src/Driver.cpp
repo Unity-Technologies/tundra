@@ -649,7 +649,7 @@ static void FindNodesByName(
     }
 }
 
-static void DriverSelectNodes(const Frozen::Dag *dag, const char **targets, int target_count, Buffer<int32_t> *out_nodes, MemAllocHeap *heap)
+void DriverSelectNodes(const Frozen::Dag *dag, const char **targets, int target_count, Buffer<int32_t> *out_nodes, MemAllocHeap *heap)
 {
     if (target_count > 0)
     {
@@ -669,7 +669,7 @@ static void DriverSelectNodes(const Frozen::Dag *dag, const char **targets, int 
     Log(kDebug, "Node selection finished with %d nodes to build", (int)out_nodes->m_Size);
 }
 
-bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
+bool DriverPrepareNodes(Driver *self)
 {
     ProfilerScope prof_scope("Tundra PrepareNodes", 0);
 
@@ -678,42 +678,21 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
     const HashDigest *dag_node_guids = dag->m_NodeGuids;
     MemAllocHeap *heap = &self->m_Heap;
 
-    Buffer<int32_t> node_stack;
-    BufferInitWithCapacity(&node_stack, heap, 1024);
-
-    DriverSelectNodes(dag, targets, target_count, &node_stack, heap);
-    int explicitelyRequestedCount = node_stack.m_Size;
-
-    for (int i = 0; i < node_stack.m_Size; ++i)
-    {
-        const Frozen::DagNode *dag_node = dag_nodes + node_stack[i];
-
-        for (auto usageDep : dag_node->m_ToUseDependencies)
-        {
-            if (!BufferContains(&node_stack, usageDep))
-                BufferAppendOne(&node_stack, heap, usageDep);
-        }
-    }
-
-    self->m_AmountOfRuntimeNodesSpecificallyRequested = node_stack.m_Size;
-
-    Buffer<int32_t> node_indices;
-    BufferInitWithCapacity(&node_indices, heap, 1024);
-    FindDependentNodesFromRootIndices(heap, dag, self->m_DagDerivedData, nullptr, &node_stack[0], node_stack.m_Size, node_indices);
-
-    int node_count = node_indices.m_Size;
     // Allocate space for nodes
-    RuntimeNode *out_nodes = BufferAllocZero(&self->m_RuntimeNodes, &self->m_Heap, node_count);
+    RuntimeNode *out_nodes = BufferAllocZero(&self->m_RuntimeNodes, &self->m_Heap, dag->m_NodeCount);
+
+    int node_count = dag->m_NodeCount;
 
     // Initialize node state
     for (int i = 0; i < node_count; ++i)
     {
-        const Frozen::DagNode *dag_node = dag_nodes + node_indices[i];
+        const Frozen::DagNode *dag_node = dag_nodes + i;
         out_nodes[i].m_DagNode = dag_node;
-        out_nodes[i].m_DagNodeIndex = node_indices[i];
+        out_nodes[i].m_DagNodeIndex = i;
 #if ENABLED(CHECKED_BUILD)
         out_nodes[i].m_DebugAnnotation = dag_node->m_Annotation.Get();
 #endif
+/*
         for (int j = 0; j < node_stack.m_Size; ++j)
         {
             if (node_indices[i] == node_stack[j])
@@ -723,6 +702,7 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
                     RuntimeNodeSetExplicitlyRequestedThroughUseDependency(&out_nodes[i]);
             }
         }
+        */
     }
 
     // Find frozen node state from previous build, if present.
@@ -734,8 +714,7 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
 
         for (int i = 0; i < node_count; ++i)
         {
-            const HashDigest *src_guid = dag_node_guids + node_indices[i];
-
+            const HashDigest *src_guid = dag_node_guids + i;
             if (const HashDigest *old_guid = BinarySearch(state_guids, state_guid_count, *src_guid))
             {
                 int state_index = int(old_guid - state_guids);
@@ -744,25 +723,6 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
         }
     }
 
-    // initialize a remapping table from global (dag) index to local (state)
-    // index. This is so we can map any DAG node reference onto any local state.
-    int32_t *node_remap = BufferAllocFill(&self->m_DagNodeIndexToRuntimeNodeIndex_Table, heap, dag->m_NodeCount, -1);
-
-    CHECK(node_remap == self->m_DagNodeIndexToRuntimeNodeIndex_Table.m_Storage);
-
-    for (int local_index = 0; local_index < node_count; ++local_index)
-    {
-        const Frozen::DagNode *global_node = out_nodes[local_index].m_DagNode;
-        const int global_index = int(global_node - dag_nodes);
-        CHECK(node_remap[global_index] == -1);
-        node_remap[global_index] = local_index;
-    }
-
-    Log(kDebug, "Node remap: %d src nodes, %d active nodes, using %d bytes of node state buffer space",
-        dag->m_NodeCount, node_count, sizeof(RuntimeNode) * node_count);
-
-    BufferDestroy(&node_stack, &self->m_Heap);
-    BufferDestroy(&node_indices, &self->m_Heap);
 
     return true;
 }
@@ -786,7 +746,6 @@ bool DriverInit(Driver *self, const DriverOptions *options)
     self->m_AllBuiltNodes = nullptr;
     self->m_ScanData = nullptr;
 
-    BufferInit(&self->m_DagNodeIndexToRuntimeNodeIndex_Table);
     BufferInit(&self->m_RuntimeNodes);
 
     self->m_Options = *options;
@@ -819,7 +778,6 @@ void DriverDestroy(Driver *self)
     }
 
     BufferDestroy(&self->m_RuntimeNodes, &self->m_Heap);
-    BufferDestroy(&self->m_DagNodeIndexToRuntimeNodeIndex_Table, &self->m_Heap);
 
     MmapFileDestroy(&self->m_ScanFile);
     MmapFileDestroy(&self->m_StateFile);
@@ -836,7 +794,7 @@ bool DriverAllocNodes(Driver *self);
 
 
 
-BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count)
+BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count, const char** argv, int argc)
 {
     const Frozen::Dag *dag = self->m_DagData;
 
@@ -847,12 +805,10 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count)
     queue_config.m_DriverOptions = &self->m_Options;
     queue_config.m_Flags = 0;
     queue_config.m_Heap = &self->m_Heap;
+    queue_config.m_LinearAllocator = &self->m_Allocator;
     queue_config.m_Dag = self->m_DagData;
     queue_config.m_DagNodes = self->m_DagData->m_DagNodes;
     queue_config.m_DagDerived = self->m_DagDerivedData;
-    queue_config.m_RuntimeNodes = self->m_RuntimeNodes.m_Storage;
-    queue_config.m_TotalRuntimeNodeCount = (int)self->m_RuntimeNodes.m_Size;
-    queue_config.m_DagNodeIndexToRuntimeNodeIndex_Table = self->m_DagNodeIndexToRuntimeNodeIndex_Table.m_Storage;
     queue_config.m_ScanCache = &self->m_ScanCache;
     queue_config.m_StatCache = &self->m_StatCache;
     queue_config.m_DigestCache = &self->m_DigestCache;
@@ -860,7 +816,7 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count)
     queue_config.m_ShaDigestExtensions = dag->m_ShaExtensionHashes.GetArray();
     queue_config.m_SharedResources = dag->m_SharedResources.GetArray();
     queue_config.m_SharedResourcesCount = dag->m_SharedResources.GetCount();
-    queue_config.m_AmountOfRuntimeNodesSpecificallyRequested = self->m_AmountOfRuntimeNodesSpecificallyRequested;
+    BufferInit(&queue_config.m_RequestedNodes);
 
     GetCachingBehaviourSettingsFromEnvironment(&queue_config.m_AttemptCacheReads, &queue_config.m_AttemptCacheWrites);
 
@@ -883,25 +839,20 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count)
         queue_config.m_FileSigningLog = nullptr;
     }
 
-#if ENABLED(CHECKED_BUILD)
+    // Prepare list of nodes to build/clean/rebuild
+    if (!DriverPrepareNodes(self))
     {
-        ProfilerScope prof_scope("Tundra DebugCheckRemap", 0);
-        // Paranoia - double check node remapping table
-        for (size_t i = 0, count = self->m_RuntimeNodes.m_Size; i < count; ++i)
-        {
-            const RuntimeNode *state = self->m_RuntimeNodes.m_Storage + i;
-            const Frozen::DagNode *src = state->m_DagNode;
-            const int dag_node_index = int(src - self->m_DagData->m_DagNodes);
-            int remapped_index = self->m_DagNodeIndexToRuntimeNodeIndex_Table[dag_node_index];
-            CHECK(size_t(remapped_index) == i);
-        }
+        Log(kError, "couldn't set up list of targets to build");
+        goto leave;
     }
-#endif
 
     BuildQueue build_queue;
-    BuildQueueInit(&build_queue, &queue_config);
+    BuildQueueInit(&build_queue, &queue_config,(const char**)argv, argc);
+    build_queue.m_Config.m_RuntimeNodes = self->m_RuntimeNodes.m_Storage;
+    build_queue.m_Config.m_TotalRuntimeNodeCount = (int)self->m_RuntimeNodes.m_Size;
 
     BuildResult::Enum build_result = BuildResult::kOk;
+
 
     if (self->m_Options.m_JustPrintLeafInputSignature)
     {

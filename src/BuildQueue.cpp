@@ -58,7 +58,9 @@ static ThreadRoutineReturnType TUNDRA_STDCALL BuildThreadRoutine(void *param)
     return 0;
 }
 
-void BuildQueueInit(BuildQueue *queue, const BuildQueueConfig *config)
+
+
+void BuildQueueInit(BuildQueue *queue, const BuildQueueConfig *config, const char** targets, int target_count)
 {
     ProfilerScope prof_scope("Tundra BuildQueueInit", 0);
 
@@ -72,25 +74,27 @@ void BuildQueueInit(BuildQueue *queue, const BuildQueueConfig *config)
     // indices that's at least one larger than the max number of nodes. Because
     // the queue is treated as a ring buffer, we want W=R to mean an empty
     // buffer.
-    uint32_t capacity = NextPowerOfTwo(config->m_TotalRuntimeNodeCount + 1);
+    uint32_t capacity = NextPowerOfTwo(config->m_Dag->m_NodeCount + 1);
 
     MemAllocHeap *heap = config->m_Heap;
 
-    queue->m_Queue = HeapAllocateArray<int32_t>(heap, capacity);
+    queue->m_Queue = HeapAllocateArrayZeroed<int32_t>(heap, capacity);
     queue->m_QueueReadIndex = 0;
     queue->m_QueueWriteIndex = 0;
     queue->m_QueueCapacity = capacity;
     queue->m_Config = *config;
     queue->m_FinalBuildResult = BuildResult::kOk;
     queue->m_FinishedNodeCount = 0;
-    queue->m_FinishedRequestedNodeCount = 0;
     queue->m_MainThreadWantsToCleanUp = false;
     queue->m_BuildFinishedConditionalVariableSignaled = false;
+    queue->m_AmountOfNodesEverQueued = 0;
     queue->m_SharedResourcesCreated = HeapAllocateArrayZeroed<uint32_t>(heap, config->m_SharedResourcesCount);
     MutexInit(&queue->m_SharedResourcesLock);
 
     CHECK(queue->m_Queue);
 
+    BufferInitWithCapacity(&queue->m_Config.m_RequestedNodes, queue->m_Config.m_Heap, 32);
+    DriverSelectNodes(queue->m_Config.m_Dag, targets, target_count, &queue->m_Config.m_RequestedNodes,  queue->m_Config.m_Heap);
 
     queue->m_DynamicMaxJobs = queue->m_Config.m_DriverOptions->m_ThreadCount;
 
@@ -148,8 +152,11 @@ void BuildQueueDestroy(BuildQueue *queue)
     PrintDeferredMessages(queue);
     MutexUnlock(&queue->m_Lock);
 
-    // Deallocate storage.
+
     MemAllocHeap *heap = queue->m_Config.m_Heap;
+    BufferDestroy(&queue->m_Config.m_RequestedNodes, heap);
+
+    // Deallocate storage.
     HeapFree(heap, queue->m_Queue);
     HeapFree(heap, queue->m_SharedResourcesCreated);
     MutexDestroy(&queue->m_SharedResourcesLock);
@@ -230,23 +237,11 @@ BuildResult::Enum BuildQueueBuild(BuildQueue *queue, MemAllocLinear* scratch)
     int32_t *build_queue = queue->m_Queue;
     RuntimeNode *runtime_nodes = queue->m_Config.m_RuntimeNodes;
 
-    int amountQueued = 0;
-
-    for (int i = 0; i < queue->m_Config.m_TotalRuntimeNodeCount; ++i)
+    for (auto requestedNode:  queue->m_Config.m_RequestedNodes)
     {
-        RuntimeNode *runtime_node = runtime_nodes + i;
-        if (RuntimeNodeIsExplicitlyRequested(runtime_node))
-        {
-            RuntimeNodeFlagQueued(runtime_node);
-            build_queue[amountQueued++] = i;
-
-            LogEnqueue(scratch, runtime_node, nullptr);
-        }
+        RuntimeNode *runtime_node = runtime_nodes + requestedNode;
+        EnqueueNodeWithoutWakingAwaiters(queue, queue->m_Config.m_LinearAllocator, runtime_node, nullptr);
     }
-
-    queue->m_QueueWriteIndex = amountQueued;
-    queue->m_QueueReadIndex = 0;
-    queue->m_AmountOfNodesEverQueued = amountQueued;
 
     CondBroadcast(&queue->m_WorkAvailable);
 

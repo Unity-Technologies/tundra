@@ -9,6 +9,7 @@
 #include "JsonWriter.hpp"
 #include "DagData.hpp"
 #include "BuildLoop.hpp"
+#include "Buffer.hpp"
 
 struct MemAllocHeap;
 struct RuntimeNode;
@@ -33,13 +34,14 @@ struct BuildQueueConfig
     const DriverOptions* m_DriverOptions;
     uint32_t m_Flags;
     MemAllocHeap *m_Heap;
+    MemAllocLinear *m_LinearAllocator;
     const Frozen::Dag* m_Dag;
     const Frozen::DagNode *m_DagNodes;
     const Frozen::DagDerived* m_DagDerived;
     DagRuntimeData m_DagRuntimeData;
     RuntimeNode *m_RuntimeNodes;
     int m_TotalRuntimeNodeCount;
-    const int32_t *m_DagNodeIndexToRuntimeNodeIndex_Table;
+    Buffer<int32_t> m_RequestedNodes;
     ScanCache *m_ScanCache;
     StatCache *m_StatCache;
     DigestCache *m_DigestCache;
@@ -49,9 +51,9 @@ struct BuildQueueConfig
     Mutex *m_FileSigningLogMutex;
     const Frozen::SharedResourceData *m_SharedResources;
     int m_SharedResourcesCount;
-    int32_t m_AmountOfRuntimeNodesSpecificallyRequested;
     bool m_AttemptCacheReads;
     bool m_AttemptCacheWrites;
+
 };
 
 struct BuildQueue;
@@ -97,7 +99,6 @@ struct BuildQueue
 
     BuildResult::Enum m_FinalBuildResult;
     uint32_t m_FinishedNodeCount;
-    uint32_t m_FinishedRequestedNodeCount;
     uint32_t m_AmountOfNodesEverQueued;
 
     ThreadId m_Threads[kMaxBuildThreads];
@@ -108,7 +109,7 @@ struct BuildQueue
     uint32_t m_DynamicMaxJobs;
 };
 
-void BuildQueueInit(BuildQueue *queue, const BuildQueueConfig *config);
+void BuildQueueInit(BuildQueue *queue, const BuildQueueConfig *config, const char** targets, int target_count);
 
 BuildResult::Enum BuildQueueBuild(BuildQueue *queue, MemAllocLinear* scratch);
 

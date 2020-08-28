@@ -2,7 +2,8 @@
 struct ThreadState;
 struct MemAllocLinear;
 struct RuntimeNode;
+struct BuildQueue;
+
 
 void BuildLoop(ThreadState *thread_state);
-void LogEnqueue(MemAllocLinear* scratch, RuntimeNode* enqueuedNode, RuntimeNode* enqueueingNode);
-
+int EnqueueNodeWithoutWakingAwaiters(BuildQueue *queue, MemAllocLinear* scratch, RuntimeNode *runtime_node, RuntimeNode* queueing_node);
