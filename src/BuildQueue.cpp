@@ -235,6 +235,11 @@ BuildResult::Enum BuildQueueBuild(BuildQueue *queue, MemAllocLinear* scratch)
     for (int i = 0; i < queue->m_Config.m_TotalRuntimeNodeCount; ++i)
     {
         RuntimeNode *runtime_node = runtime_nodes + i;
+
+        // We initially queue any node explicitly requested by the build command.
+        // That way, we can check if nodes can be loaded from the cache, bypassing
+        // their dependencies. If not, we will walk the build graph, queuing dependencies
+        // whenever nodes are being processed.
         if (RuntimeNodeIsExplicitlyRequested(runtime_node))
         {
             RuntimeNodeFlagQueued(runtime_node);

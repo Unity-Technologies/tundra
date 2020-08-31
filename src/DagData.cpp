@@ -50,7 +50,7 @@ void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* da
     } dependencyLookup;
 
     dependencyLookup.dagDerived = dagDerived;
-    FindDependentNodesFromRootIndices_Shared(heap,dag,dependencyLookup, shouldProcess, searchRootIndices, searchRootCount, results);
+    FindDependentNodesFromRootIndices_Shared(heap, dag, dependencyLookup, shouldProcess, searchRootIndices, searchRootCount, results);
 }
 
 void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* dag, Buffer<int32_t>* dependencyBuffers, std::function<bool(int,int)>* shouldProcess, int32_t* searchRootIndices, int32_t searchRootCount, Buffer<int32_t>& results)

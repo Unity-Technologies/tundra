@@ -30,7 +30,6 @@
 #include <stdarg.h>
 #include <algorithm>
 #include <stdio.h>
-#include <time.h>
 
 static int AvailableNodeCount(BuildQueue *queue)
 {
@@ -286,6 +285,9 @@ static bool AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(RuntimeNode* 
         case CacheResult::CacheMiss:
             PrintCacheMissIntoStructuredLog(thread_state,node);
             break;
+
+        default:
+            Croak("Unexpected cache read result %d", cacheReadResult);
     }
 
     return false;

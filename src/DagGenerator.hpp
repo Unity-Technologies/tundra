@@ -2,8 +2,6 @@
 #include "BinaryWriter.hpp"
 #include "HashTable.hpp"
 
-namespace Frozen { struct Dag; }
-
 struct CommonStringRecord
 {
     BinaryLocator m_Pointer;

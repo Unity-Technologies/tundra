@@ -87,6 +87,8 @@ static CacheResult::Enum Invoke_REAPI_Cache_Client(const HashDigest& digest, Sta
     DigestToString(digestString, digest);
 
     const char* cmd = operation == kOperationRead ? "down" : "up";
+    // Reapi expects 256 byte hashes as cache keys, but we operate on 128 byte hashes. So we add some zeroes for padding,
+    // along with a number we can increment for changes in cached data format.
     totalWritten += snprintf(buffer, sizeof(buffer), "%s -v %s %s00000000000000000000000000000002", reapi, cmd, digestString);
 
     auto processFailure = [queue_lock, dagNode](const char* msg)
