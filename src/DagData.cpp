@@ -50,9 +50,7 @@ void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* da
     } dependencyLookup;
 
     dependencyLookup.dagDerived = dagDerived;
-
     FindDependentNodesFromRootIndices_Shared(heap,dag,dependencyLookup, shouldProcess, searchRootIndices, searchRootCount, results);
-    return;
 }
 
 void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* dag, Buffer<int32_t>* dependencyBuffers, std::function<bool(int,int)>* shouldProcess, int32_t* searchRootIndices, int32_t searchRootCount, Buffer<int32_t>& results)
@@ -65,15 +63,6 @@ void FindDependentNodesFromRootIndices(MemAllocHeap* heap, const Frozen::Dag* da
 
     dependencyLookup.buffers = dependencyBuffers;
     FindDependentNodesFromRootIndices_Shared(heap,dag,dependencyLookup, shouldProcess, searchRootIndices, searchRootCount, results);
-    return;
-}
-
-void FindAllOutputFiles(const Frozen::Dag* dag, HashSet<kFlagPathStrings>& outputFiles)
-{
-    int node_count = dag->m_NodeCount;
-    for (int32_t i = 0; i < node_count; ++i)
-        for (auto& outputFile : dag->m_DagNodes[i].m_OutputFiles)
-            HashSetInsert(&outputFiles, outputFile.m_FilenameHash, outputFile.m_Filename.Get());
 }
 
 void DagRuntimeDataInit(DagRuntimeData* data, const Frozen::Dag* dag, MemAllocHeap *heap)
@@ -91,7 +80,7 @@ void DagRuntimeDataInit(DagRuntimeData* data, const Frozen::Dag* dag, MemAllocHe
 
     // We currently don't populate m_OutputDirectories for all nodes.
     // Some output directries still only show up in m_DirectoriesCausingImplicitDependencies.
-    // For those, we don't know which node they came from, so we ise the special index value of -1.
+    // For those, we don't know which node they came from, so we use the special index value of -1.
     for (auto& d: dag->m_DirectoriesCausingImplicitDependencies)
         HashTableInsert(&data->m_OutputDirectoriesToDagNodes, d.m_FilenameHash, d.m_Filename.Get(), -1);
 
