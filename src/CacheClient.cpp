@@ -9,8 +9,13 @@
 #include "BuildQueue.hpp"
 #include "MakeDirectories.hpp"
 
+// The path the reapi client executable used to talk to the cache server
 const char* kENV_REAPI_CACHE_CLIENT = "REAPI_CACHE_CLIENT";
+
+// The cache server address, in the format hostname:port
 const char* kENV_CACHE_SERVER_ADDRESS = "CACHE_SERVER_ADDRESS";
+
+// The cache behavior, one of ``, `R`, `W`, `RW` - enabling cache reading and/or cache writing.
 const char* kENV_BEE_CACHE_BEHAVIOUR = "BEE_CACHE_BEHAVIOUR";
 
 static int SlowCallback(void *user_data, const char* label)
