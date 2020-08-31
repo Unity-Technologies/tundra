@@ -13,10 +13,10 @@
 #define PathCompareN strncasecmp
 #define PathCompare strcasecmp
 #endif
-#else
+#else // ENABLED(TUNDRA_CASE_INSENSITIVE_FILESYSTEM)
 #define PathCompareN strncmp
 #define PathCompare strcmp
-#endif
+#endif // ENABLED(TUNDRA_CASE_INSENSITIVE_FILESYSTEM)
 
 #if defined(TUNDRA_WIN32)
 #define strncasecmp _strnicmp
