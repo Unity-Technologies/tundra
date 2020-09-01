@@ -37,7 +37,8 @@ class Build
                 new WarningAndPolicy("4624", WarningPolicy.Silent),
                 new WarningAndPolicy("4244", WarningPolicy.Silent),
                 new WarningAndPolicy("4267", WarningPolicy.Silent), //<-- even vs2017 headers complain about this one
-                new WarningAndPolicy("4018", WarningPolicy.AsError)
+                new WarningAndPolicy("4018", WarningPolicy.AsError),
+                new WarningAndPolicy("4189", WarningPolicy.AsError) //local variable is initialized but not referenced
             }));
 
             this.Libraries.Add(c=>IsWindows(c) && c.CodeGen == CodeGen.Debug, new SystemLibrary("DbgHelp.lib"));

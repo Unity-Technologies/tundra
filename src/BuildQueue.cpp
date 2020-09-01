@@ -234,7 +234,6 @@ BuildResult::Enum BuildQueueBuild(BuildQueue *queue, MemAllocLinear* scratch)
     MutexLock(&queue->m_BuildFinishedMutex);
 
     // Initialize build queue with index range to build
-    int32_t *build_queue = queue->m_Queue;
     RuntimeNode *runtime_nodes = queue->m_Config.m_RuntimeNodes;
 
     for (auto requestedNode:  queue->m_Config.m_RequestedNodes)

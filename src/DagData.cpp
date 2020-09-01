@@ -7,7 +7,6 @@ void FindDependentNodesFromRootIndex_IncludingSelf_NotRecursingIntoCacheableNode
     Buffer<int32_t> node_stack;
     BufferInitWithCapacity(&node_stack, heap, 1024);
 
-    int node_count = 0;
     const size_t node_word_count = (dag->m_NodeCount + 31) / 32;
     uint32_t *node_visited_bits = HeapAllocateArrayZeroed<uint32_t>(heap, node_word_count);
 

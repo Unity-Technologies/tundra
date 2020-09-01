@@ -676,7 +676,6 @@ bool DriverPrepareNodes(Driver *self)
     const Frozen::Dag *dag = self->m_DagData;
     const Frozen::DagNode *dag_nodes = dag->m_DagNodes;
     const HashDigest *dag_node_guids = dag->m_NodeGuids;
-    MemAllocHeap *heap = &self->m_Heap;
 
     // Allocate space for nodes
     RuntimeNode *out_nodes = BufferAllocZero(&self->m_RuntimeNodes, &self->m_Heap, dag->m_NodeCount);
