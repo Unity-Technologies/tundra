@@ -9,8 +9,13 @@
 #include "BuildQueue.hpp"
 #include "MakeDirectories.hpp"
 
+// The path the reapi client executable used to talk to the cache server
 const char* kENV_REAPI_CACHE_CLIENT = "REAPI_CACHE_CLIENT";
+
+// The cache server address, in the format hostname:port
 const char* kENV_CACHE_SERVER_ADDRESS = "CACHE_SERVER_ADDRESS";
+
+// The cache behavior, one of ``, `R`, `W`, `RW` - enabling cache reading and/or cache writing.
 const char* kENV_BEE_CACHE_BEHAVIOUR = "BEE_CACHE_BEHAVIOUR";
 
 static int SlowCallback(void *user_data, const char* label)
@@ -82,6 +87,8 @@ static CacheResult::Enum Invoke_REAPI_Cache_Client(const HashDigest& digest, Sta
     DigestToString(digestString, digest);
 
     const char* cmd = operation == kOperationRead ? "down" : "up";
+    // Reapi expects 256 byte hashes as cache keys, but we operate on 128 byte hashes. So we add some zeroes for padding,
+    // along with a number we can increment for changes in cached data format.
     totalWritten += snprintf(buffer, sizeof(buffer), "%s -v %s %s00000000000000000000000000000002", reapi, cmd, digestString);
 
     auto processFailure = [queue_lock, dagNode](const char* msg)

@@ -30,7 +30,6 @@
 #include <stdarg.h>
 #include <algorithm>
 #include <stdio.h>
-#include <time.h>
 
 static int AvailableNodeCount(BuildQueue *queue)
 {
@@ -222,11 +221,9 @@ static void AttemptCacheWrite(BuildQueue* queue, ThreadState* thread_state, Runt
 
     uint64_t time_exec_started = TimerGet();
 
-    char path[kMaxPathLength];
     char digestString[kDigestStringSize];
     DigestToString(digestString, node->m_CurrentLeafInputSignature->digest);
-    snprintf(path, sizeof(path), "%s", digestString);
-    FILE *sig = fopen(path, "w");
+    FILE *sig = fopen(digestString, "w");
     if (sig == NULL)
     {
         printf("Failed to open file for signature ingredient writing. Skipping CacheWrite.\n");
@@ -236,11 +233,10 @@ static void AttemptCacheWrite(BuildQueue* queue, ThreadState* thread_state, Runt
     //we already calculated the leaf input signature before, but we'll do it again because now we want to have the ingredient stream written out to disk.
     CalculateLeafInputSignature(queue, node->m_DagNode, node, &thread_state->m_ScratchAlloc, thread_state->m_ProfilerThreadId, sig);
 
-    fflush(sig);
     fclose(sig);
 
-    auto writeResult = CacheClient::AttemptWrite(queue->m_Config.m_Dag, node->m_DagNode, node->m_CurrentLeafInputSignature->digest, queue->m_Config.m_StatCache, &queue->m_Lock, thread_state, path);
-    remove(path);
+    auto writeResult = CacheClient::AttemptWrite(queue->m_Config.m_Dag, node->m_DagNode, node->m_CurrentLeafInputSignature->digest, queue->m_Config.m_StatCache, &queue->m_Lock, thread_state, digestString);
+    remove(digestString);
 
     uint64_t now = TimerGet();
     double duration = TimerDiffSeconds(time_exec_started, now);
@@ -321,6 +317,9 @@ static bool AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(RuntimeNode* 
         case CacheResult::CacheMiss:
             PrintCacheMissIntoStructuredLog(thread_state,node);
             break;
+
+        default:
+            Croak("Unexpected cache read result %d", cacheReadResult);
     }
 
     return false;

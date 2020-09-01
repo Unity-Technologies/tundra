@@ -9,14 +9,6 @@
 #include <stdlib.h>
 #include <time.h>
 
-static void PrintNodeIndex(int index, const Frozen::Dag* dag)
-{
-    if (dag)
-        printf("  %d: %s\n", index, dag->m_DagNodes[index].m_Annotation.Get());
-    else
-        printf("  %d\n", index);
-}
-
 static void DumpDagDerived(const Frozen::DagDerived* data, const Frozen::Dag* dag)
 {
     printf("magic number: 0x%08x\n", data->m_MagicNumber);
