@@ -691,17 +691,6 @@ bool DriverPrepareNodes(Driver *self)
 #if ENABLED(CHECKED_BUILD)
         out_nodes[i].m_DebugAnnotation = dag_node->m_Annotation.Get();
 #endif
-/*
-        for (int j = 0; j < node_stack.m_Size; ++j)
-        {
-            if (node_indices[i] == node_stack[j])
-            {
-                RuntimeNodeSetExplicitlyRequested(&out_nodes[i]);
-                if (j>=explicitelyRequestedCount)
-                    RuntimeNodeSetExplicitlyRequestedThroughUseDependency(&out_nodes[i]);
-            }
-        }
-        */
     }
 
     // Find frozen node state from previous build, if present.
