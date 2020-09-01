@@ -96,13 +96,27 @@ inline void CondDestroy(ConditionVariable *var)
 
 inline void CondWait(ConditionVariable *var, Mutex *mutex)
 {
+    CheckHasLock(mutex);
+#if ENABLE_MUTEX_OWNERSHIP_CHECKS
+    mutex->m_ThreadHoldingLock = 0;
+#endif
     if (!SleepConditionVariableCS(&var->m_Impl, &mutex->m_Impl, INFINITE))
         CroakErrno("SleepConditionVariableCS() failed");
+#if ENABLE_MUTEX_OWNERSHIP_CHECKS
+    mutex->m_ThreadHoldingLock = GetCurrentThreadId();
+#endif
 }
 
 inline void CondWait(ConditionVariable *var, Mutex *mutex, int timeoutMilliseconds)
 {
+    CheckHasLock(mutex);
+#if ENABLE_MUTEX_OWNERSHIP_CHECKS
+    mutex->m_ThreadHoldingLock = 0;
+#endif
     SleepConditionVariableCS(&var->m_Impl, &mutex->m_Impl, timeoutMilliseconds);
+#if ENABLE_MUTEX_OWNERSHIP_CHECKS
+    mutex->m_ThreadHoldingLock = GetCurrentThreadId();
+#endif
 }
 
 inline void CondSignal(ConditionVariable *var)

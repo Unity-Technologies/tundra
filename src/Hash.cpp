@@ -83,6 +83,18 @@ void HashAddInteger(HashState *self, uint64_t value)
     HashUpdate(self, bytes, sizeof bytes);
 }
 
+void HashAddInteger(FILE* debug_hash_fd, HashState* state, const char* label, int payload)
+{
+    if (debug_hash_fd)
+        fprintf(debug_hash_fd, "%s: %d\n", label, payload);
+    HashAddInteger(state, payload);
+}
+
+void HashAddHashDigest(HashState *h, const HashDigest& value)
+{
+    HashUpdate(h, &value, sizeof(HashDigest));
+}
+
 void HashAddSeparator(HashState *self)
 {
     uint8_t zero = 0;

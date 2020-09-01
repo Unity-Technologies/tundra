@@ -8,16 +8,23 @@
 #include "MemAllocLinear.hpp"
 #include "DagData.hpp"
 
+//the msvc isspace() asserts in debug builds that the passed in character is not negative, which in some fancy files the includescanner scans is actually true,
+//so we'll cast it to unsigned before checking.
+static bool isspace_(char c)
+{
+    return isspace((unsigned char)c);
+}
+
 static IncludeData *
 ScanCppLine(const char *start, MemAllocLinear *allocator)
 {
-    while (isspace(*start))
+    while (isspace_(*start))
         ++start;
 
     if (*start++ != '#')
         return nullptr;
 
-    while (isspace(*start))
+    while (isspace_(*start))
         ++start;
 
     if (0 != strncmp("include", start, 7))
@@ -25,10 +32,10 @@ ScanCppLine(const char *start, MemAllocLinear *allocator)
 
     start += 7;
 
-    if (!isspace(*start++))
+    if (!isspace_(*start++))
         return nullptr;
 
-    while (isspace(*start))
+    while (isspace_(*start))
         ++start;
 
     IncludeData *dest = LinearAllocate<IncludeData>(allocator);
@@ -138,7 +145,7 @@ ScanLineGeneric(MemAllocLinear *allocator, const char *start_in, const Frozen::G
     const bool use_separators = 0 != (config.m_Flags & Frozen::GenericScannerData::kFlagUseSeparators);
     const bool bare_is_system = 0 != (config.m_Flags & Frozen::GenericScannerData::kFlagBareMeansSystem);
 
-    while (isspace(*start))
+    while (isspace_(*start))
         ++start;
 
     if (require_ws && start == start_in)
@@ -161,10 +168,10 @@ ScanLineGeneric(MemAllocLinear *allocator, const char *start_in, const Frozen::G
     start += keyword->m_StringLength;
 
     // TDDO: Should make this optional
-    if (!isspace(*start++))
+    if (!isspace_(*start++))
         return nullptr;
 
-    while (isspace(*start))
+    while (isspace_(*start))
         ++start;
 
     IncludeData *dest = LinearAllocate<IncludeData>(allocator);
@@ -208,7 +215,7 @@ ScanLineGeneric(MemAllocLinear *allocator, const char *start_in, const Frozen::G
         str_start = start;
 
         // just grab the next token
-        while (*start && !isspace(*start))
+        while (*start && !isspace_(*start))
             ++start;
 
         if (str_start == start)

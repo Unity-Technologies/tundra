@@ -8,7 +8,7 @@
 #include "MemAllocHeap.hpp"
 #include "JsonWriter.hpp"
 #include "DagData.hpp"
-
+#include "BuildLoop.hpp"
 
 struct MemAllocHeap;
 struct RuntimeNode;
@@ -33,7 +33,10 @@ struct BuildQueueConfig
     const DriverOptions* m_DriverOptions;
     uint32_t m_Flags;
     MemAllocHeap *m_Heap;
+    const Frozen::Dag* m_Dag;
     const Frozen::DagNode *m_DagNodes;
+    const Frozen::DagDerived* m_DagDerived;
+    DagRuntimeData m_DagRuntimeData;
     RuntimeNode *m_RuntimeNodes;
     int m_TotalRuntimeNodeCount;
     const int32_t *m_DagNodeIndexToRuntimeNodeIndex_Table;
@@ -46,6 +49,9 @@ struct BuildQueueConfig
     Mutex *m_FileSigningLogMutex;
     const Frozen::SharedResourceData *m_SharedResources;
     int m_SharedResourcesCount;
+    int32_t m_AmountOfRuntimeNodesSpecificallyRequested;
+    bool m_AttemptCacheReads;
+    bool m_AttemptCacheWrites;
 };
 
 struct BuildQueue;
@@ -91,6 +97,8 @@ struct BuildQueue
 
     BuildResult::Enum m_FinalBuildResult;
     uint32_t m_FinishedNodeCount;
+    uint32_t m_FinishedRequestedNodeCount;
+    uint32_t m_AmountOfNodesEverQueued;
 
     ThreadId m_Threads[kMaxBuildThreads];
     ThreadState m_ThreadState[kMaxBuildThreads];
@@ -102,7 +110,7 @@ struct BuildQueue
 
 void BuildQueueInit(BuildQueue *queue, const BuildQueueConfig *config);
 
-BuildResult::Enum BuildQueueBuild(BuildQueue *queue);
+BuildResult::Enum BuildQueueBuild(BuildQueue *queue, MemAllocLinear* scratch);
 
 void BuildQueueDestroy(BuildQueue *queue);
 

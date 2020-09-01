@@ -8,6 +8,7 @@
 #include <windows.h>
 #endif
 
+#define ENABLE_MUTEX_OWNERSHIP_CHECKS ENABLED(CHECKED_BUILD) && TUNDRA_WIN32
 
 struct Mutex
 {
@@ -26,6 +27,10 @@ struct Mutex
 #else
     // Every other platform uses pthreads.
     pthread_mutex_t m_Impl;
+#endif
+
+#if ENABLE_MUTEX_OWNERSHIP_CHECKS
+    DWORD m_ThreadHoldingLock;
 #endif
 };
 
@@ -63,6 +68,9 @@ inline void MutexInit(Mutex *self)
 #else
     self->m_Impl = CreateMutex(NULL, FALSE, NULL);
 #endif
+#if ENABLE_MUTEX_OWNERSHIP_CHECKS
+    self->m_ThreadHoldingLock = 0;
+#endif
 }
 
 inline void MutexDestroy(Mutex *self)
@@ -72,6 +80,9 @@ inline void MutexDestroy(Mutex *self)
 #else
     CloseHandle(self->m_Impl);
     self->m_Impl = NULL;
+#endif
+#if ENABLE_MUTEX_OWNERSHIP_CHECKS
+    self->m_ThreadHoldingLock = 0;
 #endif
 }
 
@@ -83,10 +94,25 @@ inline void MutexLock(Mutex *self)
     if (WAIT_OBJECT_0 != WaitForSingleObject(self->m_Impl, INFINITE))
         CroakErrno("WaitForSingleObject failed");
 #endif
+#if ENABLE_MUTEX_OWNERSHIP_CHECKS
+    self->m_ThreadHoldingLock = GetCurrentThreadId();
+#endif
+}
+
+inline bool MutexHasLock(Mutex* self)
+{
+#if ENABLE_MUTEX_OWNERSHIP_CHECKS
+    return self->m_ThreadHoldingLock == GetCurrentThreadId();
+#else
+    Croak("MutexHasLock is only available in ENABLE_MUTEX_OWNERSHIP_CHECKS builds");
+#endif
 }
 
 inline void MutexUnlock(Mutex *self)
 {
+#if ENABLE_MUTEX_OWNERSHIP_CHECKS
+    self->m_ThreadHoldingLock = 0;
+#endif
 #if ENABLED(TUNDRA_WIN32_VISTA_APIS)
     LeaveCriticalSection(&self->m_Impl);
 #else
@@ -95,4 +121,18 @@ inline void MutexUnlock(Mutex *self)
 #endif
 }
 
+#endif
+
+#if ENABLE_MUTEX_OWNERSHIP_CHECKS
+inline void CheckHasLock(Mutex* mutex)
+{
+    CHECK(MutexHasLock(mutex));
+}
+inline void CheckDoesNotHaveLock(Mutex* mutex)
+{
+    CHECK(!MutexHasLock(mutex));
+}
+#else
+inline void CheckHasLock(Mutex* mutex) {}
+inline void CheckDoesNotHaveLock(Mutex* mutex) {}
 #endif

@@ -16,6 +16,7 @@
 #include "Profiler.hpp"
 #include "NodeResultPrinting.hpp"
 #include "OutputValidation.hpp"
+#include "InputSignature.hpp"
 #include "DigestCache.hpp"
 #include "SharedResources.hpp"
 #include "HumanActivityDetection.hpp"
@@ -87,11 +88,9 @@ static void ReportChangedInputFiles(JsonWriter *msg, const FrozenArray<Frozen::N
 {
     for (const Frozen::NodeInputFileData &input : files)
     {
-        uint32_t filenameHash = Djb2HashPath(input.m_Filename);
-
         CheckAndReportChangedInputFile(msg,
                                        input.m_Filename,
-                                       filenameHash,
+                                       input.m_FilenameHash,
                                        input.m_Timestamp,
                                        dependencyType,
                                        digest_cache,
@@ -117,6 +116,7 @@ static void ReportValueWithOptionalTruncation(JsonWriter *msg, const char *keyNa
 
 static void ReportInputSignatureChanges(
     JsonWriter *msg,
+    const Frozen::Dag* dag,
     RuntimeNode *node,
     const Frozen::DagNode *dagnode,
     const Frozen::BuiltNode *previously_built_node,
@@ -205,7 +205,7 @@ static void ReportInputSignatureChanges(
 
     ReportChangedInputFiles(msg, previously_built_node->m_InputFiles, "explicit", digest_cache, stat_cache, sha_extension_hashes, sha_extension_hash_count, force_use_timestamp);
 
-    if (dagnode->m_Scanner)
+    if (dagnode->m_ScannerIndex != -1)
     {
         HashTable<bool, kFlagPathStrings> implicitDependencies;
         HashTableInit(&implicitDependencies, &thread_state->m_LocalHeap);
@@ -216,11 +216,12 @@ static void ReportInputSignatureChanges(
             MemAllocLinearScope alloc_scope(&thread_state->m_ScratchAlloc);
 
             ScanInput scan_input;
-            scan_input.m_ScannerConfig = dagnode->m_Scanner;
+            scan_input.m_ScannerConfig = dag->m_Scanners[dagnode->m_ScannerIndex];
             scan_input.m_ScratchAlloc = &thread_state->m_ScratchAlloc;
             scan_input.m_ScratchHeap = &thread_state->m_LocalHeap;
             scan_input.m_FileName = input.m_Filename;
             scan_input.m_ScanCache = scan_cache;
+            scan_input.m_SafeToScanBeforeDependenciesAreProduced = false;
 
             ScanOutput scan_output;
 
@@ -240,7 +241,7 @@ static void ReportInputSignatureChanges(
         {
             for (const Frozen::NodeInputFileData &implicitInput : previously_built_node->m_ImplicitInputFiles)
             {
-                bool *visited = HashTableLookup(&implicitDependencies, Djb2HashPath(implicitInput.m_Filename), implicitInput.m_Filename);
+                bool *visited = HashTableLookup(&implicitDependencies, implicitInput.m_FilenameHash, implicitInput.m_Filename);
                 if (!visited)
                 {
                     implicitFilesListChanged = true;
@@ -291,21 +292,13 @@ static void ReportInputSignatureChanges(
     }
 }
 
-static bool OutputFilesMissing(StatCache *stat_cache, RuntimeNode* node)
+
+static bool CalculateInputSignature(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node)
 {
-    for (const FrozenFileAndHash &f : node->m_BuiltNode->m_OutputFiles)
-    {
-        FileInfo i = StatCacheStat(stat_cache, f.m_Filename, f.m_FilenameHash);
+    CheckDoesNotHaveLock(&queue->m_Lock);
 
-        if (!i.Exists())
-            return true;
-    }
+    auto& dagnode = node->m_DagNode;
 
-    return false;
-}
-
-static HashDigest CalculateInputSignature(BuildQueue* queue, ThreadState* thread_state, const Frozen::DagNode* dagnode)
-{
     ProfilerScope prof_scope("CheckInputSignature", thread_state->m_ProfilerThreadId, dagnode->m_Annotation);
 
     const BuildQueueConfig &config = queue->m_Config;
@@ -319,7 +312,7 @@ static HashDigest CalculateInputSignature(BuildQueue* queue, ThreadState* thread
     HashAddString(&sighash, dagnode->m_Action);
     HashAddSeparator(&sighash);
 
-    const Frozen::ScannerData *scanner = dagnode->m_Scanner;
+    const Frozen::ScannerData *scanner = dagnode->m_ScannerIndex == -1 ? nullptr : config.m_Dag->m_Scanners[dagnode->m_ScannerIndex].Get();
 
     // TODO: The input files are not guaranteed to be in a stably sorted order. If the order changes then the input
     // TODO: signature might change, giving us a false-positive for the node needing to be rebuilt. We should look into
@@ -332,9 +325,8 @@ static HashDigest CalculateInputSignature(BuildQueue* queue, ThreadState* thread
     // file to the signature multiple times, so we would also like to deduplicate. We use a HashSet to collect all the
     // implicit inputs, both to ensure we have no duplicate entries, and also so we can sort all the inputs before we
     // add them to the signature.
-    HashSet<kFlagPathStrings> implicitDeps;
     if (scanner)
-        HashSetInit(&implicitDeps, &thread_state->m_LocalHeap);
+        HashSetInit(&node->m_ImplicitInputs, queue->m_Config.m_Heap);
 
     bool force_use_timestamp = dagnode->m_Flags & Frozen::DagNode::kFlagBanContentDigestForInputs;
 
@@ -363,16 +355,17 @@ static HashDigest CalculateInputSignature(BuildQueue* queue, ThreadState* thread
             scan_input.m_ScratchHeap = &thread_state->m_LocalHeap;
             scan_input.m_FileName = input.m_Filename;
             scan_input.m_ScanCache = queue->m_Config.m_ScanCache;
+            scan_input.m_SafeToScanBeforeDependenciesAreProduced = false;
 
             ScanOutput scan_output;
 
-            if (ScanImplicitDeps(stat_cache, &scan_input, &scan_output))
+            if (ScanImplicitDeps(stat_cache, &scan_input, &scan_output, nullptr))
             {
                 for (int i = 0, count = scan_output.m_IncludedFileCount; i < count; ++i)
                 {
                     const FileAndHash &path = scan_output.m_IncludedFiles[i];
-                    if (!HashSetLookup(&implicitDeps, path.m_FilenameHash, path.m_Filename))
-                        HashSetInsert(&implicitDeps, path.m_FilenameHash, path.m_Filename);
+                    if (!HashSetLookup(&node->m_ImplicitInputs, path.m_FilenameHash, path.m_Filename))
+                        HashSetInsert(&node->m_ImplicitInputs, path.m_FilenameHash, path.m_Filename);
                 }
             }
         }
@@ -382,7 +375,7 @@ static HashDigest CalculateInputSignature(BuildQueue* queue, ThreadState* thread
     {
         // Add path and timestamp of every indirect input file (#includes).
         // This will walk all the implicit dependencies in hash order.
-        HashSetWalk(&implicitDeps, [&](uint32_t, uint32_t hash, const char *filename) {
+        HashSetWalk(&node->m_ImplicitInputs, [&](uint32_t, uint32_t hash, const char *filename) {
             HashAddPath(&sighash, filename);
             ComputeFileSignature(
                 &sighash,
@@ -394,8 +387,6 @@ static HashDigest CalculateInputSignature(BuildQueue* queue, ThreadState* thread
                 config.m_ShaDigestExtensionCount,
                 force_use_timestamp);
         });
-
-        HashSetDestroy(&implicitDeps);
     }
 
     for (const FrozenString &input : dagnode->m_AllowedOutputSubstrings)
@@ -404,16 +395,17 @@ static HashDigest CalculateInputSignature(BuildQueue* queue, ThreadState* thread
     HashAddInteger(&sighash, (dagnode->m_Flags & Frozen::DagNode::kFlagAllowUnexpectedOutput) ? 1 : 0);
     HashAddInteger(&sighash, (dagnode->m_Flags & Frozen::DagNode::kFlagAllowUnwrittenOutputFiles) ? 1 : 0);
 
-    HashDigest result;
-    HashFinalize(&sighash, &result);
-    return result;
+    HashFinalize(&sighash, &node->m_CurrentInputSignature);
+    return true;
 }
 
 bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node)
 {
+    CheckDoesNotHaveLock(&queue->m_Lock);
+
     const Frozen::DagNode *dagnode = node->m_DagNode;
 
-    node->m_InputSignature = CalculateInputSignature(queue, thread_state, dagnode);
+    CalculateInputSignature(queue, thread_state, node);
 
     // Figure out if we need to rebuild this node.
     const Frozen::BuiltNode *prev_builtnode = node->m_BuiltNode;
@@ -476,14 +468,14 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
     StatCache *stat_cache = config.m_StatCache;
     DigestCache *digest_cache = config.m_DigestCache;
 
-    if (prev_builtnode->m_InputSignature != node->m_InputSignature)
+    if (prev_builtnode->m_InputSignature != node->m_CurrentInputSignature)
     {
         // The input signature has changed (either direct inputs or includes)
         // We need to rebuild this node.
         char oldDigest[kDigestStringSize];
         char newDigest[kDigestStringSize];
         DigestToString(oldDigest, prev_builtnode->m_InputSignature);
-        DigestToString(newDigest, node->m_InputSignature);
+        DigestToString(newDigest, node->m_CurrentInputSignature);
 
         Log(kSpam, "T=%d: building %s - input signature changed. was:%s now:%s", thread_state->m_ThreadIndex, dagnode->m_Annotation.Get(), oldDigest, newDigest);
 
@@ -507,7 +499,7 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
             JsonWriteKeyName(&msg, "changes");
             JsonWriteStartArray(&msg);
 
-            ReportInputSignatureChanges(&msg, node, dagnode, prev_builtnode, stat_cache, digest_cache, queue->m_Config.m_ScanCache, config.m_ShaDigestExtensions, config.m_ShaDigestExtensionCount, thread_state);
+            ReportInputSignatureChanges(&msg, queue->m_Config.m_Dag, node, dagnode, prev_builtnode, stat_cache, digest_cache, queue->m_Config.m_ScanCache, config.m_ShaDigestExtensions, config.m_ShaDigestExtensionCount, thread_state);
 
             JsonWriteEndArray(&msg);
             JsonWriteEndObject(&msg);
@@ -546,7 +538,7 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
         return true;
     }
 
-    if (OutputFilesMissing(stat_cache, node))
+    if (OutputFilesMissingFor(node->m_BuiltNode, stat_cache))
     {
         // One or more output files are missing - need to rebuild.
         Log(kSpam, "T=%d: building %s - output files are missing", thread_state->m_ThreadIndex, dagnode->m_Annotation.Get());

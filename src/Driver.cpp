@@ -5,6 +5,7 @@
 #include "Common.hpp"
 #include "DagData.hpp"
 #include "DagGenerator.hpp"
+#include "DagDerivedCompiler.hpp"
 #include "FileInfo.hpp"
 #include "MemAllocLinear.hpp"
 #include "MemoryMappedFile.hpp"
@@ -21,6 +22,8 @@
 #include "FileSign.hpp"
 #include "DynamicOutputDirectories.hpp"
 #include "PathUtil.hpp"
+#include "CacheClient.hpp"
+#include "LeafInputSignature.hpp"
 
 #include <time.h>
 #include <stdio.h>
@@ -29,25 +32,6 @@
 #include <vector>
 #include <sstream>
 #include "stdarg.h"
-
-#if ENABLED(TUNDRA_CASE_INSENSITIVE_FILESYSTEM)
-#if defined(_MSC_VER) || defined(TUNDRA_WIN32_MINGW)
-#define PathCompareN _strnicmp
-#define PathCompare _stricmp
-#else
-#define PathCompareN strncasecmp
-#define PathCompare strcasecmp
-#endif
-#else
-#define PathCompareN strncmp
-#define PathCompare strcmp
-#endif
-
-#if defined(TUNDRA_WIN32)
-#define strncasecmp _strnicmp
-#endif
-
-
 
 TundraStats g_Stats;
 
@@ -75,6 +59,7 @@ void DriverOptionsInit(DriverOptions *self)
     self->m_SilenceIfPossible = false;
     self->m_DontReusePreviousResults = false;
     self->m_DebugSigning = false;
+    self->m_JustPrintLeafInputSignature = nullptr;
     self->m_ThrottleOnHumanActivity = false;
     self->m_ThrottleInactivityPeriod = 30;
     self->m_ThrottledThreadsAmount = 0;
@@ -176,7 +161,7 @@ static void GetIncludesRecursive(const HashDigest &scannerGuid, const char *fn, 
     HashTableInsert(&seen, fnHash, fn, scannerGuid);
 
     HashDigest scan_key;
-    ComputeScanCacheKey(&scan_key, fn, scannerGuid);
+    ComputeScanCacheKey(&scan_key, fn, scannerGuid, false);
 
     const int32_t count = scan_data->m_EntryCount;
     if (const HashDigest *ptr = BinarySearch(scan_data->m_Keys.Get(), count, scan_key))
@@ -222,11 +207,12 @@ bool DriverReportIncludes(Driver *self)
     {
         const Frozen::DagNode &node = dag->m_DagNodes[i];
 
-        const Frozen::ScannerData *s = node.m_Scanner;
-        if (s != nullptr && node.m_InputFiles.GetCount() > 0)
+
+        if (node.m_ScannerIndex != -1 && node.m_InputFiles.GetCount() > 0)
         {
             const char *fn = node.m_InputFiles[0].m_Filename.Get();
             uint32_t fnHash = node.m_InputFiles[0].m_FilenameHash;
+            const Frozen::ScannerData *s = dag->m_Scanners[node.m_ScannerIndex];
             GetIncludesRecursive(s->m_ScannerGuid, fn, fnHash, scan_data, 0, seen, direct);
         }
     }
@@ -245,7 +231,7 @@ bool DriverReportIncludes(Driver *self)
 
     HashTableWalk(&seen, [&](uint32_t index, uint32_t hash, const char *filename, const HashDigest &scannerguid) {
         HashDigest scan_key;
-        ComputeScanCacheKey(&scan_key, filename, scannerguid);
+        ComputeScanCacheKey(&scan_key, filename, scannerguid, false);
         const int32_t count = scan_data->m_EntryCount;
         if (const HashDigest *ptr = BinarySearch(scan_data->m_Keys.Get(), count, scan_key))
         {
@@ -366,17 +352,22 @@ static bool DriverPrepareDag(Driver *self, const char *dag_fn)
 
     snprintf(out_of_date_reason, out_of_date_reason_length, "(unknown reason)");
 
-
     char json_filename[kMaxPathLength];
     snprintf(json_filename, sizeof json_filename, "%s.json", dag_fn);
     json_filename[sizeof(json_filename) - 1] = '\0';
 
+    char dagderived_filename[kMaxPathLength];
+    snprintf(dagderived_filename, sizeof dagderived_filename, "%s_derived", dag_fn);
+    dagderived_filename[sizeof(dagderived_filename) - 1] = '\0';
+
     FileInfo dag_info = GetFileInfo(dag_fn);
+    FileInfo dagderived_info = GetFileInfo(dagderived_filename);
     FileInfo json_info = GetFileInfo(json_filename);
 
     if (!dag_info.Exists() && !json_info.Exists())
         return ExitRequestingFrontendRun("%s does not exist yet", json_filename);
 
+    bool frozeDag = false;
     if (json_info.Exists())
     {
         bool dagExists = dag_info.Exists();
@@ -387,6 +378,7 @@ static bool DriverPrepareDag(Driver *self, const char *dag_fn)
             uint64_t time_exec_started = TimerGet();
             if (!FreezeDagJson(json_filename, dag_fn))
                 return ExitRequestingFrontendRun("%s failed to freeze", json_filename);
+            frozeDag = true;
             uint64_t now = TimerGet();
             double duration = TimerDiffSeconds(time_exec_started, now);
             PrintMessage(MessageStatusLevel::Success, duration, "Freezing %s into .dag (%s)", FindFileNameInside(json_filename), reason);
@@ -396,6 +388,20 @@ static bool DriverPrepareDag(Driver *self, const char *dag_fn)
     if (!LoadFrozenData<Frozen::Dag>(dag_fn, &self->m_DagFile, &self->m_DagData))
     {
         remove(dag_fn);
+        remove(dagderived_filename);
+        return ExitRequestingFrontendRun("%s couldn't be loaded", dag_fn);
+    }
+
+    if (!dagderived_info.Exists() || frozeDag)
+    {
+        if (!CompileDagDerived(self->m_DagData, &self->m_Heap, &self->m_Allocator, &self->m_StatCache, dagderived_filename))
+            return ExitRequestingFrontendRun("failed to create derived dag file %s", dagderived_filename);
+    }
+
+    if (!LoadFrozenData<Frozen::DagDerived>(dagderived_filename, &self->m_DagDerivedFile, &self->m_DagDerivedData))
+    {
+        remove(dag_fn);
+        remove(dagderived_filename);
         return ExitRequestingFrontendRun("%s couldn't be loaded", dag_fn);
     }
 
@@ -422,9 +428,13 @@ static bool DriverPrepareDag(Driver *self, const char *dag_fn)
 
     MmapFileUnmap(&self->m_DagFile);
     self->m_DagData = nullptr;
+    MmapFileUnmap(&self->m_DagDerivedFile);
+    self->m_DagDerivedData = nullptr;
 
     if (remove(dag_fn))
         Croak("Failed to remove out of date dag at %s", dag_fn);
+    if (remove(dagderived_filename))
+        Croak("Failed to remove out of date dagderived file at %s", dagderived_filename);
 
     ExitRequestingFrontendRun("%s no longer valid. %s", FindFileNameInside(dag_fn), out_of_date_reason);
 
@@ -664,7 +674,7 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
     ProfilerScope prof_scope("Tundra PrepareNodes", 0);
 
     const Frozen::Dag *dag = self->m_DagData;
-    const Frozen::DagNode *src_nodes = dag->m_DagNodes;
+    const Frozen::DagNode *dag_nodes = dag->m_DagNodes;
     const HashDigest *dag_node_guids = dag->m_NodeGuids;
     MemAllocHeap *heap = &self->m_Heap;
 
@@ -672,51 +682,47 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
     BufferInitWithCapacity(&node_stack, heap, 1024);
 
     DriverSelectNodes(dag, targets, target_count, &node_stack, heap);
+    int explicitelyRequestedCount = node_stack.m_Size;
 
-    const size_t node_word_count = (dag->m_NodeCount + 31) / 32;
-    uint32_t *node_visited_bits = HeapAllocateArrayZeroed<uint32_t>(heap, node_word_count);
-
-    int node_count = 0;
-
-    Buffer<int32_t> node_indices;
-    BufferInitWithCapacity(&node_indices, heap, 1024);
-
-    while (node_stack.m_Size > 0)
+    for (int i = 0; i < node_stack.m_Size; ++i)
     {
-        int dag_index = BufferPopOne(&node_stack);
-        const int dag_word = dag_index / 32;
-        const int dag_bit = 1 << (dag_index & 31);
+        const Frozen::DagNode *dag_node = dag_nodes + node_stack[i];
 
-        if (0 == (node_visited_bits[dag_word] & dag_bit))
+        for (auto usageDep : dag_node->m_ToUseDependencies)
         {
-            const Frozen::DagNode *node = src_nodes + dag_index;
-
-            BufferAppendOne(&node_indices, &self->m_Heap, dag_index);
-
-            node_visited_bits[dag_word] |= dag_bit;
-
-            // Update counts
-            ++node_count;
-
-            // Stash node dependencies on the work queue to keep iterating
-            BufferAppend(&node_stack, &self->m_Heap, node->m_Dependencies.GetArray(), node->m_Dependencies.GetCount());
+            if (!BufferContains(&node_stack, usageDep))
+                BufferAppendOne(&node_stack, heap, usageDep);
         }
     }
 
-    HeapFree(heap, node_visited_bits);
-    node_visited_bits = nullptr;
+    self->m_AmountOfRuntimeNodesSpecificallyRequested = node_stack.m_Size;
 
+    Buffer<int32_t> node_indices;
+    BufferInitWithCapacity(&node_indices, heap, 1024);
+    FindDependentNodesFromRootIndices(heap, dag, self->m_DagDerivedData, nullptr, &node_stack[0], node_stack.m_Size, node_indices);
+
+    int node_count = node_indices.m_Size;
     // Allocate space for nodes
     RuntimeNode *out_nodes = BufferAllocZero(&self->m_RuntimeNodes, &self->m_Heap, node_count);
 
     // Initialize node state
     for (int i = 0; i < node_count; ++i)
     {
-        const Frozen::DagNode *src_node = src_nodes + node_indices[i];
-        out_nodes[i].m_DagNode = src_node;
+        const Frozen::DagNode *dag_node = dag_nodes + node_indices[i];
+        out_nodes[i].m_DagNode = dag_node;
+        out_nodes[i].m_DagNodeIndex = node_indices[i];
 #if ENABLED(CHECKED_BUILD)
-        out_nodes[i].m_DebugAnnotation = src_node->m_Annotation.Get();
+        out_nodes[i].m_DebugAnnotation = dag_node->m_Annotation.Get();
 #endif
+        for (int j = 0; j < node_stack.m_Size; ++j)
+        {
+            if (node_indices[i] == node_stack[j])
+            {
+                RuntimeNodeSetExplicitlyRequested(&out_nodes[i]);
+                if (j>=explicitelyRequestedCount)
+                    RuntimeNodeSetExplicitlyRequestedThroughUseDependency(&out_nodes[i]);
+            }
+        }
     }
 
     // Find frozen node state from previous build, if present.
@@ -747,7 +753,7 @@ bool DriverPrepareNodes(Driver *self, const char **targets, int target_count)
     for (int local_index = 0; local_index < node_count; ++local_index)
     {
         const Frozen::DagNode *global_node = out_nodes[local_index].m_DagNode;
-        const int global_index = int(global_node - src_nodes);
+        const int global_index = int(global_node - dag_nodes);
         CHECK(node_remap[global_index] == -1);
         node_remap[global_index] = local_index;
     }
@@ -804,6 +810,14 @@ void DriverDestroy(Driver *self)
 
     ScanCacheDestroy(&self->m_ScanCache);
 
+    for (auto &node: self->m_RuntimeNodes)
+    {
+        if (node.m_CurrentLeafInputSignature != nullptr)
+            DestroyLeafInputSignatureData(&self->m_Heap, node.m_CurrentLeafInputSignature);
+        if (HashSetIsInitialized(&node.m_ImplicitInputs))
+            HashSetDestroy(&node.m_ImplicitInputs);
+    }
+
     BufferDestroy(&self->m_RuntimeNodes, &self->m_Heap);
     BufferDestroy(&self->m_DagNodeIndexToRuntimeNodeIndex_Table, &self->m_Heap);
 
@@ -813,12 +827,14 @@ void DriverDestroy(Driver *self)
 
     LinearAllocDestroy(&self->m_ScanCacheAllocator);
     LinearAllocDestroy(&self->m_StatCacheAllocator);
-    LinearAllocDestroy(&self->m_Allocator);
+    LinearAllocDestroy(&self->m_Allocator, true);
     HeapDestroy(&self->m_Heap);
 }
 
 bool DriverPrepareDag(Driver *self, const char *dag_fn);
 bool DriverAllocNodes(Driver *self);
+
+
 
 BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count)
 {
@@ -831,7 +847,9 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count)
     queue_config.m_DriverOptions = &self->m_Options;
     queue_config.m_Flags = 0;
     queue_config.m_Heap = &self->m_Heap;
+    queue_config.m_Dag = self->m_DagData;
     queue_config.m_DagNodes = self->m_DagData->m_DagNodes;
+    queue_config.m_DagDerived = self->m_DagDerivedData;
     queue_config.m_RuntimeNodes = self->m_RuntimeNodes.m_Storage;
     queue_config.m_TotalRuntimeNodeCount = (int)self->m_RuntimeNodes.m_Size;
     queue_config.m_DagNodeIndexToRuntimeNodeIndex_Table = self->m_DagNodeIndexToRuntimeNodeIndex_Table.m_Storage;
@@ -842,6 +860,11 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count)
     queue_config.m_ShaDigestExtensions = dag->m_ShaExtensionHashes.GetArray();
     queue_config.m_SharedResources = dag->m_SharedResources.GetArray();
     queue_config.m_SharedResourcesCount = dag->m_SharedResources.GetCount();
+    queue_config.m_AmountOfRuntimeNodesSpecificallyRequested = self->m_AmountOfRuntimeNodesSpecificallyRequested;
+
+    GetCachingBehaviourSettingsFromEnvironment(&queue_config.m_AttemptCacheReads, &queue_config.m_AttemptCacheWrites);
+
+    DagRuntimeDataInit(&queue_config.m_DagRuntimeData, self->m_DagData, &self->m_Heap);
 
     if (self->m_Options.m_Verbose)
     {
@@ -880,7 +903,13 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count)
 
     BuildResult::Enum build_result = BuildResult::kOk;
 
-    build_result = BuildQueueBuild(&build_queue);
+    if (self->m_Options.m_JustPrintLeafInputSignature)
+    {
+        PrintLeafInputSignature(&build_queue, self->m_Options.m_JustPrintLeafInputSignature);
+        goto leave;
+    }
+
+    build_result = BuildQueueBuild(&build_queue, &self->m_Allocator);
 
     if (self->m_Options.m_DebugSigning)
     {
@@ -890,8 +919,11 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count)
 
     *out_finished_node_count = build_queue.m_FinishedNodeCount;
 
+leave:
     // Shut down build queue
     BuildQueueDestroy(&build_queue);
+
+    DagRuntimeDataDestroy(&queue_config.m_DagRuntimeData);
 
     return build_result;
 }
@@ -941,15 +973,16 @@ struct StateSavingSegments
 };
 
 template <class TNodeType>
-static void save_node_sharedcode(bool nodeWasBuiltSuccesfully, const HashDigest *input_signature, const TNodeType *src_node, const HashDigest *guid, const StateSavingSegments &segments, const SinglyLinkedPathList* additionalDiscoveredOutputFiles)
+static void save_node_sharedcode(bool nodeWasBuiltSuccesfully, const HashDigest *input_signature, const HashDigest* leafinput_signature, const TNodeType *src_node, const HashDigest *guid, const StateSavingSegments &segments, const SinglyLinkedPathList* additionalDiscoveredOutputFiles)
 {
     //we're writing to two arrays in one go.  the FrozenArray<HashDigest> m_NodeGuids and the FrozenArray<BuiltNode> m_BuiltNodes
     //the hashdigest is quick
-    BinarySegmentWrite(segments.guid, (const char *)guid, sizeof(HashDigest));
+    BinarySegmentWriteHashDigest(segments.guid, *guid);
 
     //the rest not so much
     BinarySegmentWriteInt32(segments.built_nodes, nodeWasBuiltSuccesfully ? 1 : 0);
-    BinarySegmentWrite(segments.built_nodes, (const char *)input_signature, sizeof(HashDigest));
+    BinarySegmentWriteHashDigest(segments.built_nodes, *input_signature);
+    BinarySegmentWriteHashDigest(segments.built_nodes, *leafinput_signature);
 
     auto WriteFrozenFileAndHashIntoBuiltNodesStream = [segments](const FrozenFileAndHash& f) -> void {
         BinarySegmentWritePointer(segments.array, BinarySegmentPosition(segments.string));
@@ -1052,13 +1085,13 @@ bool DriverSaveAllBuiltNodes(Driver *self)
 
         const Frozen::DagNode* dag_node = runtime_node->m_DagNode;
 
-        bool nodeWasBuiltSuccessfully = runtime_node->m_BuildResult == NodeBuildResult::kRanSuccesfully || runtime_node->m_BuildResult == NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun;
+        bool nodeWasBuiltSuccessfully = runtime_node->m_BuildResult != NodeBuildResult::kRanFailed;
 
-        save_node_sharedcode(nodeWasBuiltSuccessfully, &runtime_node->m_InputSignature, runtime_node->m_DagNode, guid, segments, runtime_node->m_DynamicallyDiscoveredOutputFiles);
+        HashDigest leafInputSignatureDigest = {};
+        if (runtime_node->m_CurrentLeafInputSignature)
+            leafInputSignatureDigest = runtime_node->m_CurrentLeafInputSignature->digest;
 
-        HashSet<kFlagPathStrings> implicitDependencies;
-        if (dag_node->m_Scanner)
-            HashSetInit(&implicitDependencies, &self->m_Heap);
+        save_node_sharedcode(nodeWasBuiltSuccessfully, &runtime_node->m_CurrentInputSignature, &leafInputSignatureDigest, runtime_node->m_DagNode, guid, segments, runtime_node->m_DynamicallyDiscoveredOutputFiles);
 
         int32_t file_count = dag_node->m_InputFiles.GetCount();
         BinarySegmentWriteInt32(built_nodes_seg, file_count);
@@ -1066,58 +1099,32 @@ bool DriverSaveAllBuiltNodes(Driver *self)
         for (int32_t i = 0; i < file_count; ++i)
         {
             uint64_t timestamp = 0;
-            FileInfo fileInfo = StatCacheStat(&self->m_StatCache, dag_node->m_InputFiles[i].m_Filename, dag_node->m_InputFiles[i].m_FilenameHash);
+            uint32_t filenameHash = dag_node->m_InputFiles[i].m_FilenameHash;
+            const FrozenString& filename = dag_node->m_InputFiles[i].m_Filename;
+            FileInfo fileInfo = StatCacheStat(&self->m_StatCache, filename, filenameHash);
             if (fileInfo.Exists())
                 timestamp = fileInfo.m_Timestamp;
 
             BinarySegmentWriteUint64(array_seg, timestamp);
-
-            WriteCommonStringPtr(array_seg, string_seg, dag_node->m_InputFiles[i].m_Filename, &shared_strings, scratch);
-
-            if (dag_node->m_Scanner)
-            {
-                MemAllocLinearScope alloc_scope(scratch);
-
-                ScanInput scan_input;
-                scan_input.m_ScannerConfig = dag_node->m_Scanner;
-                scan_input.m_ScratchAlloc = scratch;
-                scan_input.m_ScratchHeap = &self->m_Heap;
-                scan_input.m_FileName = dag_node->m_InputFiles[i].m_Filename;
-                scan_input.m_ScanCache = &self->m_ScanCache;
-
-                ScanOutput scan_output;
-
-                // It looks like we're re-running the scanner here, but the scan results should all be cached already, so it
-                // should be fast.
-                if (ScanImplicitDeps(&self->m_StatCache, &scan_input, &scan_output))
-                {
-                    for (int i = 0, count = scan_output.m_IncludedFileCount; i < count; ++i)
-                    {
-                        const FileAndHash &path = scan_output.m_IncludedFiles[i];
-                        if (!HashSetLookup(&implicitDependencies, path.m_FilenameHash, path.m_Filename))
-                            HashSetInsert(&implicitDependencies, path.m_FilenameHash, path.m_Filename);
-                    }
-                }
-            }
+            BinarySegmentWriteUint32(array_seg, filenameHash);
+            WriteCommonStringPtr(array_seg, string_seg, filename, &shared_strings, scratch);
         }
 
-        if (dag_node->m_Scanner)
+        if (dag_node->m_ScannerIndex != -1)
         {
-            BinarySegmentWriteInt32(built_nodes_seg, implicitDependencies.m_RecordCount);
+            BinarySegmentWriteInt32(built_nodes_seg, runtime_node->m_ImplicitInputs.m_RecordCount);
             BinarySegmentWritePointer(built_nodes_seg, BinarySegmentPosition(array_seg));
 
-            HashSetWalk(&implicitDependencies, [=, &shared_strings](uint32_t index, uint32_t hash, const char *filename) {
+            HashSetWalk(&runtime_node->m_ImplicitInputs, [=, &shared_strings](uint32_t index, uint32_t hash, const char *filename) {
                 uint64_t timestamp = 0;
                 FileInfo fileInfo = StatCacheStat(&self->m_StatCache, filename, hash);
                 if (fileInfo.Exists())
                     timestamp = fileInfo.m_Timestamp;
 
                 BinarySegmentWriteUint64(array_seg, timestamp);
-
+                BinarySegmentWriteUint32(array_seg, hash);
                 WriteCommonStringPtr(array_seg, string_seg, filename, &shared_strings, scratch);
             });
-
-            HashSetDestroy(&implicitDependencies);
         }
         else
         {
@@ -1142,7 +1149,7 @@ bool DriverSaveAllBuiltNodes(Driver *self)
 
     auto EmitBuiltNodeFromPreviouslyBuiltNode = [=, &emitted_built_nodes_count, &shared_strings](const Frozen::BuiltNode *built_node, const HashDigest *guid) -> void {
 
-        save_node_sharedcode(built_node->m_WasBuiltSuccessfully, &built_node->m_InputSignature, built_node, guid, segments, nullptr);
+        save_node_sharedcode(built_node->m_WasBuiltSuccessfully, &built_node->m_InputSignature, &built_node->m_LeafInputSignature, built_node, guid, segments, nullptr);
         emitted_built_nodes_count++;
 
         int32_t file_count = built_node->m_InputFiles.GetCount();
@@ -1151,7 +1158,7 @@ bool DriverSaveAllBuiltNodes(Driver *self)
         for (int32_t i = 0; i < file_count; ++i)
         {
             BinarySegmentWriteUint64(array_seg, built_node->m_InputFiles[i].m_Timestamp);
-
+            BinarySegmentWriteUint32(array_seg, built_node->m_InputFiles[i].m_FilenameHash);
             WriteCommonStringPtr(array_seg, string_seg, built_node->m_InputFiles[i].m_Filename, &shared_strings, &self->m_Allocator);
         }
 
@@ -1161,7 +1168,7 @@ bool DriverSaveAllBuiltNodes(Driver *self)
         for (int32_t i = 0; i < file_count; ++i)
         {
             BinarySegmentWriteUint64(array_seg, built_node->m_ImplicitInputFiles[i].m_Timestamp);
-
+            BinarySegmentWriteUint32(array_seg, built_node->m_ImplicitInputFiles[i].m_FilenameHash);
             WriteCommonStringPtr(array_seg, string_seg, built_node->m_ImplicitInputFiles[i].m_Filename, &shared_strings, &self->m_Allocator);
         }
 
@@ -1184,8 +1191,8 @@ bool DriverSaveAllBuiltNodes(Driver *self)
         switch(runtime_node->m_BuildResult)
         {
             case NodeBuildResult::kDidNotRun:
-            case NodeBuildResult::kUpToDate:
                 return false;
+            case NodeBuildResult::kUpToDate:
             case NodeBuildResult::kRanSuccesfully:
             case NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun:
             case NodeBuildResult::kRanFailed:

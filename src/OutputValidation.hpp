@@ -3,12 +3,15 @@
 struct ExecResult;
 namespace Frozen { struct DagNode; }
 
-enum ValidationResult
+namespace ValidationResult
 {
-    Pass,
-    SwallowStdout,
-    UnexpectedConsoleOutputFail,
-    UnwrittenOutputFileFail
-};
+    enum Enum
+    {
+        Pass,
+        SwallowStdout,
+        UnexpectedConsoleOutputFail,
+        UnwrittenOutputFileFail
+    };
+}
 
-ValidationResult ValidateExecResultAgainstAllowedOutput(ExecResult *result, const Frozen::DagNode *node_data);
+ValidationResult::Enum ValidateExecResultAgainstAllowedOutput(ExecResult *result, const Frozen::DagNode *node_data);

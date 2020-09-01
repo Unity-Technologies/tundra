@@ -5,6 +5,23 @@
 
 #include <string.h>
 
+#if ENABLED(TUNDRA_CASE_INSENSITIVE_FILESYSTEM)
+#if defined(_MSC_VER) || defined(TUNDRA_WIN32_MINGW)
+#define PathCompareN _strnicmp
+#define PathCompare _stricmp
+#else
+#define PathCompareN strncasecmp
+#define PathCompare strcasecmp
+#endif
+#else // ENABLED(TUNDRA_CASE_INSENSITIVE_FILESYSTEM)
+#define PathCompareN strncmp
+#define PathCompare strcmp
+#endif // ENABLED(TUNDRA_CASE_INSENSITIVE_FILESYSTEM)
+
+#if defined(TUNDRA_WIN32)
+#define strncasecmp _strnicmp
+#endif
+
 static const int kMaxPathLength = 512;
 static const int kMaxPathSegments = 64;
 

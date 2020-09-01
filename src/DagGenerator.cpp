@@ -11,6 +11,7 @@
 #include "HashTable.hpp"
 #include "FileSign.hpp"
 #include "BuildQueue.hpp"
+#include "LeafInputSignature.hpp"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -265,41 +266,6 @@ static bool WriteNodes(
 
     size_t node_count = nodes->m_Count;
 
-    struct BacklinkRec
-    {
-        Buffer<int32_t> m_Links;
-    };
-
-    BacklinkRec *links = HeapAllocateArrayZeroed<BacklinkRec>(heap, node_count);
-
-    for (size_t i = 0; i < node_count; ++i)
-    {
-        const JsonObjectValue *node = nodes->m_Values[i]->AsObject();
-        if (!node)
-            return false;
-
-        const JsonArrayValue *deps = FindArrayValue(node, "Deps");
-
-        if (EmptyArray(deps))
-            continue;
-
-        for (size_t di = 0, count = deps->m_Count; di < count; ++di)
-        {
-            if (const JsonNumberValue *dep_index_n = deps->m_Values[di]->AsNumber())
-            {
-                int32_t dep_index = (int)dep_index_n->m_Number;
-                if (dep_index < 0 || dep_index >= (int)node_count)
-                    return false;
-
-                BufferAppendOne(&links[dep_index].m_Links, heap, int32_t(i));
-            }
-            else
-            {
-                return false;
-            }
-        }
-    }
-
     uint32_t *reverse_remap = (uint32_t *)HeapAllocate(heap, node_count * sizeof(uint32_t));
     for (uint32_t i = 0; i < node_count; ++i)
     {
@@ -313,8 +279,12 @@ static bool WriteNodes(
 
         const char *action = FindStringValue(node, "Action");
         const char *annotation = FindStringValue(node, "Annotation");
-        const JsonArrayValue *deps = FindArrayValue(node, "Deps");
+        const JsonArrayValue *toBuildDependencies = FindArrayValue(node, "ToBuildDependencies");
+        if (toBuildDependencies == nullptr)
+            toBuildDependencies = FindArrayValue(node, "Deps");
+        const JsonArrayValue *toUseDependencies = FindArrayValue(node, "ToUseDependencies");
         const JsonArrayValue *inputs = FindArrayValue(node, "Inputs");
+        const JsonArrayValue *filesThatMightBeIncluded = FindArrayValue(node, "FilesThatMightBeIncluded");
         const JsonArrayValue *outputs = FindArrayValue(node, "Outputs");
         const JsonArrayValue *output_dirs = FindArrayValue(node, "TargetDirectories");
         const JsonArrayValue *aux_outputs = FindArrayValue(node, "AuxOutputs");
@@ -323,6 +293,7 @@ static bool WriteNodes(
         const JsonArrayValue *shared_resources = FindArrayValue(node, "SharedResources");
         const JsonArrayValue *frontend_rsps = FindArrayValue(node, "FrontendResponseFiles");
         const JsonArrayValue *allowedOutputSubstrings = FindArrayValue(node, "AllowedOutputSubstrings");
+        const JsonArrayValue *cachingInputIgnoreList = FindArrayValue(node, "CachingInputIgnoreList");
         const char *writetextfile_payload = FindStringValue(node, "WriteTextFilePayload");
 
         if (writetextfile_payload == nullptr)
@@ -332,48 +303,38 @@ static bool WriteNodes(
 
         WriteStringPtr(node_data_seg, str_seg, annotation);
 
-        if (deps)
-        {
-            BinarySegmentAlign(array2_seg, 4);
-            BinarySegmentWriteInt32(node_data_seg, (int)deps->m_Count);
-            BinarySegmentWritePointer(node_data_seg, BinarySegmentPosition(array2_seg));
-            for (size_t i = 0, count = deps->m_Count; i < count; ++i)
+        auto writeDependencyIndexList = [=](const JsonArrayValue* deps)->void{
+            if (deps)
             {
-                if (const JsonNumberValue *dep_index = deps->m_Values[i]->AsNumber())
+                BinarySegmentAlign(array2_seg, 4);
+                BinarySegmentWriteInt32(node_data_seg, (int)deps->m_Count);
+                BinarySegmentWritePointer(node_data_seg, BinarySegmentPosition(array2_seg));
+                for (size_t i = 0, count = deps->m_Count; i < count; ++i)
                 {
-                    int index = (int)dep_index->m_Number;
-                    int remapped_index = remap_table[index];
-                    BinarySegmentWriteInt32(array2_seg, remapped_index);
-                }
-                else
-                {
-                    return false;
+                    if (const JsonNumberValue *dep_index = deps->m_Values[i]->AsNumber())
+                    {
+                        int index = (int)dep_index->m_Number;
+                        int remapped_index = remap_table[index];
+                        BinarySegmentWriteInt32(array2_seg, remapped_index);
+                    }
+                    else
+                    {
+                        Croak("dependency node index out of range for node %s.", annotation);
+                    }
                 }
             }
-        }
-        else
-        {
-            BinarySegmentWriteInt32(node_data_seg, 0);
-            BinarySegmentWriteNullPointer(node_data_seg);
-        }
+            else
+            {
+                BinarySegmentWriteInt32(node_data_seg, 0);
+                BinarySegmentWriteNullPointer(node_data_seg);
+            }
+        };
 
-        const Buffer<int32_t> &backlinks = links[i].m_Links;
-        if (backlinks.m_Size > 0)
-        {
-            BinarySegmentWriteInt32(node_data_seg, (int)backlinks.m_Size);
-            BinarySegmentWritePointer(node_data_seg, BinarySegmentPosition(array2_seg));
-            for (int32_t index : backlinks)
-            {
-                BinarySegmentWriteInt32(array2_seg, remap_table[index]);
-            }
-        }
-        else
-        {
-            BinarySegmentWriteInt32(node_data_seg, 0);
-            BinarySegmentWriteNullPointer(node_data_seg);
-        }
+        writeDependencyIndexList(toBuildDependencies);
+        writeDependencyIndexList(toUseDependencies);
 
         WriteFileArray(node_data_seg, array2_seg, str_seg, inputs);
+        WriteFileArray(node_data_seg, array2_seg, str_seg, filesThatMightBeIncluded);
         WriteFileArray(node_data_seg, array2_seg, str_seg, outputs);
         WriteFileArray(node_data_seg, array2_seg, str_seg, output_dirs);
 
@@ -419,14 +380,7 @@ static bool WriteNodes(
             BinarySegmentWriteNullPointer(node_data_seg);
         }
 
-        if (-1 != scanner_index)
-        {
-            BinarySegmentWritePointer(node_data_seg, scanner_ptrs[scanner_index]);
-        }
-        else
-        {
-            BinarySegmentWriteNullPointer(node_data_seg);
-        }
+        BinarySegmentWriteInt32(node_data_seg, scanner_index);
 
         if (shared_resources && shared_resources->m_Count > 0)
         {
@@ -454,6 +408,8 @@ static bool WriteNodes(
         EmitFileSignatures(node, node_data_seg, array2_seg, str_seg);
         EmitGlobSignatures(node, node_data_seg, array2_seg, str_seg, heap, scratch);
 
+        WriteFileArray(node_data_seg, array2_seg, str_seg, cachingInputIgnoreList);
+
         uint32_t flags = 0;
 
         flags |= GetNodeFlag(node, "OverwriteOutputs", Frozen::DagNode::kFlagOverwriteOutputs, true);
@@ -462,20 +418,26 @@ static bool WriteNodes(
         flags |= GetNodeFlag(node, "AllowUnwrittenOutputFiles", Frozen::DagNode::kFlagAllowUnwrittenOutputFiles, false);
         flags |= GetNodeFlag(node, "BanContentDigestForInputs", Frozen::DagNode::kFlagBanContentDigestForInputs, false);
 
+        const char* cachingMode = FindStringValue(node, "CachingMode");
+        if (cachingMode != nullptr)
+        {
+            if (0==strcmp(cachingMode, "ByLeafInputs"))
+                flags |= Frozen::DagNode::kFlagCacheableByLeafInputs;
+        }
+
         if (writetextfile_payload != nullptr)
             flags |= Frozen::DagNode::kFlagIsWriteTextFileAction;
 
         BinarySegmentWriteUint32(node_data_seg, flags);
-        BinarySegmentWriteUint32(node_data_seg, reverse_remap[ni]);
-    }
 
-    for (size_t i = 0; i < node_count; ++i)
-    {
-        BufferDestroy(&links[i].m_Links, heap);
+        //write m_OriginalIndex
+        BinarySegmentWriteUint32(node_data_seg, reverse_remap[ni]);
+
+        //write dagNodeIndex
+        BinarySegmentWriteUint32(node_data_seg, ni);
     }
 
     HeapFree(heap, reverse_remap);
-    HeapFree(heap, links);
 
     return true;
 }
@@ -795,6 +757,7 @@ static bool CompileDag(const JsonObjectValue *root, BinaryWriter *writer, MemAll
     BinarySegment *writetextfile_payloads_seg = BinaryWriterAddSegment(writer);
 
     const JsonArrayValue *nodes = FindArrayValue(root, "Nodes");
+    const JsonArrayValue *directoriesCausingImplicitDependencies = FindArrayValue(root, "DirectoriesCausingImplicitDependencies");
     const JsonArrayValue *scanners = FindArrayValue(root, "Scanners");
     const JsonArrayValue *shared_resources = FindArrayValue(root, "SharedResources");
     const char *identifier = FindStringValue(root, "Identifier", "default");
@@ -821,7 +784,6 @@ static bool CompileDag(const JsonObjectValue *root, BinaryWriter *writer, MemAll
     BinarySegmentWriteUint32(main_seg, Djb2Hash(identifier));
 
     // Compute node guids and index remapping table.
-    // FIXME: this just leaks
     int32_t *remap_table = HeapAllocateArray<int32_t>(heap, nodes->m_Count);
     TempNodeGuid *guid_table = HeapAllocateArray<TempNodeGuid>(heap, nodes->m_Count);
 
@@ -882,6 +844,21 @@ static bool CompileDag(const JsonObjectValue *root, BinaryWriter *writer, MemAll
     EmitFileSignatures(root, main_seg, aux_seg, str_seg);
     EmitGlobSignatures(root, main_seg, aux_seg, str_seg, heap, scratch);
 
+    WriteFileArray(main_seg, aux_seg, str_seg, directoriesCausingImplicitDependencies);
+
+    if (scanner_ptrs == nullptr)
+    {
+        BinarySegmentWriteInt32(main_seg, 0);
+        BinarySegmentWriteNullPointer(main_seg);
+    } else {
+        BinarySegmentWriteInt32(main_seg, scanners->m_Count);
+        BinarySegmentWritePointer(main_seg, BinarySegmentPosition(aux_seg));
+        for (int i=0; i<scanners->m_Count; i++)
+        {
+            BinarySegmentWritePointer(aux_seg, scanner_ptrs[i]);
+        }
+    }
+
     // Emit hashes of file extensions to sign using SHA-1 content digest instead of the normal timestamp signing.
     if (const JsonArrayValue *sha_exts = FindArrayValue(root, "ContentDigestExtensions"))
     {
@@ -927,6 +904,9 @@ static bool CompileDag(const JsonObjectValue *root, BinaryWriter *writer, MemAll
     WriteStringPtr(main_seg, str_seg, FindStringValue(root, "StructuredLogFileName"));
 
     HashTableDestroy(&shared_strings);
+
+    HeapFree(heap, remap_table);
+    HeapFree(heap, guid_table);
 
     //write magic number again at the end to pretect against writing too much / too little data and not noticing.
     BinarySegmentWriteUint32(main_seg, Frozen::Dag::MagicNumber);

@@ -20,7 +20,7 @@ static bool HasAnyNonNewLine(const char *buffer)
     }
 }
 
-ValidationResult ValidateExecResultAgainstAllowedOutput(ExecResult *result, const Frozen::DagNode *node_data)
+ValidationResult::Enum ValidateExecResultAgainstAllowedOutput(ExecResult *result, const Frozen::DagNode *node_data)
 {
     auto &allowed = node_data->m_AllowedOutputSubstrings;
     bool allowOutput = node_data->m_Flags & Frozen::DagNode::kFlagAllowUnexpectedOutput;
@@ -38,9 +38,7 @@ ValidationResult ValidateExecResultAgainstAllowedOutput(ExecResult *result, cons
 
         if (re_match(allowedSubstring, result->m_OutputBuffer.buffer) != -1)
         {
-            ValidationResult returnValue = ValidationResult::SwallowStdout;
-            //printf("MATCH %s against %s allowOutput %d returning %d\n", allowedSubstring, result->m_OutputBuffer.buffer, (int)allowOutput, returnValue);
-            return returnValue;
+            return ValidationResult::SwallowStdout;
         }
     }
     return allowOutput ? ValidationResult::Pass : ValidationResult::UnexpectedConsoleOutputFail;

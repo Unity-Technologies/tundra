@@ -2,6 +2,7 @@
 
 #include "Common.hpp"
 #include <cstring>
+#include <stdio.h>
 
 struct MemAllocLinear;
 
@@ -170,6 +171,13 @@ inline void HashAddString(HashState *self, const char *s)
     HashUpdate(self, s, strlen(s));
 }
 
+inline void HashAddString(FILE* debug_hash_fd, HashState* state, const char* label, const char* str)
+{
+    if (debug_hash_fd)
+        fprintf(debug_hash_fd, "%s: %s\n", label, str);
+    HashAddString(state, str);
+}
+
 void HashAddStringFoldCase(HashState *self, const char *path);
 
 inline void HashAddPath(HashState *self, const char *path)
@@ -183,6 +191,9 @@ inline void HashAddPath(HashState *self, const char *path)
 
 // Add binary integer data to be hashed.
 void HashAddInteger(HashState *h, uint64_t value);
+
+// Add binary integer data to be hashed.
+void HashAddHashDigest(HashState *h, const HashDigest& value);
 
 // Add a separator (zero byte) to keep runs of separate data apart.
 void HashAddSeparator(HashState *h);
@@ -201,3 +212,5 @@ void DigestToString(char (&buffer)[kDigestStringSize], const HashDigest &digest)
 
 // Quickie to generate a hash digest from a single string
 void HashSingleString(HashDigest *digest_out, const char *string);
+
+void HashAddInteger(FILE* debug_hash_fd, HashState* state, const char* label, int payload);

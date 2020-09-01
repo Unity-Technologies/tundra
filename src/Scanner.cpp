@@ -45,19 +45,6 @@ static bool IncludeSetAddNoDuplicateString(IncludeSet *self, const char *string,
     return true;
 }
 
-static bool IncludeSetAddDuplicateString(IncludeSet *self, const char *string, uint32_t hash)
-{
-    if (HashSetLookup(&self->m_HashTable, hash, string))
-    {
-        return false;
-    }
-
-    // Allocate a new cell
-    HashSetInsert(&self->m_HashTable, hash, StrDup(self->m_LinearAlloc, string));
-
-    return true;
-}
-
 static bool FindFile(
     StatCache *stat_cache,
     PathBuffer *buffer,
@@ -139,11 +126,18 @@ static void ScanFile(
     }
 }
 
-bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput *output)
+
+bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput *output, IncludeFilterCallback* includeFilterCallback)
 {
+    auto invokeFilterCallback = [includeFilterCallback](const char* includingFile, const char* includedFile) -> bool
+    {
+        if (includeFilterCallback == nullptr)
+            return true;
+        return includeFilterCallback->Invoke(includingFile, includedFile);
+    };
+
     MemAllocHeap *scratch_heap = input->m_ScratchHeap;
     MemAllocLinear *scratch_alloc = input->m_ScratchAlloc;
-    const Frozen::ScannerData *scanner_config = input->m_ScannerConfig;
     ScanCache *scan_cache = input->m_ScanCache;
 
     Buffer<const char *> found_includes;
@@ -168,25 +162,34 @@ bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput 
         if (!info.Exists())
             continue;
 
-        ComputeScanCacheKey(&scan_key, fn, scanner_config->m_ScannerGuid);
+        ComputeScanCacheKey(&scan_key, fn, input->m_ScannerConfig->m_ScannerGuid, input->m_SafeToScanBeforeDependenciesAreProduced);
 
-        ScanCacheLookupResult cache_result;
-
-        if (ScanCacheLookup(scan_cache, scan_key, info.m_Timestamp, &cache_result, scratch_alloc))
+        auto DoScanCacheLookupAndMakeResults = [&]() -> bool
         {
+            ScanCacheLookupResult cache_result;
+
+            if (!ScanCacheLookup(scan_cache, scan_key, info.m_Timestamp, &cache_result, scratch_alloc))
+                return false;
+
             int file_count = cache_result.m_IncludedFileCount;
             const FileAndHash *files = cache_result.m_IncludedFiles;
 
             for (int i = 0; i < file_count; ++i)
             {
-                if (IncludeSetAddNoDuplicateString(&incset, files[i].m_Filename, files[i].m_FilenameHash))
+                //if filter returns true we will process it
+                if (invokeFilterCallback(fn, files[i].m_Filename))
                 {
-                    // This was a new file, schedule it for scanning as well.
-                    BufferAppendOne(&filename_stack, scratch_heap, files[i].m_Filename);
+                    if (IncludeSetAddNoDuplicateString(&incset, files[i].m_Filename, files[i].m_FilenameHash))
+                    {
+                        // This was a new file, schedule it for scanning as well.
+                        BufferAppendOne(&filename_stack, scratch_heap, files[i].m_Filename);
+                    }
                 }
             }
-        }
-        else
+            return true;
+        };
+
+        if (!DoScanCacheLookupAndMakeResults())
         {
             // Reset buffer
             BufferClear(&found_includes);
@@ -230,18 +233,14 @@ bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput 
 
             // Insert result into scan cache
             ScanCacheInsert(scan_cache, scan_key, info.m_Timestamp, found_includes.m_Storage, (int)found_includes.m_Size);
-
-            for (const char *file : found_includes)
-            {
-                if (IncludeSetAddDuplicateString(&incset, file, Djb2HashPath(file)))
-                {
-                    // This was a new file, schedule it for scanning as well.
-                    BufferAppendOne(&filename_stack, scratch_heap, file);
-                }
-            }
-
             HeapFree(scratch_heap, buffer);
             fclose(f);
+
+            //we will recursively call ourselves, with the purpose of returning the cache entry we just inserted into the cache.
+            //this construct lets us guarantee that the string payload memory storage we return has a lifetime until the end of the build
+            //which simplifies a lot of memory management of the users of the scancache
+            if (!DoScanCacheLookupAndMakeResults())
+                Croak("Failed to get results from scancache that we inserted just now.");
         }
     }
 

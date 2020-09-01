@@ -3,6 +3,7 @@
 #include "BuildQueue.hpp"
 #include "Exec.hpp"
 #include "JsonWriter.hpp"
+#include "LeafInputSignature.hpp"
 #include <stdio.h>
 #include <sstream>
 #include <ctime>
@@ -22,7 +23,7 @@ struct NodeResultPrintData
     const char *cmd_line;
     bool verbose;
     int duration;
-    ValidationResult validation_result;
+    ValidationResult::Enum validation_result;
     const bool *untouched_outputs;
     const char *output_buffer;
     int processed_node_count;
@@ -317,7 +318,7 @@ void PrintMessage(MessageStatusLevel::Enum status_level, int duration, ExecResul
 
 static void PrintNodeResult(const NodeResultPrintData *data, BuildQueue *queue)
 {
-    PrintMessage(data->status_level, data->processed_node_count, queue->m_Config.m_TotalRuntimeNodeCount, data->duration, data->node_data->m_Annotation.Get());
+    PrintMessage(data->status_level, data->processed_node_count, queue->m_AmountOfNodesEverQueued, data->duration, data->node_data->m_Annotation.Get());
 
     if (data->verbose)
     {
@@ -402,7 +403,62 @@ static void PrintNodeResult(const NodeResultPrintData *data, BuildQueue *queue)
     }
 }
 
-inline char *StrDupN(MemAllocHeap *allocator, const char *str, size_t len)
+static void PrintCacheOperationIntoStructuredLog(ThreadState* thread_state, RuntimeNode* node, const char* hitOrMissMessage)
+{
+    if (IsStructuredLogActive())
+    {
+        MemAllocLinearScope allocScope(&thread_state->m_ScratchAlloc);
+
+        JsonWriter msg;
+        JsonWriteInit(&msg, &thread_state->m_ScratchAlloc);
+        JsonWriteStartObject(&msg);
+
+        JsonWriteKeyName(&msg, "msg");
+        JsonWriteValueString(&msg, hitOrMissMessage);
+
+        JsonWriteKeyName(&msg, "annotation");
+        JsonWriteValueString(&msg, node->m_DagNode->m_Annotation);
+
+        JsonWriteKeyName(&msg, "index");
+        JsonWriteValueInteger(&msg, node->m_DagNode->m_OriginalIndex);
+
+        JsonWriteKeyName(&msg, "leafInputSignature");
+        char hash[kDigestStringSize];
+        DigestToString(hash, node->m_CurrentLeafInputSignature->digest);
+        JsonWriteValueString(&msg, hash);
+
+        JsonWriteEndObject(&msg);
+        LogStructured(&msg);
+    }
+}
+
+void PrintCacheHitIntoStructuredLog(ThreadState* thread_state, RuntimeNode* node)
+{
+    PrintCacheOperationIntoStructuredLog(thread_state, node, "cachehit");
+}
+
+void PrintCacheMissIntoStructuredLog(ThreadState* thread_state, RuntimeNode* node)
+{
+    PrintCacheOperationIntoStructuredLog(thread_state, node, "cachemiss");
+}
+
+void PrintCacheHit(BuildQueue* queue, ThreadState *thread_state, double duration, RuntimeNode* node)
+{
+    CheckHasLock(&queue->m_Lock);
+
+    PrintCacheHitIntoStructuredLog(thread_state, node);
+
+    char buffer[1024];
+    char hash[kDigestStringSize];
+    DigestToString(hash, node->m_CurrentLeafInputSignature->digest);
+    int written = snprintf(buffer, sizeof(buffer), "%s [CacheHit %s]", node->m_DagNode->m_Annotation.Get(), hash);
+    if (written >0 && written < sizeof(buffer))
+        PrintMessage(MessageStatusLevel::Success, queue->m_FinishedNodeCount, queue->m_AmountOfNodesEverQueued, duration, buffer);
+}
+
+
+
+static char *StrDupN(MemAllocHeap *allocator, const char *str, size_t len)
 {
     size_t sz = len + 1;
     char *buffer = static_cast<char *>(HeapAllocate(allocator, sz));
@@ -411,7 +467,7 @@ inline char *StrDupN(MemAllocHeap *allocator, const char *str, size_t len)
     return buffer;
 }
 
-inline char *StrDup(MemAllocHeap *allocator, const char *str)
+static char *StrDup(MemAllocHeap *allocator, const char *str)
 {
     return StrDupN(allocator, str, strlen(str));
 }
@@ -424,13 +480,13 @@ void PrintNodeResult(
     ThreadState *thread_state,
     bool always_verbose,
     uint64_t time_exec_started,
-    ValidationResult validationResult,
+    ValidationResult::Enum validationResult,
     const bool *untouched_outputs,
     bool was_preparation_error)
 {
     int processedNodeCount = queue->m_FinishedNodeCount;
     bool failed = result->m_ReturnCode != 0 || result->m_WasSignalled || validationResult >= ValidationResult::UnexpectedConsoleOutputFail;
-    bool verbose = (failed && !result->m_WasAborted) || always_verbose;
+    bool verbose = (failed && !result->m_WasAborted && !was_preparation_error) || always_verbose;
 
     int duration = TimerDiffSeconds(time_exec_started, TimerGet());
 
@@ -542,11 +598,14 @@ void PrintDeferredMessages(BuildQueue *queue)
     deferred_message_count = 0;
 }
 
-int PrintNodeInProgress(const Frozen::DagNode *node_data, uint64_t time_of_start, const BuildQueue *queue)
+int PrintNodeInProgress(const Frozen::DagNode *node_data, uint64_t time_of_start, const BuildQueue *queue, const char* message)
 {
     uint64_t now = TimerGet();
     int seconds_job_has_been_running_for = TimerDiffSeconds(time_of_start, now);
     double seconds_since_last_progress_message_of_any_job = TimerDiffSeconds(last_progress_message_of_any_job, now);
+
+    if (message == nullptr)
+        message = node_data->m_Annotation.Get();
 
     int acceptable_time_since_last_message = last_progress_message_job == node_data ? 10 : (total_number_node_results_printed == 0 ? 0 : 5);
     int only_print_if_slower_than = seconds_since_last_progress_message_of_any_job > 30 ? 0 : 5;
@@ -558,7 +617,7 @@ int PrintNodeInProgress(const Frozen::DagNode *node_data, uint64_t time_of_start
         EmitColor(YEL);
         printf("[BUSY %*ds] ", maxDigits * 2 - 1, seconds_job_has_been_running_for);
         EmitColor(RESET);
-        printf("%s\n", (const char *)node_data->m_Annotation);
+        printf("%s\n", message);
         last_progress_message_of_any_job = now;
         last_progress_message_job = node_data;
 

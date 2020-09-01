@@ -36,7 +36,7 @@ static void ThreadStateInit(ThreadState *self, BuildQueue *queue, size_t scratch
 
 static void ThreadStateDestroy(ThreadState *self)
 {
-    LinearAllocDestroy(&self->m_ScratchAlloc);
+    LinearAllocDestroy(&self->m_ScratchAlloc, true);
     HeapDestroy(&self->m_LocalHeap);
 }
 
@@ -67,7 +67,6 @@ void BuildQueueInit(BuildQueue *queue, const BuildQueueConfig *config)
     CondInit(&queue->m_MaxJobsChangedConditionalVariable);
     CondInit(&queue->m_BuildFinishedConditionalVariable);
     MutexInit(&queue->m_BuildFinishedMutex);
-    MutexLock(&queue->m_BuildFinishedMutex);
 
     // Compute queue capacity. Allocate space for a power of two number of
     // indices that's at least one larger than the max number of nodes. Because
@@ -84,6 +83,7 @@ void BuildQueueInit(BuildQueue *queue, const BuildQueueConfig *config)
     queue->m_Config = *config;
     queue->m_FinalBuildResult = BuildResult::kOk;
     queue->m_FinishedNodeCount = 0;
+    queue->m_FinishedRequestedNodeCount = 0;
     queue->m_MainThreadWantsToCleanUp = false;
     queue->m_BuildFinishedConditionalVariableSignaled = false;
     queue->m_SharedResourcesCreated = HeapAllocateArrayZeroed<uint32_t>(heap, config->m_SharedResourcesCount);
@@ -91,7 +91,7 @@ void BuildQueueInit(BuildQueue *queue, const BuildQueueConfig *config)
 
     CHECK(queue->m_Queue);
 
-    
+
     queue->m_DynamicMaxJobs = queue->m_Config.m_DriverOptions->m_ThreadCount;
 
     Log(kDebug, "build queue initialized; ring buffer capacity = %u", queue->m_QueueCapacity);
@@ -220,30 +220,38 @@ static void ProcessThrottling(BuildQueue *queue)
     throttled = false;
 }
 
-BuildResult::Enum BuildQueueBuild(BuildQueue *queue)
+BuildResult::Enum BuildQueueBuild(BuildQueue *queue, MemAllocLinear* scratch)
 {
     // Make sure none of the build threads see in-progress state due to a spurious wakeup.
     MutexLock(&queue->m_Lock);
+    MutexLock(&queue->m_BuildFinishedMutex);
 
     // Initialize build queue with index range to build
     int32_t *build_queue = queue->m_Queue;
     RuntimeNode *runtime_nodes = queue->m_Config.m_RuntimeNodes;
 
     int amountQueued = 0;
+
     for (int i = 0; i < queue->m_Config.m_TotalRuntimeNodeCount; ++i)
     {
         RuntimeNode *runtime_node = runtime_nodes + i;
 
-        //to start up, let's enqueue all nodes that have 0 dependencies.
-        if (runtime_node->m_DagNode->m_Dependencies.GetCount() == 0)
+        // We initially queue any node explicitly requested by the build command.
+        // That way, we can check if nodes can be loaded from the cache, bypassing
+        // their dependencies. If not, we will walk the build graph, queuing dependencies
+        // whenever nodes are being processed.
+        if (RuntimeNodeIsExplicitlyRequested(runtime_node))
         {
             RuntimeNodeFlagQueued(runtime_node);
             build_queue[amountQueued++] = i;
+
+            LogEnqueue(scratch, runtime_node, nullptr);
         }
     }
 
     queue->m_QueueWriteIndex = amountQueued;
     queue->m_QueueReadIndex = 0;
+    queue->m_AmountOfNodesEverQueued = amountQueued;
 
     CondBroadcast(&queue->m_WorkAvailable);
 

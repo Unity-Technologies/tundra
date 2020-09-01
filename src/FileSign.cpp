@@ -7,29 +7,24 @@
 #include <stdio.h>
 
 
-
-static void ComputeFileSignatureSha1(HashState *state, StatCache *stat_cache, DigestCache *digest_cache, const char *filename, uint32_t fn_hash)
+HashDigest ComputeFileSignatureSha1(StatCache* stat_cache, DigestCache* digest_cache, const char* filename, uint32_t fn_hash)
 {
+    HashDigest result = {};
+
     FileInfo file_info = StatCacheStat(stat_cache, filename, fn_hash);
 
     if (!file_info.Exists())
     {
-        HashAddInteger(state, ~0ull);
-        return;
+        return result;
     }
 
-    HashDigest digest;
-
-    if (!DigestCacheGet(digest_cache, filename, fn_hash, file_info.m_Timestamp, &digest))
+    if (!DigestCacheGet(digest_cache, filename, fn_hash, file_info.m_Timestamp, &result))
     {
         TimingScope timing_scope(&g_Stats.m_FileDigestCount, &g_Stats.m_FileDigestTimeCycles);
 
         FILE *f = fopen(filename, "rb");
         if (!f)
-        {
-            HashAddString(state, "<missing>");
-            return;
-        }
+            return result;
 
         HashState h;
         HashInit(&h);
@@ -41,14 +36,19 @@ static void ComputeFileSignatureSha1(HashState *state, StatCache *stat_cache, Di
         }
         fclose(f);
 
-        HashFinalize(&h, &digest);
-        DigestCacheSet(digest_cache, filename, fn_hash, file_info.m_Timestamp, digest);
+        HashFinalize(&h, &result);
+        DigestCacheSet(digest_cache, filename, fn_hash, file_info.m_Timestamp, result);
     }
     else
     {
         AtomicIncrement(&g_Stats.m_DigestCacheHits);
     }
+    return result;
+}
 
+static void ComputeFileSignatureSha1(HashState *state, StatCache *stat_cache, DigestCache *digest_cache, const char *filename, uint32_t fn_hash)
+{
+    HashDigest digest = ComputeFileSignatureSha1(stat_cache, digest_cache, filename, fn_hash);
     HashUpdate(state, &digest, sizeof(digest));
 }
 

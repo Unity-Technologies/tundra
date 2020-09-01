@@ -88,6 +88,12 @@ void HashSetDestroy(HashSet<kFlags> *self)
     HashSetInit(self, self->m_Heap);
 }
 
+template <uint32_t kFlags>
+bool HashSetIsInitialized(HashSet<kFlags> *self)
+{
+    return self->m_Heap != nullptr;
+}
+
 inline int FastCompareNoCase(const char *lhs, const char *rhs)
 {
     for (;;)
@@ -105,7 +111,7 @@ inline int FastCompareNoCase(const char *lhs, const char *rhs)
 }
 
 template <uint32_t kFlags>
-int HashTableBaseLookup(HashTableBase<kFlags> *self, uint32_t hash, const char *string)
+int HashTableBaseLookup(const HashTableBase<kFlags> *self, uint32_t hash, const char *string)
 {
     uint32_t size = self->m_TableSize;
 
@@ -151,7 +157,7 @@ int HashTableBaseLookup(HashTableBase<kFlags> *self, uint32_t hash, const char *
 }
 
 template <typename T, uint32_t kFlags>
-T *HashTableLookup(HashTable<T, kFlags> *self, uint32_t hash, const char *string)
+T *HashTableLookup(const HashTable<T, kFlags> *self, uint32_t hash, const char *string)
 {
     int index = HashTableBaseLookup(self, hash, string);
 
@@ -162,11 +168,22 @@ T *HashTableLookup(HashTable<T, kFlags> *self, uint32_t hash, const char *string
 }
 
 template <uint32_t kFlags>
-bool HashSetLookup(HashSet<kFlags> *self, uint32_t hash, const char *string)
+bool HashSetLookup(const HashSet<kFlags> *self, uint32_t hash, const char *string)
 {
     int index = HashTableBaseLookup(self, hash, string);
     return -1 != index;
 }
+
+template <uint32_t kFlags>
+bool HashSetInsertIfNotPresent(HashSet<kFlags> *self, uint32_t hash, const char *string)
+{
+    if (HashSetLookup(self, hash, string))
+        return false;
+
+    HashSetInsert(self, hash, string);
+    return true;
+}
+
 
 template <typename T, uint32_t kFlags>
 void HashTableGrow(HashTable<T, kFlags> *self)
@@ -300,6 +317,7 @@ void HashTableInsert(HashTable<T, kFlags> *self, uint32_t hash, const char *stri
 template <uint32_t kFlags>
 void HashSetInsert(HashSet<kFlags> *self, uint32_t hash, const char *string)
 {
+    //todo: we should really have a HashSetInitializeWithCapacity, as we often insert many known-ahead-of-time things
     HashTableBaseInsert(self, hash, string);
 }
 
@@ -324,7 +342,7 @@ void HashTableWalk(HashTable<T, kFlags> *self, Callback callback)
 }
 
 template <uint32_t kFlags, typename Callback>
-void HashSetWalk(HashSet<kFlags> *self, Callback callback)
+void HashSetWalk(const HashSet<kFlags> *self, Callback callback)
 {
     uint32_t *hashes = self->m_Hashes;
     const char **strings = self->m_Strings;

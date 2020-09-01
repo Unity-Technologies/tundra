@@ -40,6 +40,8 @@ class Build
                 new WarningAndPolicy("4018", WarningPolicy.AsError)
             }));
 
+            this.Libraries.Add(c=>IsWindows(c) && c.CodeGen == CodeGen.Debug, new SystemLibrary("DbgHelp.lib"));
+
             // We can enable this by committing valgrind to the repository or uploading a public stevedore artifact.
             this.Defines.Add("USE_VALGRIND=NO");
             this.Defines.Add(IsWindows, "WIN32_LEAN_AND_MEAN", "NOMINMAX", "WINVER=0x0601", "_WIN32_WINNT=0x0601"); // allow using Windows 7+ APIs

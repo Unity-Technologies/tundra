@@ -11,7 +11,7 @@
           "isDefault": true
         },
         "windows":{
-          "command": "bee.exe debug-deploy"
+          "command": "./bee.exe debug-deploy"
         },
         "osx":{
           "command": "mono bee.exe debug-deploy"

@@ -30,7 +30,7 @@ struct MemAllocLinear
 
 void LinearAllocInit(MemAllocLinear *allocator, MemAllocHeap *heap, size_t max_size, const char *debug_name);
 
-void LinearAllocDestroy(MemAllocLinear *allocator);
+void LinearAllocDestroy(MemAllocLinear *allocator, bool shouldNotLeak = false);
 
 void LinearAllocSetOwner(MemAllocLinear *allocator, ThreadId thread_id);
 
