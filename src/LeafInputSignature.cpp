@@ -212,16 +212,6 @@ void DestroyLeafInputSignatureData(MemAllocHeap *heap, LeafInputSignatureData *d
     HeapFree(heap, data);
 }
 
-static const Frozen::DagNode& FindRequestedNode(BuildQueue* queue)
-{
-    auto& nodes = queue->m_Config.m_RuntimeNodes;
-    for (int i=0; i!=queue->m_Config.m_TotalRuntimeNodeCount;i++)
-        if (RuntimeNodeIsExplicitlyRequested(nodes+i) && !RuntimeNodeIsExplicitlyRequestedThroughUseDependency(nodes+i))
-            return *nodes[i].m_DagNode;
-
-    Croak("Unable to find requested node for leaf input signature printing");
-}
-
 void PrintLeafInputSignature(BuildQueue* buildQueue, const char* outputFile)
 {
     const Frozen::DagNode& dagNode = buildQueue->m_Config.m_DagNodes[buildQueue->m_Config.m_RequestedNodes[0]];
