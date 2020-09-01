@@ -18,7 +18,6 @@
 #include "OutputValidation.hpp"
 #include "DigestCache.hpp"
 #include "SharedResources.hpp"
-#include "HumanActivityDetection.hpp"
 #include "InputSignature.hpp"
 #include "MakeDirectories.hpp"
 #include "BuildLoop.hpp"
@@ -435,18 +434,6 @@ void BuildLoop(ThreadState *thread_state)
     MutexLock(mutex);
     bool waitingForWork = false;
 
-    auto HibernateForThrottlingIfRequired = [=]() {
-        //check if dynamic max jobs amount has been reduced to a point where we need this thread to hibernate.
-        //Don't take a mutex lock for this check, as this if check will almost never hit and it's in a perf critical loop.
-        if (thread_state->m_ThreadIndex < (int)queue->m_DynamicMaxJobs)
-            return false;
-
-        ProfilerScope profiler_scope("HibernateForThrottling", thread_state->m_ProfilerThreadId, nullptr, "thread_state_sleeping");
-
-        CondWait(&thread_state->m_Queue->m_MaxJobsChangedConditionalVariable, mutex);
-        return true;
-    };
-
     //This is the main build loop that build threads go through. The mutex/threading policy is that only one buildthread at a time actually goes through this loop
     //figures out what the next task is to do etc. When that thread has figured out what to do,  it will return the queue->m_Lock mutex while the job it has to execute
     //is executing. Another build thread can take its turn to pick up a new task at that point. In a sense it's a single threaded system, except that it happens on multiple threads :).
@@ -456,10 +443,6 @@ void BuildLoop(ThreadState *thread_state)
     //lock is taken here
     while (ShouldKeepBuilding(queue))
     {
-        //if this function decides to hibernate, it will release the lock, and re-aquire it before it returns
-        if (HibernateForThrottlingIfRequired())
-            continue;
-
         if (RuntimeNode *node = NextNode(queue))
         {
             if (waitingForWork)

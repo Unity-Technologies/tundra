@@ -7,7 +7,6 @@
 #include "Profiler.hpp"
 #include "DagData.hpp"
 #include "NodeResultPrinting.hpp"
-#include "HumanActivityDetection.hpp"
 #include "DynamicOutputDirectories.hpp"
 #include "LeafInputSignature.hpp"
 
@@ -56,9 +55,6 @@ static const struct OptionTemplate
     {'D', "debug", OptionType::kBool, offsetof(DriverOptions, m_DebugMessages), "Enable debug messages"},
     {'S', "debug-signing", OptionType::kBool, offsetof(DriverOptions, m_DebugSigning), "Generate an extensive log of signature generation"},
     {'e', "just-print-leafinput-signature", OptionType::kString, offsetof(DriverOptions, m_JustPrintLeafInputSignature), "Print to the specified file the leaf input signature ingredients of the requested node"},
-    {'r', "throttle", OptionType::kBool, offsetof(DriverOptions, m_ThrottleOnHumanActivity), "Throttles down amount of simultaneous jobs when mouse or keyboard activity has been detected."},
-    {'\0', "throttle-time", OptionType::kInt, offsetof(DriverOptions, m_ThrottleInactivityPeriod), "Amount of inactive time after which we stop throttling. (if throttling behaviour is enabled)"},
-    {'\0', "throttle-threads-amount", OptionType::kInt, offsetof(DriverOptions, m_ThrottledThreadsAmount), "Amount of threads used in throttled mode"},
     {'s', "stats", OptionType::kBool, offsetof(DriverOptions, m_DisplayStats), "Display stats"},
     {'p', "profile", OptionType::kString, offsetof(DriverOptions, m_ProfileOutput), "Output build profile"},
     {'C', "working-dir", OptionType::kString, offsetof(DriverOptions, m_WorkingDir), "Set working directory before building"},
@@ -265,15 +261,6 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    if (options.m_ThrottleOnHumanActivity)
-    {
-#if WIN32
-        HumanActivityDetectionInit();
-#else
-        printf("Throttling is not supported on this paltform\n");
-        return 1;
-#endif
-    }
     DriverInitializeTundraFilePaths(&options);
 #if defined(TUNDRA_WIN32)
     if (!options.m_RunUnprotected && nullptr == getenv("_TUNDRA2_PARENT_PROCESS_HANDLE"))
@@ -473,8 +460,6 @@ int main(int argc, char *argv[])
         Log(kWarning, "Couldn't save SHA1 digest cache");
 
 leave:
-    if (options.m_ThrottleOnHumanActivity)
-        HumanActivityDetectionDestroy();
 
     DestroyDynamicOutputDirectories();
 

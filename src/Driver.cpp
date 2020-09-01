@@ -60,9 +60,6 @@ void DriverOptionsInit(DriverOptions *self)
     self->m_DontReusePreviousResults = false;
     self->m_DebugSigning = false;
     self->m_JustPrintLeafInputSignature = nullptr;
-    self->m_ThrottleOnHumanActivity = false;
-    self->m_ThrottleInactivityPeriod = 30;
-    self->m_ThrottledThreadsAmount = 0;
     self->m_IdentificationColor = 0;
     self->m_ThreadCount = GetCpuCount();
     self->m_WorkingDir = nullptr;

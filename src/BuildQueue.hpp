@@ -106,7 +106,6 @@ struct BuildQueue
     uint32_t *m_SharedResourcesCreated;
     Mutex m_SharedResourcesLock;
     bool m_MainThreadWantsToCleanUp;
-    uint32_t m_DynamicMaxJobs;
 };
 
 void BuildQueueInit(BuildQueue *queue, const BuildQueueConfig *config, const char** targets, int target_count);

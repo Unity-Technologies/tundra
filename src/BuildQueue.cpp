@@ -4,7 +4,6 @@
 #include "SignalHandler.hpp"
 #include "SharedResources.hpp"
 #include "NodeResultPrinting.hpp"
-#include "HumanActivityDetection.hpp"
 #include "RuntimeNode.hpp"
 #include "BuildLoop.hpp"
 #include "Driver.hpp"
@@ -96,8 +95,6 @@ void BuildQueueInit(BuildQueue *queue, const BuildQueueConfig *config, const cha
     BufferInitWithCapacity(&queue->m_Config.m_RequestedNodes, queue->m_Config.m_Heap, 32);
     DriverSelectNodes(queue->m_Config.m_Dag, targets, target_count, &queue->m_Config.m_RequestedNodes,  queue->m_Config.m_Heap);
 
-    queue->m_DynamicMaxJobs = queue->m_Config.m_DriverOptions->m_ThreadCount;
-
     Log(kDebug, "build queue initialized; ring buffer capacity = %u", queue->m_QueueCapacity);
 
     // Block all signals on the main thread.
@@ -172,61 +169,6 @@ void BuildQueueDestroy(BuildQueue *queue)
     SignalBlockThread(false);
 }
 
-static void SetNewDynamicMaxJobs(BuildQueue *queue, int maxJobs, const char *formatString, ...)
-{
-    queue->m_DynamicMaxJobs = maxJobs;
-    CondBroadcast(&queue->m_MaxJobsChangedConditionalVariable);
-
-    va_list args;
-    va_start(args, formatString);
-    PrintMessage(MessageStatusLevel::Warning, 0, formatString, args);
-    va_end(args);
-}
-
-static bool throttled = false;
-
-static void ProcessThrottling(BuildQueue *queue)
-{
-    if (!queue->m_Config.m_DriverOptions->m_ThrottleOnHumanActivity)
-        return;
-
-    double t = TimeSinceLastDetectedHumanActivityOnMachine();
-
-    //in case we've not seen any activity at all (which is what happens if you just started the build), we don't want to do any throttling.
-    if (t == -1)
-        return;
-
-    int throttleInactivityPeriod = queue->m_Config.m_DriverOptions->m_ThrottleInactivityPeriod;
-
-    if (!throttled)
-    {
-        //if the last time we saw activity was a long time ago, we can stay unthrottled
-        if (t >= throttleInactivityPeriod)
-            return;
-
-        //if we see activity just now, we want to throttle, but let's not do it in the first few seconds, otherwise when a user manually aborts the build,
-        //right before aborting she'll see a throttling message.
-        if (t < 1)
-            return;
-
-        //ok, let's actually throttle;
-        int maxJobs = queue->m_Config.m_DriverOptions->m_ThrottledThreadsAmount;
-        if (maxJobs == 0)
-            maxJobs = std::max(1, (int)(queue->m_Config.m_DriverOptions->m_ThreadCount * 0.6));
-        SetNewDynamicMaxJobs(queue, maxJobs, "Human activity detected, throttling to %d simultaneous jobs to leave system responsive", maxJobs);
-        throttled = true;
-    }
-
-    //so we are throttled.  if there has been recent user activity, that's fine, we want to continue to be throttled.
-    if (t < throttleInactivityPeriod)
-        return;
-
-    //if we're throttled but haven't seen any user interaction with the machine for a while, we'll unthrottle.
-    int maxJobs = queue->m_Config.m_DriverOptions->m_ThreadCount;
-    SetNewDynamicMaxJobs(queue, maxJobs, "No human activity detected on this machine for %d seconds, unthrottling back up to %d simultaneous jobs", throttleInactivityPeriod, maxJobs);
-    throttled = false;
-}
-
 BuildResult::Enum BuildQueueBuild(BuildQueue *queue, MemAllocLinear* scratch)
 {
     // Make sure none of the build threads see in-progress state due to a spurious wakeup.
@@ -256,20 +198,7 @@ BuildResult::Enum BuildQueueBuild(BuildQueue *queue, MemAllocLinear* scratch)
     MutexUnlock(&queue->m_Lock);
     while (ShouldContinue())
     {
-        PumpOSMessageLoop();
-
-        ProcessThrottling(queue);
-
-        //we need a timeout version of CondWait so that we ensure we continue to pump the OS message loop from time to time.
-        //Turns out that's not super trivial to implement on osx without clock_gettime() which is 10.12 and up.  Since we only
-        //really support throttling and os message pumps on windows today, let's postpone this problem to another day, and use
-        //the non-timing out version on non windows platforms
-
-#if WIN32
-        CondWait(&queue->m_BuildFinishedConditionalVariable, &queue->m_BuildFinishedMutex, 100);
-#else
         CondWait(&queue->m_BuildFinishedConditionalVariable, &queue->m_BuildFinishedMutex);
-#endif
     }
     MutexUnlock(&queue->m_BuildFinishedMutex);
 

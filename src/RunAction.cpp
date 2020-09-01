@@ -18,7 +18,6 @@
 #include "OutputValidation.hpp"
 #include "DigestCache.hpp"
 #include "SharedResources.hpp"
-#include "HumanActivityDetection.hpp"
 #include "InputSignature.hpp"
 #include "MakeDirectories.hpp"
 #include "DynamicOutputDirectories.hpp"

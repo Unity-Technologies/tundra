@@ -29,9 +29,6 @@ struct DriverOptions
     bool m_SilenceIfPossible;
     bool m_DontReusePreviousResults;
     bool m_DebugSigning;
-    bool m_ThrottleOnHumanActivity;
-    int m_ThrottleInactivityPeriod;
-    int m_ThrottledThreadsAmount;
     int m_IdentificationColor;
     int m_VisualMaxNodes;
 #if defined(TUNDRA_WIN32)
