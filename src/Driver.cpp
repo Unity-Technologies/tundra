@@ -827,10 +827,13 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count, const 
         queue_config.m_FileSigningLog = nullptr;
     }
 
+    BuildResult::Enum build_result = BuildResult::kOk;
+
     // Prepare list of nodes to build/clean/rebuild
     if (!DriverPrepareNodes(self))
     {
         Log(kError, "couldn't set up list of targets to build");
+        build_result = BuildResult::kBuildError;
         goto leave;
     }
 
@@ -838,9 +841,6 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count, const 
     BuildQueueInit(&build_queue, &queue_config,(const char**)argv, argc);
     build_queue.m_Config.m_RuntimeNodes = self->m_RuntimeNodes.m_Storage;
     build_queue.m_Config.m_TotalRuntimeNodeCount = (int)self->m_RuntimeNodes.m_Size;
-
-    BuildResult::Enum build_result = BuildResult::kOk;
-
 
     if (self->m_Options.m_JustPrintLeafInputSignature)
     {
