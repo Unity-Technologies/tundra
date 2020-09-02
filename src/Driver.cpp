@@ -273,11 +273,6 @@ void DriverDestroy(Driver *self)
     HeapDestroy(&self->m_Heap);
 }
 
-bool DriverPrepareDag(Driver *self, const char *dag_fn);
-bool DriverAllocNodes(Driver *self);
-
-
-
 BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count, const char** argv, int argc)
 {
     const Frozen::Dag *dag = self->m_DagData;
