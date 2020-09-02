@@ -2,6 +2,7 @@
 #include <algorithm>
 #include "DagData.hpp"
 #include <sstream>
+#include <vector>
 
 static int LevenshteinDistanceNoCase(const char *s, const char *t)
 {
