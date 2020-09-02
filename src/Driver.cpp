@@ -39,7 +39,6 @@ TundraStats g_Stats;
 static const char *s_BuildFile;
 static const char *s_DagFileName;
 
-static bool DriverCheckDagSignatures(Driver *self, char *out_of_date_reason, int out_of_date_reason_maxlength);
 bool LoadOrBuildDag(Driver *self, const char *dag_fn);
 
 
