@@ -11,6 +11,7 @@
 #include "LeafInputSignature.hpp"
 #include "RemoveStaleOutputs.hpp"
 #include "AllBuiltNodes.hpp"
+#include "ReportIncludes.hpp"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -440,7 +441,7 @@ int main(int argc, char *argv[])
 
     if (driver.m_Options.m_IncludesOutput != nullptr)
     {
-        build_result = DriverReportIncludes(&driver) ? BuildResult::kOk : BuildResult::kSetupError;
+        build_result = ReportIncludes(&driver) ? BuildResult::kOk : BuildResult::kSetupError;
         Log(kDebug, "Only reporting includes - quitting");
         goto leave;
     }
