@@ -4,14 +4,6 @@
 #include "Common.hpp"
 
 
-void HumanActivityDetectionInit()
-{
-}
-
-void HumanActivityDetectionDestroy()
-{
-}
-
 #if WIN32
 void PumpOSMessageLoop()
 {

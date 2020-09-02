@@ -265,15 +265,14 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+#if !WIN32
     if (options.m_ThrottleOnHumanActivity)
     {
-#if WIN32
-        HumanActivityDetectionInit();
-#else
-        printf("Throttling is not supported on this paltform\n");
+        printf("Throttling is not supported on this platform\n");
         return 1;
-#endif
     }
+#endif
+
     DriverInitializeTundraFilePaths(&options);
 #if defined(TUNDRA_WIN32)
     if (!options.m_RunUnprotected && nullptr == getenv("_TUNDRA2_PARENT_PROCESS_HANDLE"))
@@ -479,9 +478,6 @@ int main(int argc, char *argv[])
         Log(kWarning, "Couldn't save SHA1 digest cache");
 
 leave:
-    if (options.m_ThrottleOnHumanActivity)
-        HumanActivityDetectionDestroy();
-
     DestroyDynamicOutputDirectories();
 
     DriverDestroy(&driver);
