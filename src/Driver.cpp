@@ -24,6 +24,7 @@
 #include "PathUtil.hpp"
 #include "CacheClient.hpp"
 #include "LeafInputSignature.hpp"
+#include "LoadFrozenData.hpp"
 
 #include <time.h>
 #include <stdio.h>
@@ -38,8 +39,9 @@ TundraStats g_Stats;
 static const char *s_BuildFile;
 static const char *s_DagFileName;
 
-static bool DriverPrepareDag(Driver *self, const char *dag_fn);
 static bool DriverCheckDagSignatures(Driver *self, char *out_of_date_reason, int out_of_date_reason_maxlength);
+bool LoadOrBuildDag(Driver *self, const char *dag_fn);
+
 
 void DriverInitializeTundraFilePaths(DriverOptions *driverOptions)
 {
@@ -72,60 +74,6 @@ void DriverOptionsInit(DriverOptions *self)
 #endif
 }
 
-// Helper routine to load frozen data into RAM via memory mapping
-template <typename FrozenType>
-static bool LoadFrozenData(const char *fn, MemoryMappedFile *result, const FrozenType **ptr)
-{
-    MemoryMappedFile mapping;
-
-    MmapFileInit(&mapping);
-
-    MmapFileMap(&mapping, fn);
-
-    if (MmapFileValid(&mapping))
-    {
-        char *mmap_buffer = static_cast<char *>(mapping.m_Address);
-        const FrozenType *data = reinterpret_cast<const FrozenType *>(mmap_buffer);
-
-        Log(kDebug, "%s: successfully mapped at %p (%d bytes)", fn, data, (int)mapping.m_Size);
-
-        // Check size
-        if (mapping.m_Size < sizeof(FrozenType))
-        {
-            Log(kWarning, "%s: Bad mmap size %d - need at least %d bytes",
-                fn, (int)mapping.m_Size, (int)sizeof(FrozenType));
-            goto error;
-        }
-
-        // Check magic number
-        if (data->m_MagicNumber != FrozenType::MagicNumber)
-        {
-            Log(kDebug, "%s: Bad magic number %08x - current is %08x",
-                fn, data->m_MagicNumber, FrozenType::MagicNumber);
-            goto error;
-        }
-
-        // Check magic number
-        if (data->m_MagicNumberEnd != FrozenType::MagicNumber)
-        {
-            Log(kError, "Did not find expected magic number marker at the end of %s. This most likely means data writing code for that file is writing too much or too little data", fn);
-            goto error;
-        }
-
-        // Move ownership of memory mapping to member variable.
-        *result = mapping;
-
-        *ptr = data;
-
-        return true;
-    }
-
-    Log(kDebug, "%s: mmap failed", fn);
-
-error:
-    MmapFileDestroy(&mapping);
-    return false;
-}
 
 void DriverShowTargets(Driver *self)
 {
@@ -303,7 +251,7 @@ void DriverReportStartup(Driver *self, const char **targets, int target_count)
 
 bool DriverInitData(Driver *self)
 {
-    if (!DriverPrepareDag(self, s_DagFileName))
+    if (!LoadOrBuildDag(self, s_DagFileName))
         return false;
 
     ProfilerScope prof_scope("DriverInitData", 0);
@@ -324,171 +272,6 @@ bool DriverInitData(Driver *self)
 }
 
 
-static bool ExitRequestingFrontendRun(const char *reason_fmt, ...)
-{
-    char buffer[1024];
-
-    va_list args;
-    va_start(args, reason_fmt);
-    int written =vsnprintf(buffer,1024,reason_fmt, args);
-    va_end(args);
-    buffer[written] = 0;
-
-
-    PrintMessage(MessageStatusLevel::Success, "Require frontend run.  %s", buffer);
-
-    exit(BuildResult::kRequireFrontendRerun);
-    return false;
-}
-
-
-static bool DriverPrepareDag(Driver *self, const char *dag_fn)
-{
-    const int out_of_date_reason_length = 500;
-    char out_of_date_reason[out_of_date_reason_length + 1];
-
-    snprintf(out_of_date_reason, out_of_date_reason_length, "(unknown reason)");
-
-    char json_filename[kMaxPathLength];
-    snprintf(json_filename, sizeof json_filename, "%s.json", dag_fn);
-    json_filename[sizeof(json_filename) - 1] = '\0';
-
-    char dagderived_filename[kMaxPathLength];
-    snprintf(dagderived_filename, sizeof dagderived_filename, "%s_derived", dag_fn);
-    dagderived_filename[sizeof(dagderived_filename) - 1] = '\0';
-
-    FileInfo dag_info = GetFileInfo(dag_fn);
-    FileInfo dagderived_info = GetFileInfo(dagderived_filename);
-    FileInfo json_info = GetFileInfo(json_filename);
-
-    if (!dag_info.Exists() && !json_info.Exists())
-        return ExitRequestingFrontendRun("%s does not exist yet", json_filename);
-
-    bool frozeDag = false;
-    if (json_info.Exists())
-    {
-        bool dagExists = dag_info.Exists();
-        if (!dagExists || json_info.m_Timestamp > dag_info.m_Timestamp)
-        {
-            const char* reason = dagExists ? "Timestamp of .json > .dag" : ".dag file didn't exist";
-
-            uint64_t time_exec_started = TimerGet();
-            if (!FreezeDagJson(json_filename, dag_fn))
-                return ExitRequestingFrontendRun("%s failed to freeze", json_filename);
-            frozeDag = true;
-            uint64_t now = TimerGet();
-            double duration = TimerDiffSeconds(time_exec_started, now);
-            PrintMessage(MessageStatusLevel::Success, duration, "Freezing %s into .dag (%s)", FindFileNameInside(json_filename), reason);
-        }
-    }
-
-    if (!LoadFrozenData<Frozen::Dag>(dag_fn, &self->m_DagFile, &self->m_DagData))
-    {
-        remove(dag_fn);
-        remove(dagderived_filename);
-        return ExitRequestingFrontendRun("%s couldn't be loaded", dag_fn);
-    }
-
-    if (!dagderived_info.Exists() || frozeDag)
-    {
-        if (!CompileDagDerived(self->m_DagData, &self->m_Heap, &self->m_Allocator, &self->m_StatCache, dagderived_filename))
-            return ExitRequestingFrontendRun("failed to create derived dag file %s", dagderived_filename);
-    }
-
-    if (!LoadFrozenData<Frozen::DagDerived>(dagderived_filename, &self->m_DagDerivedFile, &self->m_DagDerivedData))
-    {
-        remove(dag_fn);
-        remove(dagderived_filename);
-        return ExitRequestingFrontendRun("%s couldn't be loaded", dag_fn);
-    }
-
-    uint64_t time_exec_started = TimerGet();
-    bool dagIsValid;
-    {
-        ProfilerScope prof_scope("DriverCheckDagSignatures", 0);
-        dagIsValid = DriverCheckDagSignatures(self, out_of_date_reason, out_of_date_reason_length);
-    }
-
-    uint64_t now = TimerGet();
-    double duration = TimerDiffSeconds(time_exec_started, now);
-    if (duration > 1)
-        PrintMessage(MessageStatusLevel::Warning, (int) duration, "Calculating file and glob signatures. (unusually slow)");
-
-    if (dagIsValid)
-        return true;
-
-    if (self->m_Options.m_IncludesOutput != nullptr)
-    {
-        Log(kDebug, "Only showing includes; using existing DAG without out-of-date checks");
-        return true;
-    }
-
-    MmapFileUnmap(&self->m_DagFile);
-    self->m_DagData = nullptr;
-    MmapFileUnmap(&self->m_DagDerivedFile);
-    self->m_DagDerivedData = nullptr;
-
-    if (remove(dag_fn))
-        Croak("Failed to remove out of date dag at %s", dag_fn);
-    if (remove(dagderived_filename))
-        Croak("Failed to remove out of date dagderived file at %s", dagderived_filename);
-
-    ExitRequestingFrontendRun("%s no longer valid. %s", FindFileNameInside(dag_fn), out_of_date_reason);
-
-    return false;
-}
-
-static bool DriverCheckDagSignatures(Driver *self, char *out_of_date_reason, int out_of_date_reason_maxlength)
-{
-    const Frozen::Dag *dag_data = self->m_DagData;
-
-#if ENABLED(CHECKED_BUILD)
-    // Paranoia - make sure the data is sorted.
-    for (int i = 1, count = dag_data->m_NodeCount; i < count; ++i)
-    {
-        if (dag_data->m_NodeGuids[i] < dag_data->m_NodeGuids[i - 1])
-            Croak("DAG data is not sorted by guid");
-    }
-#endif
-
-    Log(kDebug, "checking file signatures for DAG data");
-
-    // Check timestamps of frontend files used to produce the DAG
-    for (const Frozen::DagFileSignature &sig : dag_data->m_FileSignatures)
-    {
-        const char *path = sig.m_Path;
-
-        uint64_t timestamp = sig.m_Timestamp;
-        FileInfo info = GetFileInfo(path);
-
-        if (info.m_Timestamp != timestamp)
-        {
-            snprintf(out_of_date_reason, out_of_date_reason_maxlength, "FileSignature timestamp changed: %s", sig.m_Path.Get());
-            return false;
-        }
-    }
-
-    // Check directory listing fingerprints
-    // Note that the digest computation in here must match the one in LuaListDirectory
-    // The digests computed there are stored in the signature block by frontend code.
-    for (const Frozen::DagGlobSignature &sig : dag_data->m_GlobSignatures)
-    {
-        HashDigest digest = CalculateGlobSignatureFor(sig.m_Path, sig.m_Filter, sig.m_Recurse, &self->m_Heap, &self->m_Allocator);
-
-        // Compare digest with the one stored in the signature block
-        if (0 != memcmp(&digest, &sig.m_Digest, sizeof digest))
-        {
-            char stored[kDigestStringSize], actual[kDigestStringSize];
-            DigestToString(stored, sig.m_Digest);
-            DigestToString(actual, digest);
-            snprintf(out_of_date_reason, out_of_date_reason_maxlength, "directory contents changed: %s", sig.m_Path.Get());
-            Log(kInfo, "DAG out of date: file glob change for %s (%s => %s)", sig.m_Path.Get(), stored, actual);
-            return false;
-        }
-    }
-
-    return true;
-}
 
 static int LevenshteinDistanceNoCase(const char *s, const char *t)
 {
