@@ -33,6 +33,13 @@ struct StateSavingSegments
     BinarySegment *string;
 };
 
+
+bool NodeWasUsedByThisDagPreviously(const Frozen::BuiltNode *previously_built_node, uint32_t current_dag_identifier)
+{
+    auto &previous_dags = previously_built_node->m_DagsWeHaveSeenThisNodeInPreviously;
+    return std::find(previous_dags.begin(), previous_dags.end(), current_dag_identifier) != previous_dags.end();
+}
+
 template <class TNodeType>
 static void save_node_sharedcode(bool nodeWasBuiltSuccesfully, const HashDigest *input_signature, const HashDigest* leafinput_signature, const TNodeType *src_node, const HashDigest *guid, const StateSavingSegments &segments, const SinglyLinkedPathList* additionalDiscoveredOutputFiles)
 {
@@ -261,7 +268,7 @@ bool SaveAllBuiltNodes(Driver *self)
         // Make sure this node is still relevant before saving.
         bool node_is_in_dag = BinarySearch(dag_node_guids, dag_node_count, *guid) != nullptr;
 
-        return node_is_in_dag || !node_was_used_by_this_dag_previously(built_node, this_dag_hashed_identifier);
+        return node_is_in_dag || !NodeWasUsedByThisDagPreviously(built_node, this_dag_hashed_identifier);
     };
 
     {

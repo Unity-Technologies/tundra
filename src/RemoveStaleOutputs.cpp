@@ -143,7 +143,7 @@ void RemoveStaleOutputs(Driver *self)
     {
         const Frozen::BuiltNode *built_node = all_built_nodes->m_BuiltNodes + i;
 
-        if (!node_was_used_by_this_dag_previously(built_node, dag->m_HashedIdentifier))
+        if (!NodeWasUsedByThisDagPreviously(built_node, dag->m_HashedIdentifier))
             continue;
 
         for (const FrozenFileAndHash& fileAndHash : built_node->m_OutputFiles)
