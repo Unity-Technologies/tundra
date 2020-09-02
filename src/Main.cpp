@@ -9,6 +9,8 @@
 #include "NodeResultPrinting.hpp"
 #include "DynamicOutputDirectories.hpp"
 #include "LeafInputSignature.hpp"
+#include "RemoveStaleOutputs.hpp"
+#include "AllBuiltNodes.hpp"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -446,11 +448,11 @@ int main(int argc, char *argv[])
     DriverReportStartup(&driver, (const char **)argv, argc);
 
 
-    DriverRemoveStaleOutputs(&driver);
+    RemoveStaleOutputs(&driver);
 
     build_result = DriverBuild(&driver, &finished_node_count, (const char**) argv, argc);
 
-    if (!DriverSaveAllBuiltNodes(&driver))
+    if (!SaveAllBuiltNodes(&driver))
         Log(kError, "Couldn't save AllBuiltNodes");
 
     if (!DriverSaveScanCache(&driver))

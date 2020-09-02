@@ -72,8 +72,6 @@ struct Driver
     // Space for dynamic DAG node state
     Buffer<RuntimeNode> m_RuntimeNodes;
 
-    int32_t m_AmountOfRuntimeNodesSpecificallyRequested;
-
     MemAllocLinear m_ScanCacheAllocator;
     ScanCache m_ScanCache;
 
@@ -105,8 +103,8 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count, const 
 bool DriverInitData(Driver *self);
 
 bool DriverSaveScanCache(Driver *self);
-bool DriverSaveAllBuiltNodes(Driver *self);
 bool DriverSaveDigestCache(Driver *self);
 
 void DriverInitializeTundraFilePaths(DriverOptions *driverOptions);
 void DriverSelectNodes(const Frozen::Dag *dag, const char **targets, int target_count, Buffer<int32_t> *out_nodes, MemAllocHeap *heap);
+bool node_was_used_by_this_dag_previously(const Frozen::BuiltNode *previously_built_node, uint32_t current_dag_identifier);
