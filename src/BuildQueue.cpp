@@ -4,7 +4,6 @@
 #include "SignalHandler.hpp"
 #include "SharedResources.hpp"
 #include "NodeResultPrinting.hpp"
-#include "HumanActivityDetection.hpp"
 #include "RuntimeNode.hpp"
 #include "BuildLoop.hpp"
 #include "Driver.hpp"
@@ -58,7 +57,9 @@ static ThreadRoutineReturnType TUNDRA_STDCALL BuildThreadRoutine(void *param)
     return 0;
 }
 
-void BuildQueueInit(BuildQueue *queue, const BuildQueueConfig *config)
+
+
+void BuildQueueInit(BuildQueue *queue, const BuildQueueConfig *config, const char** targets, int target_count)
 {
     ProfilerScope prof_scope("Tundra BuildQueueInit", 0);
 
@@ -72,27 +73,27 @@ void BuildQueueInit(BuildQueue *queue, const BuildQueueConfig *config)
     // indices that's at least one larger than the max number of nodes. Because
     // the queue is treated as a ring buffer, we want W=R to mean an empty
     // buffer.
-    uint32_t capacity = NextPowerOfTwo(config->m_TotalRuntimeNodeCount + 1);
+    uint32_t capacity = NextPowerOfTwo(config->m_Dag->m_NodeCount + 1);
 
     MemAllocHeap *heap = config->m_Heap;
 
-    queue->m_Queue = HeapAllocateArray<int32_t>(heap, capacity);
+    queue->m_Queue = HeapAllocateArrayZeroed<int32_t>(heap, capacity);
     queue->m_QueueReadIndex = 0;
     queue->m_QueueWriteIndex = 0;
     queue->m_QueueCapacity = capacity;
     queue->m_Config = *config;
     queue->m_FinalBuildResult = BuildResult::kOk;
     queue->m_FinishedNodeCount = 0;
-    queue->m_FinishedRequestedNodeCount = 0;
     queue->m_MainThreadWantsToCleanUp = false;
     queue->m_BuildFinishedConditionalVariableSignaled = false;
+    queue->m_AmountOfNodesEverQueued = 0;
     queue->m_SharedResourcesCreated = HeapAllocateArrayZeroed<uint32_t>(heap, config->m_SharedResourcesCount);
     MutexInit(&queue->m_SharedResourcesLock);
 
     CHECK(queue->m_Queue);
 
-
-    queue->m_DynamicMaxJobs = queue->m_Config.m_DriverOptions->m_ThreadCount;
+    BufferInitWithCapacity(&queue->m_Config.m_RequestedNodes, queue->m_Config.m_Heap, 32);
+    DriverSelectNodes(queue->m_Config.m_Dag, targets, target_count, &queue->m_Config.m_RequestedNodes,  queue->m_Config.m_Heap);
 
     Log(kDebug, "build queue initialized; ring buffer capacity = %u", queue->m_QueueCapacity);
 
@@ -148,8 +149,11 @@ void BuildQueueDestroy(BuildQueue *queue)
     PrintDeferredMessages(queue);
     MutexUnlock(&queue->m_Lock);
 
-    // Deallocate storage.
+
     MemAllocHeap *heap = queue->m_Config.m_Heap;
+    BufferDestroy(&queue->m_Config.m_RequestedNodes, heap);
+
+    // Deallocate storage.
     HeapFree(heap, queue->m_Queue);
     HeapFree(heap, queue->m_SharedResourcesCreated);
     MutexDestroy(&queue->m_SharedResourcesLock);
@@ -165,61 +169,6 @@ void BuildQueueDestroy(BuildQueue *queue)
     SignalBlockThread(false);
 }
 
-static void SetNewDynamicMaxJobs(BuildQueue *queue, int maxJobs, const char *formatString, ...)
-{
-    queue->m_DynamicMaxJobs = maxJobs;
-    CondBroadcast(&queue->m_MaxJobsChangedConditionalVariable);
-
-    va_list args;
-    va_start(args, formatString);
-    PrintMessage(MessageStatusLevel::Warning, 0, formatString, args);
-    va_end(args);
-}
-
-static bool throttled = false;
-
-static void ProcessThrottling(BuildQueue *queue)
-{
-    if (!queue->m_Config.m_DriverOptions->m_ThrottleOnHumanActivity)
-        return;
-
-    double t = TimeSinceLastDetectedHumanActivityOnMachine();
-
-    //in case we've not seen any activity at all (which is what happens if you just started the build), we don't want to do any throttling.
-    if (t == -1)
-        return;
-
-    int throttleInactivityPeriod = queue->m_Config.m_DriverOptions->m_ThrottleInactivityPeriod;
-
-    if (!throttled)
-    {
-        //if the last time we saw activity was a long time ago, we can stay unthrottled
-        if (t >= throttleInactivityPeriod)
-            return;
-
-        //if we see activity just now, we want to throttle, but let's not do it in the first few seconds, otherwise when a user manually aborts the build,
-        //right before aborting she'll see a throttling message.
-        if (t < 1)
-            return;
-
-        //ok, let's actually throttle;
-        int maxJobs = queue->m_Config.m_DriverOptions->m_ThrottledThreadsAmount;
-        if (maxJobs == 0)
-            maxJobs = std::max(1, (int)(queue->m_Config.m_DriverOptions->m_ThreadCount * 0.6));
-        SetNewDynamicMaxJobs(queue, maxJobs, "Human activity detected, throttling to %d simultaneous jobs to leave system responsive", maxJobs);
-        throttled = true;
-    }
-
-    //so we are throttled.  if there has been recent user activity, that's fine, we want to continue to be throttled.
-    if (t < throttleInactivityPeriod)
-        return;
-
-    //if we're throttled but haven't seen any user interaction with the machine for a while, we'll unthrottle.
-    int maxJobs = queue->m_Config.m_DriverOptions->m_ThreadCount;
-    SetNewDynamicMaxJobs(queue, maxJobs, "No human activity detected on this machine for %d seconds, unthrottling back up to %d simultaneous jobs", throttleInactivityPeriod, maxJobs);
-    throttled = false;
-}
-
 BuildResult::Enum BuildQueueBuild(BuildQueue *queue, MemAllocLinear* scratch)
 {
     // Make sure none of the build threads see in-progress state due to a spurious wakeup.
@@ -227,31 +176,13 @@ BuildResult::Enum BuildQueueBuild(BuildQueue *queue, MemAllocLinear* scratch)
     MutexLock(&queue->m_BuildFinishedMutex);
 
     // Initialize build queue with index range to build
-    int32_t *build_queue = queue->m_Queue;
     RuntimeNode *runtime_nodes = queue->m_Config.m_RuntimeNodes;
 
-    int amountQueued = 0;
-
-    for (int i = 0; i < queue->m_Config.m_TotalRuntimeNodeCount; ++i)
+    for (auto requestedNode:  queue->m_Config.m_RequestedNodes)
     {
-        RuntimeNode *runtime_node = runtime_nodes + i;
-
-        // We initially queue any node explicitly requested by the build command.
-        // That way, we can check if nodes can be loaded from the cache, bypassing
-        // their dependencies. If not, we will walk the build graph, queuing dependencies
-        // whenever nodes are being processed.
-        if (RuntimeNodeIsExplicitlyRequested(runtime_node))
-        {
-            RuntimeNodeFlagQueued(runtime_node);
-            build_queue[amountQueued++] = i;
-
-            LogEnqueue(scratch, runtime_node, nullptr);
-        }
+        RuntimeNode *runtime_node = runtime_nodes + requestedNode;
+        EnqueueNodeWithoutWakingAwaiters(queue, queue->m_Config.m_LinearAllocator, runtime_node, nullptr);
     }
-
-    queue->m_QueueWriteIndex = amountQueued;
-    queue->m_QueueReadIndex = 0;
-    queue->m_AmountOfNodesEverQueued = amountQueued;
 
     CondBroadcast(&queue->m_WorkAvailable);
 
@@ -267,20 +198,7 @@ BuildResult::Enum BuildQueueBuild(BuildQueue *queue, MemAllocLinear* scratch)
     MutexUnlock(&queue->m_Lock);
     while (ShouldContinue())
     {
-        PumpOSMessageLoop();
-
-        ProcessThrottling(queue);
-
-        //we need a timeout version of CondWait so that we ensure we continue to pump the OS message loop from time to time.
-        //Turns out that's not super trivial to implement on osx without clock_gettime() which is 10.12 and up.  Since we only
-        //really support throttling and os message pumps on windows today, let's postpone this problem to another day, and use
-        //the non-timing out version on non windows platforms
-
-#if WIN32
-        CondWait(&queue->m_BuildFinishedConditionalVariable, &queue->m_BuildFinishedMutex, 100);
-#else
         CondWait(&queue->m_BuildFinishedConditionalVariable, &queue->m_BuildFinishedMutex);
-#endif
     }
     MutexUnlock(&queue->m_BuildFinishedMutex);
 

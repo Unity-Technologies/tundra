@@ -19,7 +19,6 @@
 #include "InputSignature.hpp"
 #include "DigestCache.hpp"
 #include "SharedResources.hpp"
-#include "HumanActivityDetection.hpp"
 #include "Driver.hpp"
 #include <stdarg.h>
 

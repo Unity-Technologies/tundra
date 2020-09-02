@@ -29,9 +29,6 @@ struct DriverOptions
     bool m_SilenceIfPossible;
     bool m_DontReusePreviousResults;
     bool m_DebugSigning;
-    bool m_ThrottleOnHumanActivity;
-    int m_ThrottleInactivityPeriod;
-    int m_ThrottledThreadsAmount;
     int m_IdentificationColor;
     int m_VisualMaxNodes;
 #if defined(TUNDRA_WIN32)
@@ -72,9 +69,6 @@ struct Driver
 
     DriverOptions m_Options;
 
-    // Remapping table from dag data node index => runtime node index
-    Buffer<int32_t> m_DagNodeIndexToRuntimeNodeIndex_Table;
-
     // Space for dynamic DAG node state
     Buffer<RuntimeNode> m_RuntimeNodes;
 
@@ -106,7 +100,7 @@ void DriverRemoveStaleOutputs(Driver *self);
 
 void DriverCleanOutputs(Driver *self);
 
-BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count);
+BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count, const char** argv, int argc);
 
 bool DriverInitData(Driver *self);
 
@@ -115,3 +109,4 @@ bool DriverSaveAllBuiltNodes(Driver *self);
 bool DriverSaveDigestCache(Driver *self);
 
 void DriverInitializeTundraFilePaths(DriverOptions *driverOptions);
+void DriverSelectNodes(const Frozen::Dag *dag, const char **targets, int target_count, Buffer<int32_t> *out_nodes, MemAllocHeap *heap);

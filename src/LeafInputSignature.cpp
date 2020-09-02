@@ -71,13 +71,12 @@ void CalculateLeafInputSignature(
     }
 
     auto& dagDerived = buildQueue->m_Config.m_DagDerived;
-    auto& dagNodeIndexToRuntimeNodeIndex_Table = buildQueue->m_Config.m_DagNodeIndexToRuntimeNodeIndex_Table;
     auto& runtimeNodesArray = buildQueue->m_Config.m_RuntimeNodes;
     auto& dag = buildQueue->m_Config.m_Dag;
 
     for (auto& dependentNodeThatIsCacheableItself: dagDerived->DependentNodesThatThemselvesAreLeafInputCacheableFor(dagNode->m_DagNodeIndex))
     {
-        int childRuntimeNodeIndex = dagNodeIndexToRuntimeNodeIndex_Table[dependentNodeThatIsCacheableItself];
+        int childRuntimeNodeIndex = dependentNodeThatIsCacheableItself;
         auto& childRuntimeNode = runtimeNodesArray[childRuntimeNodeIndex];
         const auto& childDagNode = dag->m_DagNodes[dependentNodeThatIsCacheableItself];
 
@@ -107,7 +106,7 @@ void CalculateLeafInputSignature(
     {
         //in the dagderived, we only store the leaf input signature hash. We do not store the full ingredient stream, as it's very big,
         //and often it is not needed. If it is needed at runtime, we just calculate the offline part again with an ingredient stream.
-        HashDigest secondRun = CalculateLeafInputHashOffline_FromDagDerived(buildQueue->m_Config.m_Dag,buildQueue->m_Config.m_DagDerived, dagNode->m_DagNodeIndex, heap, ingredient_stream);
+        HashDigest secondRun = CalculateLeafInputHashOffline(heap, buildQueue->m_Config.m_Dag, dagNode->m_DagNodeIndex, ingredient_stream);
         if (secondRun != offlinePart)
             Croak("While recalculating the offline hash for %s for the second time, the results are different.", dagNode->m_Annotation.Get());
     }
@@ -213,19 +212,9 @@ void DestroyLeafInputSignatureData(MemAllocHeap *heap, LeafInputSignatureData *d
     HeapFree(heap, data);
 }
 
-static const Frozen::DagNode& FindRequestedNode(BuildQueue* queue)
-{
-    auto& nodes = queue->m_Config.m_RuntimeNodes;
-    for (int i=0; i!=queue->m_Config.m_TotalRuntimeNodeCount;i++)
-        if (RuntimeNodeIsExplicitlyRequested(nodes+i) && !RuntimeNodeIsExplicitlyRequestedThroughUseDependency(nodes+i))
-            return *nodes[i].m_DagNode;
-
-    Croak("Unable to find requested node for leaf input signature printing");
-}
-
 void PrintLeafInputSignature(BuildQueue* buildQueue, const char* outputFile)
 {
-    const Frozen::DagNode& dagNode = FindRequestedNode(buildQueue);
+    const Frozen::DagNode& dagNode = buildQueue->m_Config.m_DagNodes[buildQueue->m_Config.m_RequestedNodes[0]];
 
     if (0 == (dagNode.m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs))
     {
@@ -271,8 +260,7 @@ bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLe
 
     for(auto nodeWithScanner: dagDerived->DependentNodesWithScannerFor(node->m_DagNodeIndex))
     {
-        int runtimeNodeIndex = queue->m_Config.m_DagNodeIndexToRuntimeNodeIndex_Table[nodeWithScanner];
-        RuntimeNode* runtimeNodeWithScanner = &queue->m_Config.m_RuntimeNodes[runtimeNodeIndex];
+        RuntimeNode* runtimeNodeWithScanner = &queue->m_Config.m_RuntimeNodes[nodeWithScanner];
 
         auto IsGeneratedOrIsLeafInput = [=](uint32_t hash, const char* filename) -> bool
         {
