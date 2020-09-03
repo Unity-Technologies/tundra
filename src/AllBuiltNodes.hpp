@@ -4,6 +4,7 @@
 #include "BinaryData.hpp"
 
 struct StatCache;
+struct Driver;
 
 namespace Frozen
 {
@@ -46,3 +47,5 @@ struct AllBuiltNodes
 }
 
 bool OutputFilesMissingFor(const Frozen::BuiltNode* node, StatCache *stat_cache);
+bool SaveAllBuiltNodes(Driver *self);
+bool NodeWasUsedByThisDagPreviously(const Frozen::BuiltNode *previously_built_node, uint32_t current_dag_identifier);

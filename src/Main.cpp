@@ -9,6 +9,9 @@
 #include "NodeResultPrinting.hpp"
 #include "DynamicOutputDirectories.hpp"
 #include "LeafInputSignature.hpp"
+#include "RemoveStaleOutputs.hpp"
+#include "AllBuiltNodes.hpp"
+#include "ReportIncludes.hpp"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -438,7 +441,7 @@ int main(int argc, char *argv[])
 
     if (driver.m_Options.m_IncludesOutput != nullptr)
     {
-        build_result = DriverReportIncludes(&driver) ? BuildResult::kOk : BuildResult::kSetupError;
+        build_result = ReportIncludes(&driver) ? BuildResult::kOk : BuildResult::kSetupError;
         Log(kDebug, "Only reporting includes - quitting");
         goto leave;
     }
@@ -446,11 +449,11 @@ int main(int argc, char *argv[])
     DriverReportStartup(&driver, (const char **)argv, argc);
 
 
-    DriverRemoveStaleOutputs(&driver);
+    RemoveStaleOutputs(&driver);
 
     build_result = DriverBuild(&driver, &finished_node_count, (const char**) argv, argc);
 
-    if (!DriverSaveAllBuiltNodes(&driver))
+    if (!SaveAllBuiltNodes(&driver))
         Log(kError, "Couldn't save AllBuiltNodes");
 
     if (!DriverSaveScanCache(&driver))
@@ -532,44 +535,4 @@ leave:
     HeapVerifyNoLeaks();
 
     return build_result;
-
-    // Match up nodes to nodes in the build state
-    //   Walk DAG node array in parallel with build state node array
-    //   If a node is not present in the DAG but is in the old build state:
-    //     Loop over its outputs and delete them
-    // For all DAG nodes:
-    //   Loop over their aux output references and flag them as in use
-    //
-    // Loop over aux outputs in union of (build state | dag)
-    //   Delete file if it is not flagged as in use
-    //
-    // Clean up empty output directories:
-    //   If any file was deleted due to cleanup:
-    //     Walk all directories known to be created and rmdir() them
-    //      (If any valid files are left in there we'll get an error and move on)
-    //
-    // Find out what nodes we want to build this time (match command line args against DAG info)
-    //
-    //   Construct config set:
-    //     If config list on cmdline is empty, use default config
-    //     Otherwise, look up each config and add to set
-    //
-    //   For each alias on the command line:
-    //      Add the set of nodes referenced by the alias to the build queue
-    //        Filtered by config set
-    //
-    //   If set of nodes to build is empty:
-    //     Add all default sets (filter by config set) to the build queue
-    //
-    // Set up node state for each node to build
-    //
-    // Set up nodes for pass barriers
-    //
-    // Build
-    //
-    // Generate build state data
-    //
-    // Save header scanning state
-    // Report stats
-    // Exit
 }

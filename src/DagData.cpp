@@ -111,3 +111,4 @@ bool IsFileGenerated(const DagRuntimeData* data, uint32_t filenameHash, const ch
     const Frozen::DagNode *dummy;
     return FindDagNodeForFile(data, filenameHash, filename, &dummy);
 }
+
