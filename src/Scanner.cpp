@@ -159,7 +159,7 @@ bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput 
 
         FileInfo info = StatCacheStat(stat_cache, fn);
 
-        if (!info.Exists())
+        if (!info.Exists() || info.IsDirectory())
             continue;
 
         ComputeScanCacheKey(&scan_key, fn, input->m_ScannerConfig->m_ScannerGuid, input->m_SafeToScanBeforeDependenciesAreProduced);
