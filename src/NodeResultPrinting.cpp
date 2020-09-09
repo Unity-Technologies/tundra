@@ -537,7 +537,7 @@ void PrintNodeResult(
         JsonWriteKeyName(&msg, "exitcode");
         JsonWriteValueInteger(&msg, result->m_ReturnCode);
 
-        if (failed && data.output_buffer)
+        if (data.output_buffer)
         {
             JsonWriteKeyName(&msg, "stdout");
             JsonWriteValueString(&msg, data.output_buffer);
