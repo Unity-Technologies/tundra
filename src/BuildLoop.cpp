@@ -390,7 +390,7 @@ static RuntimeNode *NextNode(BuildQueue *queue)
 
         if (RuntimeNodeIsActive(runtime_node) || runtime_node->m_Finished)
         {
-            //this can happen in legit situations. we allow nodes to appear on the workstack once. This happens in situations where
+            //this can happen in legit situations. we allow nodes to appear on the workstack more than once. This happens in situations where
             //a node gets queued as not-very-urgent (aka at the end of a dependency list). But later, the same node is also a dependency of something
             //that was queued at the top of the stack. In this case, we enqueue it again, ensuring it gets processed as fast as possible. We do not
             //bother deleting the older entry from the workstack, and instead have this check & continue.
