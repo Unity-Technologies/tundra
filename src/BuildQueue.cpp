@@ -69,18 +69,9 @@ void BuildQueueInit(BuildQueue *queue, const BuildQueueConfig *config, const cha
     CondInit(&queue->m_BuildFinishedConditionalVariable);
     MutexInit(&queue->m_BuildFinishedMutex);
 
-    // Compute queue capacity. Allocate space for a power of two number of
-    // indices that's at least one larger than the max number of nodes. Because
-    // the queue is treated as a ring buffer, we want W=R to mean an empty
-    // buffer.
-    uint32_t capacity = NextPowerOfTwo(config->m_Dag->m_NodeCount + 1);
-
     MemAllocHeap *heap = config->m_Heap;
 
-    queue->m_Queue = HeapAllocateArrayZeroed<int32_t>(heap, capacity);
-    queue->m_QueueReadIndex = 0;
-    queue->m_QueueWriteIndex = 0;
-    queue->m_QueueCapacity = capacity;
+    BufferInitWithCapacity(&queue->m_WorkStack, heap, 1024);
     queue->m_Config = *config;
     queue->m_FinalBuildResult = BuildResult::kOk;
     queue->m_FinishedNodeCount = 0;
@@ -90,12 +81,8 @@ void BuildQueueInit(BuildQueue *queue, const BuildQueueConfig *config, const cha
     queue->m_SharedResourcesCreated = HeapAllocateArrayZeroed<uint32_t>(heap, config->m_SharedResourcesCount);
     MutexInit(&queue->m_SharedResourcesLock);
 
-    CHECK(queue->m_Queue);
-
     BufferInitWithCapacity(&queue->m_Config.m_RequestedNodes, queue->m_Config.m_Heap, 32);
     DriverSelectNodes(queue->m_Config.m_Dag, targets, target_count, &queue->m_Config.m_RequestedNodes,  queue->m_Config.m_Heap);
-
-    Log(kDebug, "build queue initialized; ring buffer capacity = %u", queue->m_QueueCapacity);
 
     // Block all signals on the main thread.
     SignalBlockThread(true);
@@ -154,7 +141,7 @@ void BuildQueueDestroy(BuildQueue *queue)
     BufferDestroy(&queue->m_Config.m_RequestedNodes, heap);
 
     // Deallocate storage.
-    HeapFree(heap, queue->m_Queue);
+    BufferDestroy(&queue->m_WorkStack, heap);
     HeapFree(heap, queue->m_SharedResourcesCreated);
     MutexDestroy(&queue->m_SharedResourcesLock);
 

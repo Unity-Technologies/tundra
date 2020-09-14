@@ -30,15 +30,6 @@
 #include <algorithm>
 #include <stdio.h>
 
-static int AvailableNodeCount(BuildQueue *queue)
-{
-    const uint32_t queue_mask = queue->m_QueueCapacity - 1;
-    uint32_t read_index = queue->m_QueueReadIndex;
-    uint32_t write_index = queue->m_QueueWriteIndex;
-
-    return (write_index - read_index) & queue_mask;
-}
-
 static RuntimeNode *GetRuntimeNodeForDagNodeIndex(BuildQueue *queue, int32_t src_index)
 {
     return queue->m_Config.m_RuntimeNodes + src_index;
@@ -82,11 +73,15 @@ static void LogFirstTimeEnqueue(MemAllocLinear* scratch, RuntimeNode* enqueuedNo
     LogStructured(&msg);
 }
 
-static int EnqueueNodeListWithoutWakingAwaiters(BuildQueue* queue, MemAllocLinear* scratch, const FrozenArray<int32_t>& nodesToEnqueue, RuntimeNode* enqueingNode)
+static int EnqueueNodeListReversedWithoutWakingAwaiters(BuildQueue* queue, MemAllocLinear* scratch, const FrozenArray<int32_t>& nodesToEnqueue, RuntimeNode* enqueingNode)
 {
     int enqueue_count = 0;
-    for (int32_t depDagIndex : nodesToEnqueue)
+
+    //we enqueue dependency lists in reverse. because our semantics say that the most urgent dependencies are in the list first, it's important that they
+    //end up on the top of the workstack, so they'll be processed first.
+    for(int i=nodesToEnqueue.GetCount(); i>=0; i++)
     {
+        int32_t depDagIndex = nodesToEnqueue[i];
         enqueue_count += EnqueueNodeWithoutWakingAwaiters(queue, scratch, &queue->m_Config.m_RuntimeNodes[depDagIndex], enqueingNode);
     }
     return enqueue_count;
@@ -95,22 +90,12 @@ static int EnqueueNodeListWithoutWakingAwaiters(BuildQueue* queue, MemAllocLinea
 int EnqueueNodeWithoutWakingAwaiters(BuildQueue *queue, MemAllocLinear* scratch, RuntimeNode *runtime_node, RuntimeNode* queueing_node)
 {
     // Did someone else get to the node first?
-    if (RuntimeNodeIsQueued(runtime_node) || RuntimeNodeIsActive(runtime_node) || runtime_node->m_Finished)
+    if (RuntimeNodeIsActive(runtime_node) || runtime_node->m_Finished)
         return 0;
-
-    uint32_t write_index = queue->m_QueueWriteIndex;
-    const uint32_t queue_mask = queue->m_QueueCapacity - 1;
-    int32_t *build_queue = queue->m_Queue;
-
-#if ENABLED(CHECKED_BUILD)
-    const int avail_init = AvailableNodeCount(queue);
-#endif
 
     int runtime_node_index = int(runtime_node - queue->m_Config.m_RuntimeNodes);
 
-    build_queue[write_index] = runtime_node_index;
-    write_index = (write_index + 1) & queue_mask;
-    queue->m_QueueWriteIndex = write_index;
+    BufferAppendOne(&queue->m_WorkStack, queue->m_Config.m_Heap, runtime_node_index);
 
     if (!RuntimeNodeHasEverBeenQueued(runtime_node))
     {
@@ -121,9 +106,7 @@ int EnqueueNodeWithoutWakingAwaiters(BuildQueue *queue, MemAllocLinear* scratch,
     int enqueue_count = 1;
     RuntimeNodeFlagQueued(runtime_node);
 
-    CHECK(AvailableNodeCount(queue) == 1 + avail_init);
-
-    enqueue_count += EnqueueNodeListWithoutWakingAwaiters(queue, scratch, runtime_node->m_DagNode->m_ToUseDependencies, runtime_node);
+    enqueue_count += EnqueueNodeListReversedWithoutWakingAwaiters(queue, scratch, runtime_node->m_DagNode->m_ToUseDependencies, runtime_node);
 
     return enqueue_count;
 }
@@ -329,7 +312,7 @@ static void EnqueueToBuildDependencies(BuildQueue *queue, ThreadState *thread_st
     CheckHasLock(&queue->m_Lock);
 
     auto& dependencies = node->m_DagNode->m_ToBuildDependencies;
-    int enqueue_count = EnqueueNodeListWithoutWakingAwaiters(queue,&thread_state->m_ScratchAlloc, dependencies, node);
+    int enqueue_count = EnqueueNodeListReversedWithoutWakingAwaiters(queue,&thread_state->m_ScratchAlloc, dependencies, node);
 
     if (enqueue_count > 1)
         WakeWaiters(queue, enqueue_count-1);
@@ -397,27 +380,29 @@ static RuntimeNode *NextNode(BuildQueue *queue)
 {
     CheckHasLock(&queue->m_Lock);
 
-    int avail_count = AvailableNodeCount(queue);
+    Buffer<int32_t>* workStack = &queue->m_WorkStack;
 
-    if (0 == avail_count)
-        return nullptr;
+    while(workStack->GetCount() > 0)
+    {
+        int32_t node_index = BufferPopOne(workStack);
 
-    uint32_t read_index = queue->m_QueueReadIndex;
+        RuntimeNode *runtime_node = queue->m_Config.m_RuntimeNodes + node_index;
 
-    int32_t node_index = queue->m_Queue[read_index];
+        if (RuntimeNodeIsActive(runtime_node) || runtime_node->m_Finished)
+        {
+            //this can happen in legit situations. we allow nodes to appear on the workstack once. This happens in situations where
+            //a node gets queued as not-very-urgent (aka at the end of a dependency list). But later, the same node is also a dependency of something
+            //that was queued at the top of the stack. In this case, we enqueue it again, ensuring it gets processed as fast as possible. We do not
+            //bother deleting the older entry from the workstack, and instead have this check & continue.
+            continue;
+        }
+        CHECK(RuntimeNodeIsQueued(runtime_node));
 
-    // Update read index
-    queue->m_QueueReadIndex = (read_index + 1) & (queue->m_QueueCapacity - 1);
-
-    RuntimeNode *runtime_node = queue->m_Config.m_RuntimeNodes + node_index;
-
-    CHECK(RuntimeNodeIsQueued(runtime_node));
-    CHECK(!RuntimeNodeIsActive(runtime_node));
-
-    RuntimeNodeFlagUnqueued(runtime_node);
-    RuntimeNodeFlagActive(runtime_node);
-
-    return runtime_node;
+        RuntimeNodeFlagUnqueued(runtime_node);
+        RuntimeNodeFlagActive(runtime_node);
+        return runtime_node;
+    }
+    return nullptr;
 }
 
 static bool ShouldKeepBuilding(BuildQueue *queue)
