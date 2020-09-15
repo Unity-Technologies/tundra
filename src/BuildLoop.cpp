@@ -79,7 +79,7 @@ static int EnqueueNodeListReversedWithoutWakingAwaiters(BuildQueue* queue, MemAl
 
     //we enqueue dependency lists in reverse. because our semantics say that the most urgent dependencies are in the list first, it's important that they
     //end up on the top of the workstack, so they'll be processed first.
-    for(int i=nodesToEnqueue.GetCount(); i>=0; i++)
+    for(int i=nodesToEnqueue.GetCount(); i-- > 0;)
     {
         int32_t depDagIndex = nodesToEnqueue[i];
         enqueue_count += EnqueueNodeWithoutWakingAwaiters(queue, scratch, &queue->m_Config.m_RuntimeNodes[depDagIndex], enqueingNode);
