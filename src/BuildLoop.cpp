@@ -73,7 +73,7 @@ static void LogFirstTimeEnqueue(MemAllocLinear* scratch, RuntimeNode* enqueuedNo
     LogStructured(&msg);
 }
 
-static int EnqueueNodeListReversedWithoutWakingAwaiters(BuildQueue* queue, MemAllocLinear* scratch, const FrozenArray<int32_t>& nodesToEnqueue, RuntimeNode* enqueingNode)
+static int EnqueueNodeListReversedWithoutWakingAwaitersOnlyWhenNotEnqueuedBefore(BuildQueue* queue, MemAllocLinear* scratch, const FrozenArray<int32_t>& nodesToEnqueue, RuntimeNode* enqueingNode)
 {
     int enqueue_count = 0;
 
@@ -82,12 +82,12 @@ static int EnqueueNodeListReversedWithoutWakingAwaiters(BuildQueue* queue, MemAl
     for(int i=nodesToEnqueue.GetCount(); i-- > 0;)
     {
         int32_t depDagIndex = nodesToEnqueue[i];
-        enqueue_count += EnqueueNodeWithoutWakingAwaiters(queue, scratch, &queue->m_Config.m_RuntimeNodes[depDagIndex], enqueingNode);
+        enqueue_count += EnqueueNodeWithoutWakingAwaiters(queue, scratch, &queue->m_Config.m_RuntimeNodes[depDagIndex], enqueingNode, true);
     }
     return enqueue_count;
 }
 
-int EnqueueNodeWithoutWakingAwaiters(BuildQueue *queue, MemAllocLinear* scratch, RuntimeNode *runtime_node, RuntimeNode* queueing_node)
+int EnqueueNodeWithoutWakingAwaiters(BuildQueue *queue, MemAllocLinear* scratch, RuntimeNode *runtime_node, RuntimeNode* queueing_node, bool onlyEnqueueIfNotEnqueuedBefore)
 {
     // Did someone else get to the node first?
     if (RuntimeNodeIsActive(runtime_node) || runtime_node->m_Finished)
@@ -106,7 +106,7 @@ int EnqueueNodeWithoutWakingAwaiters(BuildQueue *queue, MemAllocLinear* scratch,
     int enqueue_count = 1;
     RuntimeNodeFlagQueued(runtime_node);
 
-    enqueue_count += EnqueueNodeListReversedWithoutWakingAwaiters(queue, scratch, runtime_node->m_DagNode->m_ToUseDependencies, runtime_node);
+    enqueue_count += EnqueueNodeListReversedWithoutWakingAwaitersOnlyWhenNotEnqueuedBefore(queue, scratch, runtime_node->m_DagNode->m_ToUseDependencies, runtime_node);
 
     return enqueue_count;
 }
@@ -153,7 +153,7 @@ static void EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(BuildQueue *queue, T
             if (!AllDependenciesAreFinished(queue, waiter))
                 continue;
 
-            enqueue_count += EnqueueNodeWithoutWakingAwaiters(queue, &thread_state->m_ScratchAlloc, waiter, nullptr);
+            enqueue_count += EnqueueNodeWithoutWakingAwaiters(queue, &thread_state->m_ScratchAlloc, waiter, nullptr, false);
         }
     }
 
@@ -312,7 +312,7 @@ static void EnqueueToBuildDependencies(BuildQueue *queue, ThreadState *thread_st
     CheckHasLock(&queue->m_Lock);
 
     auto& dependencies = node->m_DagNode->m_ToBuildDependencies;
-    int enqueue_count = EnqueueNodeListReversedWithoutWakingAwaiters(queue,&thread_state->m_ScratchAlloc, dependencies, node);
+    int enqueue_count = EnqueueNodeListReversedWithoutWakingAwaitersOnlyWhenNotEnqueuedBefore(queue,&thread_state->m_ScratchAlloc, dependencies, node);
 
     if (enqueue_count > 1)
         WakeWaiters(queue, enqueue_count-1);
