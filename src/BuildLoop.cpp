@@ -93,6 +93,9 @@ int EnqueueNodeWithoutWakingAwaiters(BuildQueue *queue, MemAllocLinear* scratch,
     if (RuntimeNodeIsActive(runtime_node) || runtime_node->m_Finished)
         return 0;
 
+    if (onlyEnqueueIfNotEnqueuedBefore && RuntimeNodeHasEverBeenQueued(runtime_node))
+        return 0;
+
     int runtime_node_index = int(runtime_node - queue->m_Config.m_RuntimeNodes);
 
     BufferAppendOne(&queue->m_WorkStack, queue->m_Config.m_Heap, runtime_node_index);
