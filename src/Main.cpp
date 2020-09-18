@@ -56,6 +56,7 @@ static const struct OptionTemplate
     {'l', "don't use previous results.", OptionType::kBool, offsetof(DriverOptions, m_DontReusePreviousResults), "Builds the requested target from scratch"},
     {'w', "spammy-verbose", OptionType::kBool, offsetof(DriverOptions, m_SpammyVerbose), "Enable spammy verbose build messages"},
     {'D', "debug", OptionType::kBool, offsetof(DriverOptions, m_DebugMessages), "Enable debug messages"},
+    {'k', "continue-on-failure", OptionType::kBool, offsetof(DriverOptions, m_ContinueOnFailure), "Build as much as possible after the first error"},
     {'S', "debug-signing", OptionType::kBool, offsetof(DriverOptions, m_DebugSigning), "Generate an extensive log of signature generation"},
     {'e', "just-print-leafinput-signature", OptionType::kString, offsetof(DriverOptions, m_JustPrintLeafInputSignature), "Print to the specified file the leaf input signature ingredients of the requested node"},
     {'s', "stats", OptionType::kBool, offsetof(DriverOptions, m_DisplayStats), "Display stats"},

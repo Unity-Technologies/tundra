@@ -60,6 +60,7 @@ void DriverOptionsInit(DriverOptions *self)
     self->m_SilenceIfPossible = false;
     self->m_DontReusePreviousResults = false;
     self->m_DebugSigning = false;
+    self->m_ContinueOnFailure = false;
     self->m_JustPrintLeafInputSignature = nullptr;
     self->m_IdentificationColor = 0;
     self->m_ThreadCount = GetCpuCount();

@@ -366,7 +366,8 @@ static void ProcessNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
         {
             case NodeBuildResult::kRanFailed:
                 queue->m_FinalBuildResult = BuildResult::kBuildError;
-                SignalMainThreadToStartCleaningUp(queue);
+                if (!queue->m_Config.m_DriverOptions->m_ContinueOnFailure)
+                    SignalMainThreadToStartCleaningUp(queue);
                 break;
             case NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun:
                 if (queue->m_FinalBuildResult == BuildResult::kOk)
