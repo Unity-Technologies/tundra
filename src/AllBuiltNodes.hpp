@@ -20,9 +20,19 @@ struct NodeInputFileData
 
 static_assert(sizeof(NodeInputFileData) == 16, "struct layout");
 
+namespace BuiltNodeResult
+{
+    enum Enum
+    {
+        kRanSuccessfullyWithGuaranteedCorrectInputSignature,
+        kRanSuccessfullyButInputSignatureMightBeIncorrect,
+        kRanFailed,
+    };
+}
+
 struct BuiltNode
 {
-    NodeBuildResult::Enum m_Result;
+    BuiltNodeResult::Enum m_Result;
     HashDigest m_InputSignature;
     HashDigest m_LeafInputSignature;
     FrozenArray<FrozenFileAndHash> m_OutputFiles;

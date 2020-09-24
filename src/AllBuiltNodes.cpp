@@ -41,14 +41,14 @@ bool NodeWasUsedByThisDagPreviously(const Frozen::BuiltNode *previously_built_no
 }
 
 template <class TNodeType>
-static void save_node_sharedcode(NodeBuildResult::Enum nodeBuildResult, const HashDigest *input_signature, const HashDigest* leafinput_signature, const TNodeType *src_node, const HashDigest *guid, const StateSavingSegments &segments, const SinglyLinkedPathList* additionalDiscoveredOutputFiles)
+static void save_node_sharedcode(Frozen::BuiltNodeResult::Enum builtNodeResult, const HashDigest *input_signature, const HashDigest* leafinput_signature, const TNodeType *src_node, const HashDigest *guid, const StateSavingSegments &segments, const SinglyLinkedPathList* additionalDiscoveredOutputFiles)
 {
     //we're writing to two arrays in one go.  the FrozenArray<HashDigest> m_NodeGuids and the FrozenArray<BuiltNode> m_BuiltNodes
     //the hashdigest is quick
     BinarySegmentWriteHashDigest(segments.guid, *guid);
 
     //the rest not so much
-    BinarySegmentWriteInt32(segments.built_nodes, nodeBuildResult);
+    BinarySegmentWriteInt32(segments.built_nodes, builtNodeResult);
     BinarySegmentWriteHashDigest(segments.built_nodes, *input_signature);
     BinarySegmentWriteHashDigest(segments.built_nodes, *leafinput_signature);
 
@@ -142,18 +142,18 @@ bool SaveAllBuiltNodes(Driver *self)
     uint32_t this_dag_hashed_identifier = self->m_DagData->m_HashedIdentifier;
 
     // Collapse runtime state to persistent state
-    auto ToPersistentBuildResult = [](NodeBuildResult::Enum runtimeBuildResult) -> NodeBuildResult::Enum {
-        switch (runtimeBuildResult)
+    auto ToBuiltNodeResult = [](const RuntimeNode* runtime_node) -> Frozen::BuiltNodeResult::Enum {
+        switch (runtime_node->m_BuildResult)
         {
             case NodeBuildResult::kUpToDate:
             case NodeBuildResult::kRanSuccesfully:
             case NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun:
-                return NodeBuildResult::kRanSuccesfully;
+                return RuntimeNodeInputSignatureMightBeIncorrect(runtime_node)
+                    ? Frozen::BuiltNodeResult::kRanSuccessfullyButInputSignatureMightBeIncorrect
+                    : Frozen::BuiltNodeResult::kRanSuccessfullyWithGuaranteedCorrectInputSignature;
             case NodeBuildResult::kDidNotRun:
             case NodeBuildResult::kRanFailed:
-                return NodeBuildResult::kRanFailed;
-            case NodeBuildResult::kRanSuccessfullyButInputSignatureMightBeIncorrect:
-                return NodeBuildResult::kRanSuccessfullyButInputSignatureMightBeIncorrect;
+                return Frozen::BuiltNodeResult::kRanFailed;
         }
     };
 
@@ -167,7 +167,7 @@ bool SaveAllBuiltNodes(Driver *self)
         if (runtime_node->m_CurrentLeafInputSignature)
             leafInputSignatureDigest = runtime_node->m_CurrentLeafInputSignature->digest;
 
-        save_node_sharedcode(ToPersistentBuildResult(runtime_node->m_BuildResult), &runtime_node->m_CurrentInputSignature, &leafInputSignatureDigest, runtime_node->m_DagNode, guid, segments, runtime_node->m_DynamicallyDiscoveredOutputFiles);
+        save_node_sharedcode(ToBuiltNodeResult(runtime_node), &runtime_node->m_CurrentInputSignature, &leafInputSignatureDigest, runtime_node->m_DagNode, guid, segments, runtime_node->m_DynamicallyDiscoveredOutputFiles);
 
         int32_t file_count = dag_node->m_InputFiles.GetCount();
         BinarySegmentWriteInt32(built_nodes_seg, file_count);
@@ -270,7 +270,6 @@ bool SaveAllBuiltNodes(Driver *self)
                 return false;
             case NodeBuildResult::kUpToDate:
             case NodeBuildResult::kRanSuccesfully:
-            case NodeBuildResult::kRanSuccessfullyButInputSignatureMightBeIncorrect:
             case NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun:
             case NodeBuildResult::kRanFailed:
                 return true;

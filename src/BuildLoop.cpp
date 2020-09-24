@@ -132,9 +132,7 @@ static bool AllDependenciesAreSuccesful(BuildQueue *queue, RuntimeNode *runtime_
         RuntimeNode *runtime_node = GetRuntimeNodeForDagNodeIndex(queue, dep_index);
         CHECK(runtime_node->m_Finished);
 
-        if (runtime_node->m_BuildResult != NodeBuildResult::kRanSuccesfully
-            && runtime_node->m_BuildResult != NodeBuildResult::kRanSuccessfullyButInputSignatureMightBeIncorrect
-            && runtime_node->m_BuildResult != NodeBuildResult::kUpToDate)
+        if (runtime_node->m_BuildResult != NodeBuildResult::kRanSuccesfully && runtime_node->m_BuildResult != NodeBuildResult::kUpToDate)
             return false;
     }
     return true;
@@ -240,11 +238,14 @@ static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, M
     if (IsNodeCacheableByLeafInputsAndCachingEnabled(queue,node))
     {
         CHECK(node->m_CurrentLeafInputSignature != nullptr);
-        bool stillTheSame = node->m_BuiltNode && node->m_BuiltNode->m_Result == NodeBuildResult::kRanSuccesfully && node->m_BuiltNode->m_LeafInputSignature == node->m_CurrentLeafInputSignature->digest;
 
-        if (!stillTheSame)
-            if (!VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLeafInputs(queue, thread_state, node, dagDerived))
+        if (node->m_BuiltNode)
+        {
+            bool wasSuccessfulWithGuaranteedCorrectInputSignature = node->m_BuiltNode->m_Result == Frozen::BuiltNodeResult::kRanSuccessfullyWithGuaranteedCorrectInputSignature;
+            bool stillTheSame = wasSuccessfulWithGuaranteedCorrectInputSignature && node->m_BuiltNode->m_LeafInputSignature == node->m_CurrentLeafInputSignature->digest;
+            if (!stillTheSame && !VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLeafInputs(queue, thread_state, node, dagDerived))
                 return NodeBuildResult::kRanFailed;
+        }
     }
 
     auto timestampsHash = HashTimestampsOfNonGeneratedInputFiles(queue, node, dagDerived, false, true);
@@ -253,12 +254,10 @@ static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, M
         return NodeBuildResult::kUpToDate;
 
     NodeBuildResult::Enum runActionResult = RunAction(queue, thread_state, node, queue_lock);
-    if ((runActionResult == NodeBuildResult::kRanSuccesfully || runActionResult == NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun)
-        && HashTimestampsOfNonGeneratedInputFiles(queue, node, dagDerived, true, false) != timestampsHash)
-    {
-        // If signatures don't match, someone touched files on disk while we were checking input signature or action was executing.
-        runActionResult = NodeBuildResult::kRanSuccessfullyButInputSignatureMightBeIncorrect;
-    }
+
+    // If signatures don't match, someone touched files on disk while we were checking input signature or action was executing.
+    if (HashTimestampsOfNonGeneratedInputFiles(queue, node, dagDerived, true, false) != timestampsHash)
+        RuntimeNodeInputSignatureMightBeIncorrect(node);
 
     // TODO: All dependent input nodes need to have trusted input signatures
     if (runActionResult == NodeBuildResult::kRanSuccesfully && queue->m_Config.m_AttemptCacheWrites && IsNodeCacheableByLeafInputsAndCachingEnabled(queue,node))
@@ -273,7 +272,8 @@ static bool AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(RuntimeNode* 
 
     if (node->m_BuiltNode)
     {
-        if (node->m_BuiltNode->m_LeafInputSignature == node->m_CurrentLeafInputSignature->digest && !OutputFilesMissingFor(node->m_BuiltNode, queue->m_Config.m_StatCache) && node->m_BuiltNode->m_Result == NodeBuildResult::kRanSuccesfully)
+        auto wasSuccessfulWithGuaranteedCorrectInputSignature = node->m_BuiltNode->m_Result == Frozen::BuiltNodeResult::kRanSuccessfullyWithGuaranteedCorrectInputSignature;
+        if (wasSuccessfulWithGuaranteedCorrectInputSignature && node->m_BuiltNode->m_LeafInputSignature == node->m_CurrentLeafInputSignature->digest && !OutputFilesMissingFor(node->m_BuiltNode, queue->m_Config.m_StatCache))
         {
             node->m_BuildResult = NodeBuildResult::kUpToDate;
             FinishNode(queue, thread_state, node);
