@@ -6,7 +6,7 @@
 #include <time.h>
 #include <stdio.h>
 
-
+static uint64_t s_cutoff_time;
 
 void DigestCacheInit(DigestCache *self, size_t heap_size, const char *filename)
 {
@@ -14,6 +14,10 @@ void DigestCacheInit(DigestCache *self, size_t heap_size, const char *filename)
 
     self->m_Initialized = true;
     self->m_State = nullptr;
+
+    // Throw out records that haven't been accessed in a week.
+    const uint64_t time_now = time(nullptr);
+    s_cutoff_time = time_now - 7 * 24 * 60 * 60;
 
     HeapInit(&self->m_Heap);
     LinearAllocInit(&self->m_Allocator, &self->m_Heap, heap_size / 2, "digest allocator");
@@ -28,24 +32,20 @@ void DigestCacheInit(DigestCache *self, size_t heap_size, const char *filename)
         const Frozen::DigestCacheState *state = (const Frozen::DigestCacheState *)self->m_StateFile.m_Address;
         if (Frozen::DigestCacheState::MagicNumber == state->m_MagicNumber)
         {
-            const uint64_t time_now = time(nullptr);
-
-            // Throw out records that haven't been accessed in a week.
-            const uint64_t cutoff_time = time_now - 7 * 24 * 60 * 60;
-
             self->m_State = state;
 
             //HashTablePrepareBulkInsert(&self->m_Table, state->m_Records.GetCount());
 
             for (const Frozen::DigestRecord &record : state->m_Records)
             {
-                if (record.m_AccessTime < cutoff_time)
+                if (record.m_AccessTime < s_cutoff_time)
                     continue;
 
                 DigestCacheRecord r;
                 r.m_ContentDigest = record.m_ContentDigest;
                 r.m_Timestamp = record.m_Timestamp;
                 r.m_AccessTime = record.m_AccessTime;
+                r.m_Dirty = false;
                 HashTableInsert(&self->m_Table, record.m_FilenameHash, record.m_Filename.Get(), r);
             }
             Log(kDebug, "digest cache initialized -- %d entries", state->m_Records.GetCount());
@@ -82,7 +82,8 @@ bool DigestCacheSave(DigestCache *self, MemAllocHeap *serialization_heap, const 
 
     auto save_record = [=](size_t index, uint32_t hash, const char *path, const DigestCacheRecord &r) {
         BinarySegmentWriteUint64(array_seg, r.m_Timestamp);
-        BinarySegmentWriteUint64(array_seg, r.m_AccessTime);
+        // If entry is marked dirty we set access time to zero to evict it from the cache on the next load
+        BinarySegmentWriteUint64(array_seg, r.m_Dirty ? 0 : r.m_AccessTime);
         BinarySegmentWriteUint32(array_seg, hash);
         BinarySegmentWrite(array_seg, &r.m_ContentDigest, sizeof(r.m_ContentDigest));
         BinarySegmentWritePointer(array_seg, BinarySegmentPosition(string_seg));
@@ -128,7 +129,7 @@ bool DigestCacheGet(DigestCache *self, const char *filename, uint32_t hash, uint
 
     if (DigestCacheRecord *r = (DigestCacheRecord *)HashTableLookup(&self->m_Table, hash, filename))
     {
-        if (r->m_Timestamp == timestamp)
+        if (r->m_Timestamp == timestamp && !r->m_Dirty)
         {
             // Technically violates r/w lock - doesn't matter
             r->m_AccessTime = self->m_AccessTime;
@@ -153,6 +154,7 @@ void DigestCacheSet(DigestCache *self, const char *filename, uint32_t hash, uint
         r->m_Timestamp = timestamp;
         r->m_ContentDigest = digest;
         r->m_AccessTime = self->m_AccessTime;
+        r->m_Dirty = false;
     }
     else
     {
@@ -160,8 +162,20 @@ void DigestCacheSet(DigestCache *self, const char *filename, uint32_t hash, uint
         r.m_ContentDigest = digest;
         r.m_Timestamp = timestamp;
         r.m_AccessTime = self->m_AccessTime;
+        r.m_Dirty = false;
         HashTableInsert(&self->m_Table, hash, StrDup(&self->m_Allocator, filename), r);
     }
+
+    ReadWriteUnlockWrite(&self->m_Lock);
+}
+
+void DigestCacheMarkDirty(DigestCache *self, const char *filename, uint32_t hash)
+{
+    ReadWriteLockWrite(&self->m_Lock);
+
+    DigestCacheRecord *r = (DigestCacheRecord *)HashTableLookup(&self->m_Table, hash, filename);
+    if (r != nullptr)
+        r->m_Dirty = true;
 
     ReadWriteUnlockWrite(&self->m_Lock);
 }
@@ -180,6 +194,9 @@ bool DigestCacheHasChanged(DigestCache *self, const char *filename, uint32_t has
         if (frozenRecord.m_FilenameHash != hash)
             continue;
 
+        if (frozenRecord.m_AccessTime < s_cutoff_time)
+            continue;
+
         if (strcmp(frozenRecord.m_Filename, filename) != 0)
             continue;
 
@@ -189,15 +206,20 @@ bool DigestCacheHasChanged(DigestCache *self, const char *filename, uint32_t has
 
     ReadWriteLockRead(&self->m_Lock);
     DigestCacheRecord *r = (DigestCacheRecord *)HashTableLookup(&self->m_Table, hash, filename);
-    ReadWriteUnlockRead(&self->m_Lock);
 
+    if (r->m_Dirty)
+        r = nullptr;
+
+    bool result;
     if (prevDigest == nullptr && r == nullptr)
-        return false;
+        result = false;
+    else if (prevDigest == nullptr || r == nullptr)
+        result = true;
+    else
+        result = prevDigest->m_ContentDigest != r->m_ContentDigest;
 
-    if (prevDigest == nullptr || r == nullptr)
-        return true;
-
-    return prevDigest->m_ContentDigest != r->m_ContentDigest;
+    ReadWriteUnlockRead(&self->m_Lock);
+    return result;
 }
 
 

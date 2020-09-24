@@ -43,6 +43,7 @@ namespace Frozen
 struct DigestCacheRecord
 {
     HashDigest m_ContentDigest;
+    bool     m_Dirty;
     uint64_t m_Timestamp;
     uint64_t m_AccessTime;
 };
@@ -68,5 +69,7 @@ bool DigestCacheSave(DigestCache *self, MemAllocHeap *serialization_heap, const 
 bool DigestCacheGet(DigestCache *self, const char *filename, uint32_t hash, uint64_t timestamp, HashDigest *digest_out);
 
 void DigestCacheSet(DigestCache *self, const char *filename, uint32_t hash, uint64_t timestamp, const HashDigest &digest);
+
+void DigestCacheMarkDirty(DigestCache *self, const char *filename, uint32_t hash);
 
 bool DigestCacheHasChanged(DigestCache *self, const char *filename, uint32_t hash);

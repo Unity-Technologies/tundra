@@ -161,9 +161,11 @@ NodeBuildResult::Enum PostRunActionBookkeeping(RuntimeNode* node, ThreadState* t
         AppendDirectoryListingToList(d.m_Filename.Get(), thread_state->m_ThreadIndex, *node->m_DynamicallyDiscoveredOutputFiles);
     }
 
+    auto& digest_cache = thread_state->m_Queue->m_Config.m_DigestCache;
     auto& stat_cache = thread_state->m_Queue->m_Config.m_StatCache;
     for (const FrozenFileAndHash &output : node->m_DagNode->m_OutputFiles)
     {
+        DigestCacheMarkDirty(digest_cache, output.m_Filename, output.m_FilenameHash);
         StatCacheMarkDirty(stat_cache, output.m_Filename, output.m_FilenameHash);
     }
     return requireFrontendRerun
