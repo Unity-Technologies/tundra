@@ -2,6 +2,7 @@
 
 #include "Common.hpp"
 #include "BinaryData.hpp"
+#include "RuntimeNode.hpp"
 
 struct StatCache;
 struct Driver;
@@ -21,7 +22,7 @@ static_assert(sizeof(NodeInputFileData) == 16, "struct layout");
 
 struct BuiltNode
 {
-    uint32_t m_WasBuiltSuccessfully;
+    NodeBuildResult::Enum m_Result;
     HashDigest m_InputSignature;
     HashDigest m_LeafInputSignature;
     FrozenArray<FrozenFileAndHash> m_OutputFiles;

@@ -13,6 +13,7 @@ namespace NodeBuildResult
         kUpToDate,
         kRanSuccesfully,
         kRanFailed,
+        kRanSuccessfullyButInputSignatureMightBeIncorrect,
         kRanSuccessButDependeesRequireFrontendRerun
     };
 }

@@ -44,6 +44,7 @@ struct CompileDagDerivedWorker
 
     BinarySegment *dependenciesArray_seg;
     BinarySegment *backlinksArray_seg;
+    BinarySegment *nonGeneratedInputIndices_seg;
     BinarySegment *leafInputsArray_seg;
     BinarySegment *dependentNodesThatThemselvesAreLeafInputCacheableArray_seg;
     BinarySegment *dependentNodesWithScannersArray_seg;
@@ -277,6 +278,9 @@ struct CompileDagDerivedWorker
         BinarySegmentWritePointer(main_seg, BinarySegmentPosition(backlinksArray_seg));
 
         BinarySegmentWriteUint32(main_seg, node_count);
+        BinarySegmentWritePointer(main_seg, BinarySegmentPosition(nonGeneratedInputIndices_seg));
+
+        BinarySegmentWriteUint32(main_seg, node_count);
         BinarySegmentWritePointer(main_seg, BinarySegmentPosition(leafInputsArray_seg));
 
         BinarySegmentWriteUint32(main_seg, node_count);
@@ -297,6 +301,19 @@ struct CompileDagDerivedWorker
         {
             WriteArrayOfIndices(dependenciesArray_seg, combinedDependenciesBuffers[nodeIndex]);
             WriteArrayOfIndices(backlinksArray_seg, backlinksBuffers[nodeIndex]);
+
+            Buffer<int32_t> indices;
+            int count = dag->m_DagNodes[nodeIndex].m_InputFiles.GetCount();
+            BufferInitWithCapacity(&indices, heap, count);
+            for (int i=0; i!=count; i++)
+            {
+                auto& inputFile = dag->m_DagNodes[nodeIndex].m_InputFiles[i];
+                if (IsFileGenerated(&dagRuntimeData, inputFile.m_FilenameHash, inputFile.m_Filename))
+                    continue;
+                BufferAppendOne(&indices, heap, i);
+            }
+
+            WriteArrayOfIndices(nonGeneratedInputIndices_seg, indices);
             WriteIntoCacheableNodeDataArraysFor(nodeIndex);
         }
 
@@ -319,6 +336,7 @@ static void CompileDagDerivedWorkerInit(CompileDagDerivedWorker* data, const Fro
 
     data->dependenciesArray_seg = BinaryWriterAddSegment(data->writer);
     data->backlinksArray_seg = BinaryWriterAddSegment(data->writer);
+    data->nonGeneratedInputIndices_seg = BinaryWriterAddSegment(data->writer);
     data->arraydata_seg = BinaryWriterAddSegment(data->writer);
     data->arraydata2_seg = BinaryWriterAddSegment(data->writer);
     data->leafInputsArray_seg = BinaryWriterAddSegment(data->writer);

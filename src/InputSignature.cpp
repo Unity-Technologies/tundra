@@ -467,6 +467,64 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
     StatCache *stat_cache = config.m_StatCache;
     DigestCache *digest_cache = config.m_DigestCache;
 
+    if (prev_builtnode->m_Result == NodeBuildResult::kRanSuccessfullyButInputSignatureMightBeIncorrect)
+    {
+        // The build progress failed the last time around - we need to retry it.
+        Log(kSpam, "T=%d: building %s - previous input signature might be incorrect", thread_state->m_ThreadIndex, dagnode->m_Annotation.Get());
+
+        if (IsStructuredLogActive())
+        {
+            MemAllocLinearScope allocScope(&thread_state->m_ScratchAlloc);
+
+            JsonWriter msg;
+            JsonWriteInit(&msg, &thread_state->m_ScratchAlloc);
+            JsonWriteStartObject(&msg);
+
+            JsonWriteKeyName(&msg, "msg");
+            JsonWriteValueString(&msg, "previousInputSignatureMightBeIncorrect");
+
+            JsonWriteKeyName(&msg, "annotation");
+            JsonWriteValueString(&msg, dagnode->m_Annotation);
+
+            JsonWriteKeyName(&msg, "index");
+            JsonWriteValueInteger(&msg, dagnode->m_OriginalIndex);
+
+            JsonWriteEndObject(&msg);
+            LogStructured(&msg);
+        }
+
+        return true;
+    }
+
+    if (prev_builtnode->m_Result == NodeBuildResult::kRanFailed)
+    {
+        // The build progress failed the last time around - we need to retry it.
+        Log(kSpam, "T=%d: building %s - previous build failed", thread_state->m_ThreadIndex, dagnode->m_Annotation.Get());
+
+        if (IsStructuredLogActive())
+        {
+            MemAllocLinearScope allocScope(&thread_state->m_ScratchAlloc);
+
+            JsonWriter msg;
+            JsonWriteInit(&msg, &thread_state->m_ScratchAlloc);
+            JsonWriteStartObject(&msg);
+
+            JsonWriteKeyName(&msg, "msg");
+            JsonWriteValueString(&msg, "nodeRetryBuild");
+
+            JsonWriteKeyName(&msg, "annotation");
+            JsonWriteValueString(&msg, dagnode->m_Annotation);
+
+            JsonWriteKeyName(&msg, "index");
+            JsonWriteValueInteger(&msg, dagnode->m_OriginalIndex);
+
+            JsonWriteEndObject(&msg);
+            LogStructured(&msg);
+        }
+
+        return true;
+    }
+
     if (prev_builtnode->m_InputSignature != node->m_CurrentInputSignature)
     {
         // The input signature has changed (either direct inputs or includes)
@@ -501,35 +559,6 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
             ReportInputSignatureChanges(&msg, queue->m_Config.m_Dag, node, dagnode, prev_builtnode, stat_cache, digest_cache, queue->m_Config.m_ScanCache, config.m_ShaDigestExtensions, config.m_ShaDigestExtensionCount, thread_state);
 
             JsonWriteEndArray(&msg);
-            JsonWriteEndObject(&msg);
-            LogStructured(&msg);
-        }
-
-        return true;
-    }
-
-    else if (!prev_builtnode->m_WasBuiltSuccessfully)
-    {
-        // The build progress failed the last time around - we need to retry it.
-        Log(kSpam, "T=%d: building %s - previous build failed", thread_state->m_ThreadIndex, dagnode->m_Annotation.Get());
-
-        if (IsStructuredLogActive())
-        {
-            MemAllocLinearScope allocScope(&thread_state->m_ScratchAlloc);
-
-            JsonWriter msg;
-            JsonWriteInit(&msg, &thread_state->m_ScratchAlloc);
-            JsonWriteStartObject(&msg);
-
-            JsonWriteKeyName(&msg, "msg");
-            JsonWriteValueString(&msg, "nodeRetryBuild");
-
-            JsonWriteKeyName(&msg, "annotation");
-            JsonWriteValueString(&msg, dagnode->m_Annotation);
-
-            JsonWriteKeyName(&msg, "index");
-            JsonWriteValueInteger(&msg, dagnode->m_OriginalIndex);
-
             JsonWriteEndObject(&msg);
             LogStructured(&msg);
         }
@@ -591,3 +620,63 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
     return false;
 }
 
+#if TUNDRA_UNIX
+#include <unistd.h> // usleep
+#endif
+
+static uint64_t s_LastSeenFileSystemTime = 0; // atomic store and load
+
+static void WaitUntilFileModificationDateIsInThePast(BuildQueue *queue, uint64_t fileModificationDate)
+{
+    // TODO: We need to do a sanity check here - fileModificationDate could be a date far into the future
+    if (fileModificationDate < s_LastSeenFileSystemTime)
+        return;
+
+    // TODO: Lock should be explicit for manipulating the timestampFile. Or can we do without a lock?
+    MutexLock(&queue->m_Lock);
+    while (fileModificationDate >= s_LastSeenFileSystemTime)
+    {
+// TODO: Make abstract sleep function
+#if TUNDRA_WIN32
+        Sleep(100);
+#else
+        usleep(100000);
+#endif
+//        queue->m_Config.m_DriverOptions->m_DAGFileName
+        const char *timestampFileName = "need_to_figure_out_what_name_to_use_here";
+        FILE *timestampFile = fopen(timestampFileName, "w");
+        if (timestampFile == nullptr)
+            CroakErrno("Unable to create timestamp file '%s'", timestampFileName);
+
+        if (fwrite(&fileModificationDate, sizeof fileModificationDate, 1, timestampFile) == 0)
+            CroakErrno("Unable to write timestamp file '%s'", timestampFileName);
+
+        fclose(timestampFile);
+
+        s_LastSeenFileSystemTime = GetFileInfo(timestampFileName).m_Timestamp;
+    }
+    MutexUnlock(&queue->m_Lock);
+}
+
+HashDigest HashTimestampsOfNonGeneratedInputFiles(BuildQueue *queue, RuntimeNode *node, const Frozen::DagDerived *dagDerived, bool forceReadTimestampFromDisk, bool waitForFileTimestampToNotBeNow)
+{
+    HashState hashState;
+    HashInit(&hashState);
+
+    for (auto i : queue->m_Config.m_DagDerived->m_NodeNonGeneratedInputIndicies[node->m_DagNodeIndex])
+    {
+        auto &non_generated_input_file = node->m_DagNode->m_InputFiles[i];
+        if (forceReadTimestampFromDisk)
+            StatCacheMarkDirty(queue->m_Config.m_StatCache, non_generated_input_file.m_Filename, non_generated_input_file.m_FilenameHash);
+
+        auto file_info = StatCacheStat(queue->m_Config.m_StatCache, non_generated_input_file.m_Filename, non_generated_input_file.m_FilenameHash);
+        HashAddInteger(&hashState, file_info.m_Timestamp);
+
+        if (waitForFileTimestampToNotBeNow)
+            WaitUntilFileModificationDateIsInThePast(queue, file_info.m_Timestamp);
+    }
+
+    HashDigest result;
+    HashFinalize(&hashState, &result);
+    return result;
+}
