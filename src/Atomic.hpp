@@ -70,6 +70,4 @@ inline void* AtomicCompareExchange(void **ptr, void* newPtr, void* comparePtr)
 }
 #endif // __GNUC__
 
-
-
 #endif

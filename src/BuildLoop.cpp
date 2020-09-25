@@ -259,6 +259,8 @@ static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, M
     if (HashTimestampsOfNonGeneratedInputFiles(queue, node, dagDerived, true, false) != timestampsHash)
         RuntimeNodeInputSignatureMightBeIncorrect(node);
 
+    // TODO: If any timestamp was set in the future we should mark InputSignature as "might be incorrect"
+
     // TODO: All dependent input nodes need to have trusted input signatures
     if (runActionResult == NodeBuildResult::kRanSuccesfully && queue->m_Config.m_AttemptCacheWrites && IsNodeCacheableByLeafInputsAndCachingEnabled(queue,node))
         AttemptCacheWrite(queue,thread_state,node);

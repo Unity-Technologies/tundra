@@ -5,6 +5,7 @@
 #include "RuntimeNode.hpp"
 #include "Scanner.hpp"
 #include "FileInfo.hpp"
+#include "FileSystem.hpp"
 #include "AllBuiltNodes.hpp"
 #include "SignalHandler.hpp"
 #include "Exec.hpp"
@@ -550,42 +551,21 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
     }
 }
 
-#if TUNDRA_UNIX
-#include <unistd.h> // usleep
-#endif
-
-static uint64_t s_LastSeenFileSystemTime = 0; // atomic store and load
-
-static void WaitUntilFileModificationDateIsInThePast(BuildQueue *queue, uint64_t fileModificationDate)
+static void WaitOrSignalInvalid(BuildQueue *queue, uint64_t fileModificationDate)
 {
-    // TODO: We need to do a sanity check here - fileModificationDate could be a date far into the future
-    if (fileModificationDate < s_LastSeenFileSystemTime)
+    if (fileModificationDate < g_LastSeenFileSystemTime)
         return;
 
-    // TODO: Lock should be explicit for manipulating the timestampFile. Or can we do without a lock?
-    MutexLock(&queue->m_Lock);
-    while (fileModificationDate >= s_LastSeenFileSystemTime)
-    {
-// TODO: Make abstract sleep function
-#if TUNDRA_WIN32
-        Sleep(100);
-#else
-        usleep(100000);
-#endif
-//        queue->m_Config.m_DriverOptions->m_DAGFileName
-        const char *timestampFileName = "need_to_figure_out_what_name_to_use_here";
-        FILE *timestampFile = fopen(timestampFileName, "w");
-        if (timestampFile == nullptr)
-            CroakErrno("Unable to create timestamp file '%s'", timestampFileName);
+    // Make sure we have the latest file system time
+    auto fileSystemTimeNow = FileSystemUpdateLastSeenFileSystemTime();
+    if (fileModificationDate < fileSystemTimeNow)
+        return;
 
-        if (fwrite(&fileModificationDate, sizeof fileModificationDate, 1, timestampFile) == 0)
-            CroakErrno("Unable to write timestamp file '%s'", timestampFileName);
+    // TODO: Signal that input signature can't be trusted
+    if (fileModificationDate > fileSystemTimeNow)
+        return;
 
-        fclose(timestampFile);
-
-        s_LastSeenFileSystemTime = GetFileInfo(timestampFileName).m_Timestamp;
-    }
-    MutexUnlock(&queue->m_Lock);
+    FileSystemWaitUntilFileModificationDateIsInThePast(fileModificationDate);
 }
 
 HashDigest HashTimestampsOfNonGeneratedInputFiles(BuildQueue *queue, RuntimeNode *node, const Frozen::DagDerived *dagDerived, bool forceReadTimestampFromDisk, bool waitForFileTimestampToNotBeNow)
@@ -603,7 +583,7 @@ HashDigest HashTimestampsOfNonGeneratedInputFiles(BuildQueue *queue, RuntimeNode
         HashAddInteger(&hashState, file_info.m_Timestamp);
 
         if (waitForFileTimestampToNotBeNow)
-            WaitUntilFileModificationDateIsInThePast(queue, file_info.m_Timestamp);
+            WaitOrSignalInvalid(queue, file_info.m_Timestamp);
     }
 
     HashDigest result;
