@@ -46,7 +46,7 @@ uint64_t FileSystemUpdateLastSeenFileSystemTime()
     if (fstat(fileno(s_LastSeenFileSystemTimeSampleFile), &fileInformation) != 0)
         CroakErrno("Unable to read file timestamp");
 #elif defined(TUNDRA_WIN32)
-    struct __stat64 stbuf;
+    struct __stat64 fileInformation;
     if (_fstat64(fileno(s_LastSeenFileSystemTimeSampleFile), &fileInformation) != 0)
         CroakErrno("Unable to read file timestamp");
 #endif
