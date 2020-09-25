@@ -1,6 +1,9 @@
 #include <stdint.h>
 
-extern volatile uint64_t g_LastSeenFileSystemTime;
+namespace FileSystem
+{
+    extern volatile uint64_t g_LastSeenFileSystemTime;
+}
 
 void FileSystemInit(const char* lastSeenFileSystemTimeSampleFile);
 void FileSystemDestroy();

@@ -5,6 +5,7 @@
 #include "RuntimeNode.hpp"
 #include "Scanner.hpp"
 #include "FileInfo.hpp"
+#include "FileSystem.hpp"
 #include "AllBuiltNodes.hpp"
 #include "SignalHandler.hpp"
 #include "Exec.hpp"
@@ -231,6 +232,29 @@ static void AttemptCacheWrite(BuildQueue* queue, ThreadState* thread_state, Runt
     MutexUnlock(&queue->m_Lock);
 }
 
+static HashDigest HashTimestampsOfNonGeneratedInputFiles(BuildQueue* queue, RuntimeNode* node, bool forceReadTimestampFromDisk, uint64_t* latestTimestampSeenForNonGeneratedInputFile = nullptr)
+{
+    HashState hashState;
+    HashInit(&hashState);
+
+    for (auto i : queue->m_Config.m_DagDerived->m_NodeNonGeneratedInputIndicies[node->m_DagNodeIndex])
+    {
+        const auto &non_generated_input_file = node->m_DagNode->m_InputFiles[i];
+        if (forceReadTimestampFromDisk)
+            StatCacheMarkDirty(queue->m_Config.m_StatCache, non_generated_input_file.m_Filename, non_generated_input_file.m_FilenameHash);
+
+        const auto timeStamp = StatCacheStat(queue->m_Config.m_StatCache, non_generated_input_file.m_Filename, non_generated_input_file.m_FilenameHash).m_Timestamp;
+        if (latestTimestampSeenForNonGeneratedInputFile && timeStamp > *latestTimestampSeenForNonGeneratedInputFile)
+            *latestTimestampSeenForNonGeneratedInputFile = timeStamp;
+
+        HashAddInteger(&hashState, timeStamp);
+    }
+
+    HashDigest result;
+    HashFinalize(&hashState, &result);
+    return result;
+};
+
 static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, Mutex *queue_lock, ThreadState* thread_state, StatCache* stat_cache, const Frozen::DagDerived* dagDerived)
 {
     CheckDoesNotHaveLock(&queue->m_Lock);
@@ -248,18 +272,28 @@ static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, M
         }
     }
 
-    auto timestampsHash = HashTimestampsOfNonGeneratedInputFiles(queue, node, dagDerived, false, true);
-    bool haveToRunAction = CheckInputSignatureToSeeNodeNeedsExecuting(queue, thread_state, node);
+    uint64_t latestTimestampSeenForNonGeneratedInputFile = 0;
+    const auto timestampsHash = HashTimestampsOfNonGeneratedInputFiles(queue, node, false, &latestTimestampSeenForNonGeneratedInputFile);
+
+    bool thereIsAtLeastOneInputFileDatedInTheFuture = false;
+    if (latestTimestampSeenForNonGeneratedInputFile >= FileSystem::g_LastSeenFileSystemTime)
+    {
+        const auto fileSystemTimeNow = FileSystemUpdateLastSeenFileSystemTime();
+        if (latestTimestampSeenForNonGeneratedInputFile == fileSystemTimeNow)
+            FileSystemWaitUntilFileModificationDateIsInThePast(latestTimestampSeenForNonGeneratedInputFile);
+        else if (latestTimestampSeenForNonGeneratedInputFile > fileSystemTimeNow)
+            thereIsAtLeastOneInputFileDatedInTheFuture = true;
+    }
+
+    const bool haveToRunAction = CheckInputSignatureToSeeNodeNeedsExecuting(queue, thread_state, node);
     if (!haveToRunAction)
         return NodeBuildResult::kUpToDate;
 
-    NodeBuildResult::Enum runActionResult = RunAction(queue, thread_state, node, queue_lock);
+    const NodeBuildResult::Enum runActionResult = RunAction(queue, thread_state, node, queue_lock);
 
     // If signatures don't match, someone touched files on disk while we were checking input signature or action was executing.
-    if (HashTimestampsOfNonGeneratedInputFiles(queue, node, dagDerived, true, false) != timestampsHash)
+    if (thereIsAtLeastOneInputFileDatedInTheFuture || HashTimestampsOfNonGeneratedInputFiles(queue, node, true) != timestampsHash)
         RuntimeNodeInputSignatureMightBeIncorrect(node);
-
-    // TODO: If any timestamp was set in the future we should mark InputSignature as "might be incorrect"
 
     // TODO: All dependent input nodes need to have trusted input signatures
     if (runActionResult == NodeBuildResult::kRanSuccesfully && queue->m_Config.m_AttemptCacheWrites && IsNodeCacheableByLeafInputsAndCachingEnabled(queue,node))

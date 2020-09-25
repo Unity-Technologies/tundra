@@ -4,7 +4,11 @@
 #include <stdio.h>
 #include <sys/stat.h>
 
-volatile uint64_t g_LastSeenFileSystemTime;
+namespace FileSystem
+{
+    volatile uint64_t g_LastSeenFileSystemTime;
+}
+
 static FILE *s_LastSeenFileSystemTimeSampleFile;
 static Mutex s_LastSeenFileSystemTimeLock;
 
@@ -31,7 +35,7 @@ uint64_t FileSystemUpdateLastSeenFileSystemTime()
 {
     MutexLock(&s_LastSeenFileSystemTimeLock);
 
-    uint64_t valueToWrite = g_LastSeenFileSystemTime; // not important what we write, just that we write something.
+    uint64_t valueToWrite = FileSystem::g_LastSeenFileSystemTime; // not important what we write, just that we write something.
 
     rewind(s_LastSeenFileSystemTimeSampleFile);
     fwrite(&valueToWrite, sizeof valueToWrite, 1, s_LastSeenFileSystemTimeSampleFile);
@@ -46,10 +50,10 @@ uint64_t FileSystemUpdateLastSeenFileSystemTime()
     if (_fstat64(fileno(s_LastSeenFileSystemTimeSampleFile), &fileInformation) != 0)
         CroakErrno("Unable to read file timestamp");
 #endif
-    g_LastSeenFileSystemTime = fileInformation.st_mtime;
+    FileSystem::g_LastSeenFileSystemTime = fileInformation.st_mtime;
     MutexUnlock(&s_LastSeenFileSystemTimeLock);
 
-    return g_LastSeenFileSystemTime;
+    return FileSystem::g_LastSeenFileSystemTime;
 }
 
 #if TUNDRA_UNIX
