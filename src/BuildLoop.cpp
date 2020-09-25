@@ -139,6 +139,18 @@ static bool AllDependenciesAreSuccesful(BuildQueue *queue, RuntimeNode *runtime_
     return true;
 }
 
+static bool AllInputSignatuesAreGuaranteedCorrect(BuildQueue *queue, RuntimeNode *runtime_node)
+{
+    if (RuntimeNodeInputSignatureMightBeIncorrect(runtime_node))
+        return false;
+
+    for (int32_t dep_index : queue->m_Config.m_DagDerived->m_CombinedDependencies[runtime_node->m_DagNodeIndex])
+        if (RuntimeNodeInputSignatureMightBeIncorrect(GetRuntimeNodeForDagNodeIndex(queue, dep_index)))
+            return false;
+
+    return true;
+}
+
 static void EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(BuildQueue *queue, ThreadState* thread_state, RuntimeNode *node)
 {
     int enqueue_count = 0;
@@ -295,9 +307,13 @@ static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, M
     if (thereIsAtLeastOneInputFileDatedInTheFuture || HashTimestampsOfNonGeneratedInputFiles(queue, node, true) != timestampsHash)
         RuntimeNodeInputSignatureMightBeIncorrect(node);
 
-    // TODO: All dependent input nodes need to have trusted input signatures
-    if (runActionResult == NodeBuildResult::kRanSuccesfully && queue->m_Config.m_AttemptCacheWrites && IsNodeCacheableByLeafInputsAndCachingEnabled(queue,node))
+    if (runActionResult == NodeBuildResult::kRanSuccesfully
+        && queue->m_Config.m_AttemptCacheWrites
+        && IsNodeCacheableByLeafInputsAndCachingEnabled(queue,node)
+        && AllInputSignatuesAreGuaranteedCorrect(queue, node))
+    {
         AttemptCacheWrite(queue,thread_state,node);
+    }
 
     return runActionResult;
 }
