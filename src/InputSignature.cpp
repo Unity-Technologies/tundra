@@ -459,6 +459,18 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
 
     switch (prev_builtnode->m_Result)
     {
+        // The build progress failed the last time around - we need to retry it.
+        case Frozen::BuiltNodeResult::kRanFailed:
+            Log(kSpam, "T=%d: building %s - previous build failed", thread_state->m_ThreadIndex, dagnode->m_Annotation.Get());
+            LogStructuredMsgObject(thread_state, "nodeRetryBuild", dagnode);
+            return true;
+
+        // Input signatures changed or was suspicious (mtime set to a future date) the last time around - we need to retry it.
+        case Frozen::BuiltNodeResult::kRanSuccessfullyButInputSignatureMightBeIncorrect:
+            Log(kSpam, "T=%d: building %s - previous input signature might be incorrect", thread_state->m_ThreadIndex, dagnode->m_Annotation.Get());
+            LogStructuredMsgObject(thread_state, "previousInputSignatureMightBeIncorrect", dagnode);
+            return true;
+
         // Previous build was successful. Check input signature and outputs to determine if we need to run again.
         case Frozen::BuiltNodeResult::kRanSuccessfullyWithGuaranteedCorrectInputSignature:
 
@@ -536,17 +548,5 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
 
             // Everything is up to date
             return false;
-
-        // The build progress failed the last time around - we need to retry it.
-        case Frozen::BuiltNodeResult::kRanFailed:
-            Log(kSpam, "T=%d: building %s - previous build failed", thread_state->m_ThreadIndex, dagnode->m_Annotation.Get());
-            LogStructuredMsgObject(thread_state, "nodeRetryBuild", dagnode);
-            return true;
-
-        // Input signatures changed or was suspicious (mtime set to a future date) the last time around - we need to retry it.
-        case Frozen::BuiltNodeResult::kRanSuccessfullyButInputSignatureMightBeIncorrect:
-            Log(kSpam, "T=%d: building %s - previous input signature might be incorrect", thread_state->m_ThreadIndex, dagnode->m_Annotation.Get());
-            LogStructuredMsgObject(thread_state, "previousInputSignatureMightBeIncorrect", dagnode);
-            return true;
     }
 }
