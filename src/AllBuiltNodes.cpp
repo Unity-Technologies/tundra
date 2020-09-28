@@ -148,7 +148,7 @@ bool SaveAllBuiltNodes(Driver *self)
             case NodeBuildResult::kUpToDate:
             case NodeBuildResult::kRanSuccesfully:
             case NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun:
-                return RuntimeNodeInputGetSignatureMightBeIncorrect(runtime_node)
+                return RuntimeNodeGetInputSignatureMightBeIncorrect(runtime_node)
                     ? Frozen::BuiltNodeResult::kRanSuccessfullyButInputSignatureMightBeIncorrect
                     : Frozen::BuiltNodeResult::kRanSuccessfullyWithGuaranteedCorrectInputSignature;
             case NodeBuildResult::kDidNotRun:

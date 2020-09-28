@@ -129,7 +129,7 @@ inline void RuntimeNodeSetInputSignatureMightBeIncorrect(RuntimeNode *runtime_no
     runtime_node->m_Flags |= RuntimeNodeFlags::kInputSignatureMightBeIncorrect;
 }
 
-inline bool RuntimeNodeInputGetSignatureMightBeIncorrect(const RuntimeNode *runtime_node)
+inline bool RuntimeNodeGetInputSignatureMightBeIncorrect(const RuntimeNode *runtime_node)
 {
     return 0 != (runtime_node->m_Flags & RuntimeNodeFlags::kInputSignatureMightBeIncorrect);
 }
