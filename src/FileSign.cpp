@@ -1,4 +1,5 @@
 #include "FileSign.hpp"
+#include "FileSystem.hpp"
 #include "Hash.hpp"
 #include "StatCache.hpp"
 #include "Stats.hpp"
@@ -37,7 +38,10 @@ HashDigest ComputeFileSignatureSha1(StatCache* stat_cache, DigestCache* digest_c
         fclose(f);
 
         HashFinalize(&h, &result);
-        DigestCacheSet(digest_cache, filename, fn_hash, file_info.m_Timestamp, result);
+
+        auto fileTimestampIsInThePast = file_info.m_Timestamp < FileSystem::g_LastSeenFileSystemTime || file_info.m_Timestamp < FileSystemUpdateLastSeenFileSystemTime();
+        if (fileTimestampIsInThePast && file_info.m_Timestamp == GetFileInfo(filename).m_Timestamp)
+            DigestCacheSet(digest_cache, filename, fn_hash, file_info.m_Timestamp, result);
     }
     else
     {
