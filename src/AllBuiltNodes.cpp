@@ -142,13 +142,13 @@ bool SaveAllBuiltNodes(Driver *self)
     uint32_t this_dag_hashed_identifier = self->m_DagData->m_HashedIdentifier;
 
     // Collapse runtime state to persistent state
-    auto ToBuiltNodeResult = [](const RuntimeNode* runtime_node) -> Frozen::BuiltNodeResult::Enum {
+    auto BuiltNodeResultFor = [](const RuntimeNode* runtime_node) -> Frozen::BuiltNodeResult::Enum {
         switch (runtime_node->m_BuildResult)
         {
             case NodeBuildResult::kUpToDate:
             case NodeBuildResult::kRanSuccesfully:
             case NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun:
-                return RuntimeNodeInputSignatureMightBeIncorrect(runtime_node)
+                return RuntimeNodeInputGetSignatureMightBeIncorrect(runtime_node)
                     ? Frozen::BuiltNodeResult::kRanSuccessfullyButInputSignatureMightBeIncorrect
                     : Frozen::BuiltNodeResult::kRanSuccessfullyWithGuaranteedCorrectInputSignature;
             case NodeBuildResult::kDidNotRun:
@@ -167,7 +167,7 @@ bool SaveAllBuiltNodes(Driver *self)
         if (runtime_node->m_CurrentLeafInputSignature)
             leafInputSignatureDigest = runtime_node->m_CurrentLeafInputSignature->digest;
 
-        save_node_sharedcode(ToBuiltNodeResult(runtime_node), &runtime_node->m_CurrentInputSignature, &leafInputSignatureDigest, runtime_node->m_DagNode, guid, segments, runtime_node->m_DynamicallyDiscoveredOutputFiles);
+        save_node_sharedcode(BuiltNodeResultFor(runtime_node), &runtime_node->m_CurrentInputSignature, &leafInputSignatureDigest, runtime_node->m_DagNode, guid, segments, runtime_node->m_DynamicallyDiscoveredOutputFiles);
 
         int32_t file_count = dag_node->m_InputFiles.GetCount();
         BinarySegmentWriteInt32(built_nodes_seg, file_count);
