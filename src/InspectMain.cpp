@@ -240,7 +240,7 @@ static void DumpState(const Frozen::AllBuiltNodes *data)
 
         DigestToString(digest_str, data->m_NodeGuids[i]);
         printf("  guid: %s\n", digest_str);
-        printf("  m_WasBuiltSuccessfully: %d\n", node.m_WasBuiltSuccessfully);
+        printf("  m_Result: %d\n", node.m_Result);
         DigestToString(digest_str, node.m_InputSignature);
         printf("  input_signature: %s\n", digest_str);
         DigestToString(digest_str, node.m_LeafInputSignature);

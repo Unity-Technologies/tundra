@@ -26,6 +26,7 @@
 #include "LeafInputSignature.hpp"
 #include "LoadFrozenData.hpp"
 #include "FindNodesByName.hpp"
+#include "FileSystem.hpp"
 
 #include <time.h>
 #include <stdio.h>
@@ -242,11 +243,15 @@ bool DriverInit(Driver *self, const DriverOptions *options)
     LinearAllocInit(&self->m_StatCacheAllocator, &self->m_Heap, MB(64), "stat cache");
     StatCacheInit(&self->m_StatCache, &self->m_StatCacheAllocator, &self->m_Heap);
 
+    FileSystemInit(s_DagFileName);
+
     return true;
 }
 
 void DriverDestroy(Driver *self)
 {
+    FileSystemDestroy();
+
     DigestCacheDestroy(&self->m_DigestCache);
 
     StatCacheDestroy(&self->m_StatCache);
