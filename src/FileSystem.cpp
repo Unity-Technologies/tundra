@@ -29,6 +29,15 @@ uint64_t FileSystemUpdateLastSeenFileSystemTime()
 {
     MutexLock(&s_LastSeenFileSystemTimeLock);
 
+    // One may think that a better (performance wise) implementation would be to open
+    // the file in FileSystemInit and only operate on the file descriptor. Don't do this! :P
+    // Windows has a feature where file modifications only gets flushed to disk every 8 seconds
+    // or so - unless some other process also has the file open. Which means we won't see our own
+    // mtime updates until x seconds after making them. And based on some local testing only if
+    // contents of the file changed.
+    //
+    // To workaround this cache behavior we need to open and close the file for each mtime update.
+
     uint64_t valueToWrite = FileSystem::g_LastSeenFileSystemTime; // not important what we write, just that we write something.
     FILE* lastSeenFileSystemTimeSampleFileFd = fopen(s_LastSeenFileSystemTimeSampleFile, "w");
     if (lastSeenFileSystemTimeSampleFileFd == nullptr)
