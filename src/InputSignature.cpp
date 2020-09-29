@@ -549,4 +549,5 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
             // Everything is up to date
             return false;
     }
+    Croak("MSVC cannot see the switch statement above can never be left");
 }

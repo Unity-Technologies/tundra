@@ -155,6 +155,7 @@ bool SaveAllBuiltNodes(Driver *self)
             case NodeBuildResult::kRanFailed:
                 return Frozen::BuiltNodeResult::kRanFailed;
         }
+        Croak("MSVC cannot see the switch statement above can never be left");
     };
 
     auto EmitBuiltNodeFromRuntimeNode = [=, &emitted_built_nodes_count, &shared_strings](const RuntimeNode* runtime_node, const HashDigest *guid) -> void {
