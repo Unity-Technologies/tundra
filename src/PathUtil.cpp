@@ -111,7 +111,7 @@ PathGetSegments(const char *scratch, PathSeg segments[kMaxPathSegments])
                 int is_dot = 1 == len && '.' == last[0];
 
                 if (segcount == kMaxPathSegments)
-                    Croak("too many segments in path; limit is %d", kMaxPathSegments);
+                    Croak("too many segments in path; limit is %d: %s", kMaxPathSegments, scratch);
 
                 segments[segcount].offset = (uint16_t)(last - start);
                 segments[segcount].len = (uint16_t)len;
