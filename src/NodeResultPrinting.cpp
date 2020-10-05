@@ -545,6 +545,18 @@ void PrintNodeResult(
         JsonWriteKeyName(&msg, "exitcode");
         JsonWriteValueInteger(&msg, result->m_ReturnCode);
 
+        if (data.node_data->m_OutputFiles.GetCount() > 0)
+        {
+            JsonWriteKeyName(&msg, "outputfile");
+            JsonWriteValueString(&msg, data.node_data->m_OutputFiles[0].m_Filename);
+        }
+
+        if (data.node_data->m_OutputDirectories.GetCount() > 0)
+        {
+            JsonWriteKeyName(&msg, "outputdirectory");
+            JsonWriteValueString(&msg, data.node_data->m_OutputDirectories[0].m_Filename);
+        }
+
         if (data.output_buffer)
         {
             JsonWriteKeyName(&msg, "stdout");
