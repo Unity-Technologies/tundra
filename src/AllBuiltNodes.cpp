@@ -279,11 +279,27 @@ bool SaveAllBuiltNodes(Driver *self)
         return true;
     };
 
+    auto NodeStillHasOutputFilesPresentOnDisk = [&](const Frozen::BuiltNode* built_node)
+    {
+        for (auto& outputfile : built_node->m_OutputFiles)
+        {
+            if (StatCacheStat(&self->m_StatCache, outputfile.m_Filename.Get(), outputfile.m_FilenameHash).Exists())
+                return true;
+        }
+        return false;
+    };
+
     auto IsPreviouslyBuiltNodeValidForWritingToBuiltNodes = [=](const Frozen::BuiltNode* built_node, const HashDigest* guid) -> bool {
         // Make sure this node is still relevant before saving.
         bool node_is_in_dag = BinarySearch(dag_node_guids, dag_node_count, *guid) != nullptr;
 
-        return node_is_in_dag || !NodeWasUsedByThisDagPreviously(built_node, this_dag_hashed_identifier);
+        if (node_is_in_dag)
+            return true;
+
+        if (!NodeWasUsedByThisDagPreviously(built_node, this_dag_hashed_identifier))
+            return true;
+
+        return NodeStillHasOutputFilesPresentOnDisk(built_node);
     };
 
     {
