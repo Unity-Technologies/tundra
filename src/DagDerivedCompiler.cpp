@@ -314,6 +314,7 @@ struct CompileDagDerivedWorker
             }
 
             WriteArrayOfIndices(nonGeneratedInputIndices_seg, indices);
+            BufferDestroy(&indices, heap);
             WriteIntoCacheableNodeDataArraysFor(nodeIndex);
         }
 
