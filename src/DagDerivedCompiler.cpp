@@ -297,14 +297,16 @@ struct CompileDagDerivedWorker
 
         DagRuntimeDataInit(&dagRuntimeData, dag, heap);
 
+        Buffer<int32_t> indices;
+        BufferInitWithCapacity(&indices, heap, 1024);
+
         for (int32_t nodeIndex = 0; nodeIndex < node_count; ++nodeIndex)
         {
             WriteArrayOfIndices(dependenciesArray_seg, combinedDependenciesBuffers[nodeIndex]);
             WriteArrayOfIndices(backlinksArray_seg, backlinksBuffers[nodeIndex]);
 
-            Buffer<int32_t> indices;
+            BufferClear(&indices);
             int count = dag->m_DagNodes[nodeIndex].m_InputFiles.GetCount();
-            BufferInitWithCapacity(&indices, heap, count);
             for (int i=0; i!=count; i++)
             {
                 auto& inputFile = dag->m_DagNodes[nodeIndex].m_InputFiles[i];
@@ -314,9 +316,9 @@ struct CompileDagDerivedWorker
             }
 
             WriteArrayOfIndices(nonGeneratedInputIndices_seg, indices);
-            BufferDestroy(&indices, heap);
             WriteIntoCacheableNodeDataArraysFor(nodeIndex);
         }
+        BufferDestroy(&indices, heap);
 
         DagRuntimeDataDestroy(&dagRuntimeData);
 
