@@ -156,13 +156,6 @@ class Build
         tundraUnitTestProgram.IncludeDirectories.Add($"{UnitTestSourceFolder}/googletest/googletest");
         tundraUnitTestProgram.IncludeDirectories.Add($"{UnitTestSourceFolder}/googletest/googletest/include");
 
-        var inspectProram = new TundraNativeProgram("tundra2-inspect")
-        {
-            Libraries = {tundraLibraryProgram},
-            Sources = {SourceFolder.Combine("InspectMain.cpp")}
-        };
-
-
 
         // setup build targets
         var toolChains = new ToolChain[]
@@ -195,8 +188,6 @@ class Build
             var tundraUnitTestExecutable =
                 (Executable) SetupSpecificConfiguration(tundraUnitTestProgram, config, toolchain.ExecutableFormat);
             projectFileBuilders[tundraUnitTestProgram].AddProjectConfiguration(config, tundraUnitTestExecutable);
-
-            SetupSpecificConfiguration(inspectProram, config, toolchain.ExecutableFormat);
 
             if (Bee.PramBinding.Pram.CanLaunch(toolchain.Platform, toolchain.Architecture))
             {
