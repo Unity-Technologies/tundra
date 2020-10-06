@@ -12,6 +12,7 @@
 #include "RemoveStaleOutputs.hpp"
 #include "AllBuiltNodes.hpp"
 #include "ReportIncludes.hpp"
+#include "Inspect.hpp"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -67,6 +68,7 @@ static const struct OptionTemplate
 #if defined(TUNDRA_WIN32)
     {'U', "unprotected", OptionType::kBool, offsetof(DriverOptions, m_RunUnprotected), "Run unprotected (same process group - for debugging)"},
 #endif
+    {'X', "inspect", OptionType::kBool, offsetof(DriverOptions, m_Inspect), "Inspect the following data files, then exit."},
     };
 
 static int AssignOptionValue(char *option_base, const OptionTemplate *templ, const char *value, bool is_short)
@@ -265,6 +267,12 @@ int main(int argc, char *argv[])
     }
 
     DriverInitializeTundraFilePaths(&options);
+
+    if (options.m_Inspect)
+    {
+        return inspect(argc, argv);
+    }
+
 #if defined(TUNDRA_WIN32)
     if (!options.m_RunUnprotected && nullptr == getenv("_TUNDRA2_PARENT_PROCESS_HANDLE"))
     {
