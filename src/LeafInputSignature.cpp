@@ -76,8 +76,7 @@ void CalculateLeafInputSignature(
 
     for (auto& dependentNodeThatIsCacheableItself: dagDerived->DependentNodesThatThemselvesAreLeafInputCacheableFor(dagNode->m_DagNodeIndex))
     {
-        int childRuntimeNodeIndex = dependentNodeThatIsCacheableItself;
-        auto& childRuntimeNode = runtimeNodesArray[childRuntimeNodeIndex];
+        auto& childRuntimeNode = runtimeNodesArray[dependentNodeThatIsCacheableItself];
         const auto& childDagNode = dag->m_DagNodes[dependentNodeThatIsCacheableItself];
 
         if (childRuntimeNode.m_CurrentLeafInputSignature == nullptr)
@@ -249,6 +248,25 @@ struct HeaderValidationError
     const char* included_file;
 };
 
+bool IsGeneratedOrIsLeafInput (BuildQueue* queue, const Frozen::DagDerived* dagDerived, uint32_t hash, const char* filename, RuntimeNode* runtimeNode)
+{
+    const Frozen::DagNode* generatingNode;
+    if (FindDagNodeForFile(&queue->m_Config.m_DagRuntimeData, hash, filename, &generatingNode))
+        return true;
+    if (HashSetLookup(&runtimeNode->m_CurrentLeafInputSignature->m_ExplicitLeafInputs, hash,filename))
+        return true;
+    if (HashSetLookup(&runtimeNode->m_CurrentLeafInputSignature->m_ImplicitLeafInputs, hash,filename))
+        return true;
+    for (auto& dependentNodeThatIsCacheableItself: dagDerived->DependentNodesThatThemselvesAreLeafInputCacheableFor(runtimeNode->m_DagNodeIndex))
+    {
+        auto& childRuntimeNode = queue->m_Config.m_RuntimeNodes[dependentNodeThatIsCacheableItself];
+        if (IsGeneratedOrIsLeafInput(queue, dagDerived, hash, filename, &childRuntimeNode))
+            return true;
+    }
+
+    return false;
+};
+
 bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLeafInputs(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node, const Frozen::DagDerived* dagDerived)
 {
     CheckDoesNotHaveLock(&queue->m_Lock);
@@ -262,18 +280,6 @@ bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLe
     {
         RuntimeNode* runtimeNodeWithScanner = &queue->m_Config.m_RuntimeNodes[nodeWithScanner];
 
-        auto IsGeneratedOrIsLeafInput = [=](uint32_t hash, const char* filename) -> bool
-        {
-            const Frozen::DagNode* generatingNode;
-            if (FindDagNodeForFile(&queue->m_Config.m_DagRuntimeData, hash, filename, &generatingNode))
-                return true;
-            if (HashSetLookup(&node->m_CurrentLeafInputSignature->m_ExplicitLeafInputs, hash,filename))
-                return true;
-            if (HashSetLookup(&node->m_CurrentLeafInputSignature->m_ImplicitLeafInputs, hash,filename))
-                return true;
-            return false;
-        };
-
         switch (runtimeNodeWithScanner->m_BuildResult)
         {
             case NodeBuildResult::kUpToDate:
@@ -282,7 +288,7 @@ bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLe
                     uint32_t pathHash = includedFile.m_FilenameHash;
                     const char* fileName = includedFile.m_Filename.Get();
 
-                    if (!IsGeneratedOrIsLeafInput(pathHash, fileName))
+                    if (!IsGeneratedOrIsLeafInput(queue, dagDerived, pathHash, fileName, node))
                     {
                         if (HashSetInsertIfNotPresent(&alreadyFound, pathHash, fileName))
                         {
@@ -297,7 +303,7 @@ bool VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLe
 
             case NodeBuildResult::kRanSuccesfully:
                 HashSetWalk(&runtimeNodeWithScanner->m_ImplicitInputs, [&](uint32_t, uint32_t hash, const char *filename) {
-                    if (!IsGeneratedOrIsLeafInput(hash, filename))
+                    if (!IsGeneratedOrIsLeafInput(queue, dagDerived, hash, filename, node))
                     {
                         HeaderValidationError error;
                         error.runtimeNode = runtimeNodeWithScanner;
