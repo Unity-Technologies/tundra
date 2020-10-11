@@ -136,7 +136,7 @@ ExecuteProcess(
         }
 
         if (-1 == execv("/bin/sh", (char **)args))
-            exit(1);
+            Croak("Failed executing /bin/sh");
         /* we never get here */
         abort();
     }

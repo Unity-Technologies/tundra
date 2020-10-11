@@ -330,19 +330,13 @@ int main(int argc, char *argv[])
             {
                 dag_data = (const Frozen::Dag *)f.m_Address;
                 if (dag_data->m_MagicNumber != Frozen::Dag::MagicNumber)
-                {
-                    fprintf(stderr, "%s: bad magic number\n", fn);
-                    exit(1);
-                }
+                    Croak("%s: bad magic number\n", fn);
             }
             else if (0 == strcmp(suffix, ".dag_derived"))
             {
                 dag_derived_data = (const Frozen::DagDerived *)f.m_Address;
                 if (dag_derived_data->m_MagicNumber != Frozen::DagDerived::MagicNumber)
-                {
-                    fprintf(stderr, "%s: bad magic number\n", fn);
-                    exit(1);
-                }
+                    Croak("%s: bad magic number\n", fn);
             }
             else if (0 == strcmp(suffix, ".state"))
             {

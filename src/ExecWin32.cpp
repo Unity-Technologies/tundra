@@ -161,7 +161,7 @@ static HANDLE GetOrCreateTempFileFor(int job_id, const char *command_that_just_f
             ShowProgramsKeepingPathOpen(temp_dir);
 
             if (!command_that_just_finished || !was_sharing_violation)
-                exit(1);
+                Croak("(!command_that_just_finished || !was_sharing_violation)");
 
             fputs("tundra: waiting for subprocesses to exit, and for the file to be deleted...\n", stderr);
             fflush(stderr);
