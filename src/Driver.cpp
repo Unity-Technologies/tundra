@@ -135,7 +135,15 @@ bool DriverInitData(Driver *self)
 
     DigestCacheInit(&self->m_DigestCache, MB(128), self->m_DagData->m_DigestCacheFileName);
 
-    LoadFrozenData<Frozen::AllBuiltNodes>(self->m_DagData->m_StateFileName, &self->m_StateFile, &self->m_AllBuiltNodes);
+    FileInfo stateFileInfo = GetFileInfo(self->m_DagData->m_StateFileName);
+    bool loadedStateFile = LoadFrozenData<Frozen::AllBuiltNodes>(self->m_DagData->m_StateFileName, &self->m_StateFile, &self->m_AllBuiltNodes);
+    if (stateFileInfo.Exists() && !loadedStateFile)
+    {
+        // We cannot recognise stale output files in this case. If we
+        // continue we might produce incorrect build results.
+        Log(kError, "Previous state file exists, but it is unreadable - please remove the artifacts directory before rebuilding");
+        return false;
+    }
 
     LoadFrozenData<Frozen::ScanData>(self->m_DagData->m_ScanCacheFileName, &self->m_ScanFile, &self->m_ScanData);
 
