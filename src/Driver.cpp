@@ -141,7 +141,8 @@ bool DriverInitData(Driver *self)
     {
         // We cannot recognise stale output files in this case. If we
         // continue we might produce incorrect build results.
-        Log(kError, "Previous state file exists, but it is unreadable - please remove the artifacts directory before rebuilding");
+        Log(kError, "Unreadable state file \"%s\" - possibly created by an incompatible version of Tundra. You can fix this by removing the build output directory before rebuilding.",
+            self->m_DagData->m_StateFileName.Get());
         return false;
     }
 
