@@ -7,6 +7,7 @@
 #if defined(TUNDRA_UNIX)
 #include <signal.h>
 #include <sys/signal.h>
+#include <string.h>
 #include <pthread.h>
 #endif
 
@@ -53,37 +54,22 @@ void SignalSet(const char *reason)
 }
 
 #if defined(TUNDRA_UNIX)
-static void *PosixSignalHandlerThread(void *arg)
+static void HandleSignal (int sig)
 {
-    (void)arg; // unused
-
-    int sig, rc;
-    sigset_t sigs;
-    sigemptyset(&sigs);
-    sigaddset(&sigs, SIGINT);
-    sigaddset(&sigs, SIGTERM);
-    sigaddset(&sigs, SIGQUIT);
-    if (0 == (rc = sigwait(&sigs, &sig)))
+    const char *reason = "unknown";
+    switch (sig)
     {
-        const char *reason = "unknown";
-        switch (sig)
-        {
-        case SIGINT:
-            reason = "SIGINT";
-            break;
-        case SIGTERM:
-            reason = "SIGTERM";
-            break;
-        case SIGQUIT:
-            reason = "SIGQUIT";
-            break;
-        }
-        SignalSet(reason);
+    case SIGINT:
+        reason = "SIGINT";
+        break;
+    case SIGTERM:
+        reason = "SIGTERM";
+        break;
+    case SIGQUIT:
+        reason = "SIGQUIT";
+        break;
     }
-    else
-        CroakErrno("sigwait() failed");
-
-    return nullptr;
+    SignalSet(reason);
 }
 #endif
 
@@ -118,12 +104,15 @@ void SignalHandlerInit()
     MutexInit(&s_SignalMutex);
 
 #if defined(TUNDRA_UNIX)
-    {
-        pthread_t sigthread;
-        if (0 != pthread_create(&sigthread, NULL, PosixSignalHandlerThread, NULL))
-            CroakErrno("couldn't start signal handler thread");
-        pthread_detach(sigthread);
-    }
+
+    struct sigaction s;
+
+    memset(&s, 0, sizeof(struct sigaction));
+    s.sa_handler = HandleSignal;
+    sigaction(SIGINT, &s, NULL);
+    sigaction(SIGTERM, &s, NULL);
+    sigaction(SIGQUIT, &s, NULL);
+
 #elif defined(TUNDRA_WIN32)
     s_SignalHandle = CreateEvent(NULL, TRUE, FALSE, NULL);
     SetConsoleCtrlHandler(WindowsSignalHandlerFunc, TRUE);
@@ -168,18 +157,3 @@ void SignalHandlerSetCondition(ConditionVariable *cvar)
     s_SignalCond = cvar;
     MutexUnlock(&s_SignalMutex);
 }
-
-#if defined(TUNDRA_UNIX)
-void SignalBlockThread(bool block)
-{
-    sigset_t sigs;
-    sigemptyset(&sigs);
-    sigaddset(&sigs, SIGINT);
-    sigaddset(&sigs, SIGTERM);
-    sigaddset(&sigs, SIGQUIT);
-    if (0 != pthread_sigmask(block ? SIG_BLOCK : SIG_UNBLOCK, &sigs, 0))
-        CroakErrno("pthread_sigmask failed");
-}
-#endif
-
-

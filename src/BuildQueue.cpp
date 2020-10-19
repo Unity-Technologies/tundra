@@ -97,8 +97,6 @@ void BuildQueueInit(BuildQueue *queue, const BuildQueueConfig *config, const cha
 
     Log(kDebug, "build queue initialized; ring buffer capacity = %u", queue->m_QueueCapacity);
 
-    // Block all signals on the main thread.
-    SignalBlockThread(true);
     SignalHandlerSetCondition(&queue->m_BuildFinishedConditionalVariable);
 
     // Create build threads.
@@ -164,9 +162,7 @@ void BuildQueueDestroy(BuildQueue *queue)
     MutexDestroy(&queue->m_Lock);
     MutexDestroy(&queue->m_BuildFinishedMutex);
 
-    // Unblock all signals on the main thread.
     SignalHandlerSetCondition(nullptr);
-    SignalBlockThread(false);
 }
 
 BuildResult::Enum BuildQueueBuild(BuildQueue *queue, MemAllocLinear* scratch)
