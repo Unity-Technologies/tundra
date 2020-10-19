@@ -1,6 +1,7 @@
 #include "SignalHandler.hpp"
 #include "Config.hpp"
 #include "Mutex.hpp"
+#include "Thread.hpp"
 #include "ConditionVar.hpp"
 #include <stdio.h>
 
@@ -113,6 +114,14 @@ BOOL WINAPI WindowsSignalHandlerFunc(DWORD ctrl_type)
 }
 #endif
 
+static ThreadRoutineReturnType TUNDRA_STDCALL WaitForStdinToClose(void *param)
+{
+    while (fgetc(stdin) != EOF)
+        ;
+    SignalSet("stdin closed");
+    return 0;
+}
+
 void SignalHandlerInit()
 {
     MutexInit(&s_SignalMutex);
@@ -130,6 +139,7 @@ void SignalHandlerInit()
 #else
 #error Meh
 #endif
+    ThreadStart(WaitForStdinToClose, nullptr, "Watchdog (stdin)");
 }
 
 #if defined(TUNDRA_WIN32)
