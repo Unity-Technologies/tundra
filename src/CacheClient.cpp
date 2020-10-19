@@ -145,7 +145,7 @@ static CacheResult::Enum Invoke_REAPI_Cache_Client(const HashDigest& digest, Sta
     if (operation == kOperationRead && result.m_ReturnCode == 2)
     {
         cacheResult = CacheResult::CacheMiss;
-    } 
+    }
     else if (result.m_ReturnCode != 0)
     {
         processFailure(result.m_OutputBuffer.buffer);
@@ -198,7 +198,10 @@ void GetCachingBehaviourSettingsFromEnvironment(bool* attemptReads, bool* attemp
             *attemptWrites = true;
             continue;
         }
-        Croak("The cache behaviour string provided: %s contains a character that is not R or W", behaviour);
+        if (c == '_')
+            continue;
+
+        Croak("The cache behaviour string provided: %s contains a character that is not R,W or _", behaviour);
     }
 
     Log(kDebug, "Caching enabled with %s=%s %s=%s and mode: %s%s%s\n", kENV_CACHE_SERVER_ADDRESS, server, kENV_REAPI_CACHE_CLIENT, reapi_cache_client, *attemptReads ? "R":"_", *attemptWrites ? "W":"_");
