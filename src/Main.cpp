@@ -12,6 +12,7 @@
 #include "RemoveStaleOutputs.hpp"
 #include "AllBuiltNodes.hpp"
 #include "ReportIncludes.hpp"
+#include "StandardInputCanary.hpp"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -59,6 +60,7 @@ static const struct OptionTemplate
     {'k', "continue-on-failure", OptionType::kBool, offsetof(DriverOptions, m_ContinueOnFailure), "Build as much as possible after the first error"},
     {'S', "debug-signing", OptionType::kBool, offsetof(DriverOptions, m_DebugSigning), "Generate an extensive log of signature generation"},
     {'e', "just-print-leafinput-signature", OptionType::kString, offsetof(DriverOptions, m_JustPrintLeafInputSignature), "Print to the specified file the leaf input signature ingredients of the requested node"},
+    {'c', "stdin-canary", OptionType::kBool, offsetof(DriverOptions, m_StandardInputCanary), "Abort build if stdin is closed"},
     {'s', "stats", OptionType::kBool, offsetof(DriverOptions, m_DisplayStats), "Display stats"},
     {'p', "profile", OptionType::kString, offsetof(DriverOptions, m_ProfileOutput), "Output build profile"},
     {'C', "working-dir", OptionType::kString, offsetof(DriverOptions, m_WorkingDir), "Set working directory before building"},
@@ -446,6 +448,9 @@ int main(int argc, char *argv[])
         Log(kDebug, "Only reporting includes - quitting");
         goto leave;
     }
+
+    if (options.m_StandardInputCanary)
+        StandardInputCanary::Initialize();
 
     DriverReportStartup(&driver, (const char **)argv, argc);
 
