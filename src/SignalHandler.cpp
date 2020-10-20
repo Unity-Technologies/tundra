@@ -109,9 +109,12 @@ void SignalHandlerInit()
 
     memset(&s, 0, sizeof(struct sigaction));
     s.sa_handler = HandleSignal;
-    sigaction(SIGINT, &s, NULL);
-    sigaction(SIGTERM, &s, NULL);
-    sigaction(SIGQUIT, &s, NULL);
+    if (sigaction(SIGINT, &s, NULL) != 0)
+        CroakErrno("sigaction failed.");
+    if (sigaction(SIGTERM, &s, NULL) != 0)
+        CroakErrno("sigaction failed.");
+    if (sigaction(SIGQUIT, &s, NULL) != 0)
+        CroakErrno("sigaction failed.");
 
 #elif defined(TUNDRA_WIN32)
     s_SignalHandle = CreateEvent(NULL, TRUE, FALSE, NULL);
