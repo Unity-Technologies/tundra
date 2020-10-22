@@ -12,11 +12,6 @@
 #endif
 
 
-
-#if defined(TUNDRA_WIN32)
-HANDLE s_SignalHandle;
-#endif
-
 static struct
 {
     bool m_Signalled;
@@ -45,12 +40,6 @@ void SignalSet(const char *reason)
         CondBroadcast(cvar);
 
     MutexUnlock(&s_SignalMutex);
-
-#if defined(TUNDRA_WIN32)
-    // Also signal this event - build threads waiting on external programs are stuck in WaitForMultipleObjects()
-    // and can't wait for a condition variable at the same time.
-    SetEvent(s_SignalHandle);
-#endif
 }
 
 #if defined(TUNDRA_UNIX)
@@ -126,7 +115,6 @@ void SignalHandlerInit()
         pthread_detach(sigthread);
     }
 #elif defined(TUNDRA_WIN32)
-    s_SignalHandle = CreateEvent(NULL, TRUE, FALSE, NULL);
     SetConsoleCtrlHandler(WindowsSignalHandlerFunc, TRUE);
 #else
 #error Meh
@@ -139,11 +127,6 @@ static DWORD WINAPI CanaryWatcherThread(LPVOID parent_handle)
     WaitForSingleObject(parent_handle, INFINITE);
     SignalSet("Process terminated");
     return 0;
-}
-
-void *SignalGetHandle()
-{
-    return s_SignalHandle;
 }
 
 void SignalHandlerInitWithParentProcess(void *parent_handle)

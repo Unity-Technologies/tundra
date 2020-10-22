@@ -19,9 +19,6 @@ void SignalHandlerInit(void);
 #if defined(TUNDRA_WIN32)
 // Init the signal handler with a parent canary process to watch for sudden termination.
 void SignalHandlerInitWithParentProcess(void *parent_handle);
-
-// Get a win32 event handle which will be signalled when the build is aborted, so we can terminate launched programs immediately.
-void *SignalGetHandle();
 #endif
 
 // Specify a condition variable which will be broadcast when a signal has

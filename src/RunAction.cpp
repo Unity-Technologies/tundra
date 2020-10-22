@@ -338,11 +338,6 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
 
     ExecResultFreeMemory(&result);
 
-    if (result.m_WasAborted)
-    {
-        SignalSet("child processes was aborted");
-    }
-
     if (0 == result.m_ReturnCode && passedOutputValidation < ValidationResult::UnexpectedConsoleOutputFail)
         return nodeBuildResult;
 
@@ -352,7 +347,7 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
     {
         for (const FrozenFileAndHash &output : node_data->m_OutputFiles)
         {
-            Log(kDebug, "Removing output file %s from failed build", output.m_Filename.Get());
+            Log(kDebug, "Removing output file %s from failed action \"%s\" (return code %d)", output.m_Filename.Get(), node->m_DagNode->m_Annotation.Get(), result.m_ReturnCode);
             remove(output.m_Filename);
             StatCacheMarkDirty(stat_cache, output.m_Filename, output.m_FilenameHash);
         }

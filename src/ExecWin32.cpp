@@ -488,31 +488,19 @@ static void CleanupResponseFile(const char *responseFile)
         remove(responseFile);
 }
 
-static int WaitForFinish(HANDLE processHandle, int (*callback_on_slow)(void *user_data), void *callback_on_slow_userdata, int time_until_first_callback, bool *out_wassignaled)
+static int WaitForFinish(HANDLE processHandle, int (*callback_on_slow)(void *user_data), void *callback_on_slow_userdata, int time_until_first_callback)
 {
-    HANDLE handles[2];
-    handles[0] = processHandle;
-    handles[1] = SignalGetHandle();
     DWORD timeUntilNextSlowCallbackInvoke = callback_on_slow != nullptr ? time_until_first_callback : INFINITE;
-
     while (true)
     {
-        DWORD waitResult = WaitForMultipleObjects(2, handles, FALSE, timeUntilNextSlowCallbackInvoke * 1000);
+        DWORD waitResult = WaitForSingleObject(processHandle, timeUntilNextSlowCallbackInvoke * 1000);
         DWORD result_code = 0;
         switch (waitResult)
         {
         case WAIT_OBJECT_0:
             // OK - command ran to completion.
             GetExitCodeProcess(processHandle, &result_code);
-            *out_wassignaled = false;
             return result_code;
-
-        case WAIT_OBJECT_0 + 1:
-            // We have been interrupted - kill the program.
-            WaitForSingleObject(processHandle, INFINITE);
-            // Leave result_code at 1 to indicate failed build.
-            *out_wassignaled = true;
-            return 1;
 
         case WAIT_TIMEOUT:
             timeUntilNextSlowCallbackInvoke = (*callback_on_slow)(callback_on_slow_userdata);
@@ -619,7 +607,7 @@ ExecResult ExecuteProcess(
     ResumeThread(pinfo.hThread);
     CloseHandle(pinfo.hThread);
 
-    result.m_ReturnCode = WaitForFinish(pinfo.hProcess, callback_on_slow, callback_on_slow_userdata, time_until_first_callback, &result.m_WasAborted);
+    result.m_ReturnCode = WaitForFinish(pinfo.hProcess, callback_on_slow, callback_on_slow_userdata, time_until_first_callback);
 
     CleanupResponseFile(responseFile);
 
