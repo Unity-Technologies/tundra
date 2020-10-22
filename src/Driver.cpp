@@ -130,14 +130,24 @@ bool DriverInitData(Driver *self)
         return false;
 
     ProfilerScope prof_scope("DriverInitData", 0);
-    // do not produce/overwrite structured log output file,
+
+    // do not produce/overwrite structured log output or state file,
     // if we're only reporting something and not doing an actual build
     if (self->m_Options.m_IncludesOutput == nullptr && !self->m_Options.m_ShowHelp && !self->m_Options.m_ShowTargets)
+    {
         SetStructuredLogFileName(self->m_DagData->m_StructuredLogFileName);
 
-    DigestCacheInit(&self->m_DigestCache, MB(128), self->m_DagData->m_DigestCacheFileName);
+        const char* stateFile = self->m_DagData->m_StateFileName.Get();
+        if (GetFileInfo(stateFile).Exists() && !RenameFile(stateFile, self->m_DagData->m_StateFileNameMapped.Get()))
+            Croak("Unable to rename state file '%s' => '%s'", stateFile, self->m_DagData->m_StateFileNameMapped.Get());
+        LoadFrozenData<Frozen::AllBuiltNodes>(self->m_DagData->m_StateFileNameMapped, &self->m_StateFile, &self->m_AllBuiltNodes);
+    }
+    else
+    {
+        LoadFrozenData<Frozen::AllBuiltNodes>(self->m_DagData->m_StateFileName, &self->m_StateFile, &self->m_AllBuiltNodes);
+    }
 
-    LoadFrozenData<Frozen::AllBuiltNodes>(self->m_DagData->m_StateFileName, &self->m_StateFile, &self->m_AllBuiltNodes);
+    DigestCacheInit(&self->m_DigestCache, MB(128), self->m_DagData->m_DigestCacheFileName);
 
     LoadFrozenData<Frozen::ScanData>(self->m_DagData->m_ScanCacheFileName, &self->m_ScanFile, &self->m_ScanData);
 

@@ -211,6 +211,7 @@ static void DumpDag(const Frozen::Dag *data)
 
     printf("m_StateFileName : %s\n", data->m_StateFileName.Get());
     printf("m_StateFileNameTmp : %s\n", data->m_StateFileNameTmp.Get());
+    printf("m_StateFileNameMapped : %s\n", data->m_StateFileNameMapped.Get());
     printf("m_ScanCacheFileName : %s\n", data->m_ScanCacheFileName.Get());
     printf("m_ScanCacheFileNameTmp : %s\n", data->m_ScanCacheFileNameTmp.Get());
     printf("m_DigestCacheFileName : %s\n", data->m_DigestCacheFileName.Get());

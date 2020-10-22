@@ -137,7 +137,7 @@ struct SharedResourceData
 
 struct Dag
 {
-    static const uint32_t MagicNumber = 0x2dea2245 ^ kTundraHashMagic;
+    static const uint32_t MagicNumber = 0x2dea2246 ^ kTundraHashMagic;
 
     uint32_t m_MagicNumber;
 
@@ -167,6 +167,7 @@ struct Dag
 
     FrozenString m_StateFileName;
     FrozenString m_StateFileNameTmp;
+    FrozenString m_StateFileNameMapped;
     FrozenString m_ScanCacheFileName;
     FrozenString m_ScanCacheFileNameTmp;
     FrozenString m_DigestCacheFileName;
