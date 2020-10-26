@@ -4,6 +4,7 @@
 #include "ScanData.hpp"
 #include "DigestCache.hpp"
 #include "MemoryMappedFile.hpp"
+#include "Inspect.hpp"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -314,11 +315,11 @@ static void DumpDigestCache(const Frozen::DigestCacheState *data)
 const Frozen::Dag* dag_data = nullptr;
 const Frozen::DagDerived* dag_derived_data = nullptr;
 
-int main(int argc, char *argv[])
+int inspect(int num_files, char *files[])
 {
-    for (int i=1; i!= argc; i++)
+    for (int i=0; i < num_files; i++)
     {
-        const char* fn = argv[i];
+        const char* fn = files[i];
         MemoryMappedFile f;
         MmapFileInit(&f);
         MmapFileMap(&f, fn);
@@ -331,13 +332,19 @@ int main(int argc, char *argv[])
             {
                 dag_data = (const Frozen::Dag *)f.m_Address;
                 if (dag_data->m_MagicNumber != Frozen::Dag::MagicNumber)
-                    Croak("%s: bad magic number\n", fn);
+                {
+                    fprintf(stderr, "%s: bad magic number\n", fn);
+                    return 1;
+                }
             }
             else if (0 == strcmp(suffix, ".dag_derived"))
             {
                 dag_derived_data = (const Frozen::DagDerived *)f.m_Address;
                 if (dag_derived_data->m_MagicNumber != Frozen::DagDerived::MagicNumber)
-                    Croak("%s: bad magic number\n", fn);
+                {
+                    fprintf(stderr, "%s: bad magic number\n", fn);
+                    return 1;
+                }
             }
             else if (0 == strcmp(suffix, ".state"))
             {
@@ -389,7 +396,7 @@ int main(int argc, char *argv[])
     if (dag_derived_data != nullptr)
     {
         DumpDagDerived(dag_derived_data, dag_data);
-        exit(0);
+        return 0;
     }
     if (dag_data != nullptr)
     {

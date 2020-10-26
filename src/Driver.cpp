@@ -74,6 +74,7 @@ void DriverOptionsInit(DriverOptions *self)
 #if defined(TUNDRA_WIN32)
     self->m_RunUnprotected = true;
 #endif
+    self->m_Inspect = false;
 }
 
 

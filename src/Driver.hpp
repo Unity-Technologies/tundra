@@ -31,6 +31,7 @@ struct DriverOptions
     bool m_DebugSigning;
     bool m_ContinueOnFailure;
     bool m_StandardInputCanary;
+    bool m_Inspect;
     int m_IdentificationColor;
     int m_VisualMaxNodes;
 #if defined(TUNDRA_WIN32)

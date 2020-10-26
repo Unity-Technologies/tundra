@@ -84,8 +84,6 @@ void BuildQueueInit(BuildQueue *queue, const BuildQueueConfig *config, const cha
     BufferInitWithCapacity(&queue->m_Config.m_RequestedNodes, queue->m_Config.m_Heap, 32);
     DriverSelectNodes(queue->m_Config.m_Dag, targets, target_count, &queue->m_Config.m_RequestedNodes,  queue->m_Config.m_Heap);
 
-    // Block all signals on the main thread.
-    SignalBlockThread(true);
     SignalHandlerSetCondition(&queue->m_BuildFinishedConditionalVariable);
 
     // Create build threads.
@@ -153,7 +151,6 @@ void BuildQueueDestroy(BuildQueue *queue)
 
     // Unblock all signals on the main thread.
     SignalHandlerSetCondition(nullptr);
-    SignalBlockThread(false);
 }
 
 BuildResult::Enum BuildQueueBuild(BuildQueue *queue, MemAllocLinear* scratch)

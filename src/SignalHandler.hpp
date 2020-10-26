@@ -24,12 +24,3 @@ void SignalHandlerInitWithParentProcess(void *parent_handle);
 // Specify a condition variable which will be broadcast when a signal has
 // arrived.
 void SignalHandlerSetCondition(ConditionVariable *variable);
-
-// Block (or unblock) all normal interruption signals for the calling thread.
-#if defined(TUNDRA_UNIX)
-void SignalBlockThread(bool block);
-#else
-// Windows doesn't deliver signals to threads, it creates a new signal
-// handler thread for you.
-inline void SignalBlockThread(bool) {}
-#endif
