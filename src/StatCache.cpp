@@ -28,6 +28,21 @@ static void StatCacheInsert(StatCache *self, uint32_t hash, const char *path, co
   ReadWriteUnlockWrite(&self->m_HashLock);
 }
 
+static void StatCacheUpdate(StatCache *self, uint32_t hash, const char *path, const FileInfo &info)
+{
+  ReadWriteLockWrite(&self->m_HashLock);
+
+  if (FileInfo *fi = HashTableLookup(&self->m_Files, hash, path))
+  {
+    *fi = info;
+  } else
+  {
+    Croak("StatCacheUpdate called with %s but it was not present int statcache", path);
+  }
+
+  ReadWriteUnlockWrite(&self->m_HashLock);
+}
+
 void StatCacheMarkDirty(StatCache *self, const char *path, uint32_t hash)
 {
   ReadWriteLockWrite(&self->m_HashLock);
@@ -44,15 +59,13 @@ FileInfo StatCacheStat(StatCache *self, const char *path, uint32_t hash)
 {
   ReadWriteLockRead(&self->m_HashLock);
 
-  const FileInfo *fi = HashTableLookup(&self->m_Files, hash, path);
+  const FileInfo *existing_hashtable_entry = HashTableLookup(&self->m_Files, hash, path);
 
-  if (fi != nullptr && 0 == (fi->m_Flags & FileInfo::kFlagDirty))
+  if (existing_hashtable_entry != nullptr && 0 == (existing_hashtable_entry->m_Flags & FileInfo::kFlagDirty))
   {
-    FileInfo result = *fi;
+    FileInfo result = *existing_hashtable_entry;
     ReadWriteUnlockRead(&self->m_HashLock);
     AtomicIncrement(&g_Stats.m_StatCacheHits);
-    //if (g_Stats.m_StatCacheHits % 600 == 0)
-    //  printf("StatCacheStat %s\n", path);
     return result;
   }
 
@@ -61,11 +74,11 @@ FileInfo StatCacheStat(StatCache *self, const char *path, uint32_t hash)
   AtomicIncrement(&g_Stats.m_StatCacheMisses);
   FileInfo file_info = GetFileInfo(path);
 
-  // There's a natural race condition here. Some other thread might come in,
-  // stat the file and insert it before us. We just let that happen. The DAG
-  // guarantees that we won't be writing to files that are being stat'd here,
-  // so the result of these races is benign.
-  StatCacheInsert(self, hash, path, file_info);
+  if (existing_hashtable_entry == nullptr)
+    StatCacheInsert(self, hash, path, file_info);
+  else
+    StatCacheUpdate(self, hash, path, file_info);
+
   return file_info;
 }
 
