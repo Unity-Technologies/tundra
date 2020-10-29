@@ -41,7 +41,7 @@ bool NodeWasUsedByThisDagPreviously(const Frozen::BuiltNode *previously_built_no
 }
 
 template <class TNodeType>
-static void save_node_sharedcode(Frozen::BuiltNodeResult::Enum builtNodeResult, const HashDigest *input_signature, const HashDigest* leafinput_signature, const TNodeType *src_node, const HashDigest *guid, const StateSavingSegments &segments, const SinglyLinkedPathList* additionalDiscoveredOutputFiles)
+static void save_node_sharedcode(Frozen::BuiltNodeResult::Enum builtNodeResult, const HashDigest *input_signature, const HashDigest* leafinput_signature, const TNodeType *src_node, const HashDigest *guid, const StateSavingSegments &segments, const SinglyLinkedPathList* additionalDiscoveredOutputFiles, bool emitDataForBeeWhy)
 {
     //we're writing to two arrays in one go.  the FrozenArray<HashDigest> m_NodeGuids and the FrozenArray<BuiltNode> m_BuiltNodes
     //the hashdigest is quick
@@ -83,7 +83,8 @@ static void save_node_sharedcode(Frozen::BuiltNodeResult::Enum builtNodeResult, 
         WriteFrozenFileAndHashIntoBuiltNodesStream(src_node->m_AuxOutputFiles[i]);
 
     BinarySegmentWritePointer(segments.built_nodes, BinarySegmentPosition(segments.string));
-    BinarySegmentWriteStringData(segments.string, src_node->m_Action);
+
+    BinarySegmentWriteStringData(segments.string, emitDataForBeeWhy ? src_node->m_Action : "");
 }
 
 
@@ -168,9 +169,9 @@ bool SaveAllBuiltNodes(Driver *self)
         if (runtime_node->m_CurrentLeafInputSignature)
             leafInputSignatureDigest = runtime_node->m_CurrentLeafInputSignature->digest;
 
-        save_node_sharedcode(BuiltNodeResultFor(runtime_node), &runtime_node->m_CurrentInputSignature, &leafInputSignatureDigest, runtime_node->m_DagNode, guid, segments, runtime_node->m_DynamicallyDiscoveredOutputFiles);
+        save_node_sharedcode(BuiltNodeResultFor(runtime_node), &runtime_node->m_CurrentInputSignature, &leafInputSignatureDigest, runtime_node->m_DagNode, guid, segments, runtime_node->m_DynamicallyDiscoveredOutputFiles, self->m_DagData->m_EmitDataForBeeWhy);
 
-        int32_t file_count = dag_node->m_InputFiles.GetCount();
+        int32_t file_count = self->m_DagData->m_EmitDataForBeeWhy ? dag_node->m_InputFiles.GetCount() : 0;
         BinarySegmentWriteInt32(built_nodes_seg, file_count);
         BinarySegmentWritePointer(built_nodes_seg, BinarySegmentPosition(array_seg));
         for (int32_t i = 0; i < file_count; ++i)
@@ -226,10 +227,10 @@ bool SaveAllBuiltNodes(Driver *self)
 
     auto EmitBuiltNodeFromPreviouslyBuiltNode = [=, &emitted_built_nodes_count, &shared_strings](const Frozen::BuiltNode *built_node, const HashDigest *guid) -> void {
 
-        save_node_sharedcode(built_node->m_Result, &built_node->m_InputSignature, &built_node->m_LeafInputSignature, built_node, guid, segments, nullptr);
+        save_node_sharedcode(built_node->m_Result, &built_node->m_InputSignature, &built_node->m_LeafInputSignature, built_node, guid, segments, nullptr, self->m_DagData->m_EmitDataForBeeWhy);
         emitted_built_nodes_count++;
 
-        int32_t file_count = built_node->m_InputFiles.GetCount();
+        int32_t file_count = self->m_DagData->m_EmitDataForBeeWhy ? built_node->m_InputFiles.GetCount() : 0;
         BinarySegmentWriteInt32(built_nodes_seg, file_count);
         BinarySegmentWritePointer(built_nodes_seg, BinarySegmentPosition(array_seg));
         for (int32_t i = 0; i < file_count; ++i)

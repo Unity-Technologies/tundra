@@ -137,7 +137,7 @@ struct SharedResourceData
 
 struct Dag
 {
-    static const uint32_t MagicNumber = 0x2dea2246 ^ kTundraHashMagic;
+    static const uint32_t MagicNumber = 0x24efa246 ^ kTundraHashMagic;
 
     uint32_t m_MagicNumber;
 
@@ -164,6 +164,7 @@ struct Dag
     FrozenArray<uint32_t> m_ShaExtensionHashes;
 
     int32_t m_DaysToKeepUnreferencedNodesAround;
+    int32_t m_EmitDataForBeeWhy;
 
     FrozenString m_StateFileName;
     FrozenString m_StateFileNameTmp;
