@@ -66,8 +66,8 @@ struct CompileDagDerivedWorker
     {
         for(int dep : node->m_ToUseDependencies)
         {
-            BufferAppendOneIfNotPresent(&combinedDependenciesBuffers[i], heap, dep);
-            AddToUseDependenciesOfDagNodeRecursive(dag->m_DagNodes + dep, i);
+            if (BufferAppendOneIfNotPresent(&combinedDependenciesBuffers[i], heap, dep))
+                AddToUseDependenciesOfDagNodeRecursive(dag->m_DagNodes + dep, i);
         }
     }
 
@@ -249,8 +249,8 @@ struct CompileDagDerivedWorker
         {
             for(int dep : dag->m_DagNodes[i].m_ToBuildDependencies)
             {
-                BufferAppendOneIfNotPresent(&combinedDependenciesBuffers[i], heap, dep);
-                AddToUseDependenciesOfDagNodeRecursive(dag->m_DagNodes + dep, i);
+                if (BufferAppendOneIfNotPresent(&combinedDependenciesBuffers[i], heap, dep))
+                    AddToUseDependenciesOfDagNodeRecursive(dag->m_DagNodes + dep, i);
             }
         }
 
