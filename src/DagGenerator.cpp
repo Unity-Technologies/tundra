@@ -939,7 +939,7 @@ static bool CreateDagFromJsonData(char *json_memory, const char *dag_fn)
             if (obj->m_Count == 0)
             {
                 Log(kInfo, "Nothing to do");
-                exit(0);
+                exit(BuildResult::kOk);
             }
 
             BinaryWriter writer;

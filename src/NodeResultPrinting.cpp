@@ -27,7 +27,7 @@ struct NodeResultPrintData
     const bool *untouched_outputs;
     const char *output_buffer;
     int processed_node_count;
-    int amount_of_nodes_ever_queued;
+    int number_of_nodes_ever_queued;
     MessageStatusLevel::Enum status_level;
     int return_code;
     bool was_preparation_error;
@@ -493,7 +493,7 @@ void PrintNodeResult(
     data.validation_result = validationResult;
     data.untouched_outputs = untouched_outputs;
     data.processed_node_count = processedNodeCount;
-    data.amount_of_nodes_ever_queued = queue->m_AmountOfNodesEverQueued;
+    data.number_of_nodes_ever_queued = queue->m_AmountOfNodesEverQueued;
     data.status_level = failed ? MessageStatusLevel::Failure : MessageStatusLevel::Success;
 
     data.return_code = was_preparation_error ? 1 : result->m_ReturnCode;
@@ -525,8 +525,8 @@ void PrintNodeResult(
         JsonWriteKeyName(&msg, "processed_node_count");
         JsonWriteValueInteger(&msg, data.processed_node_count);
 
-        JsonWriteKeyName(&msg, "amount_of_nodes_ever_queued");
-        JsonWriteValueInteger(&msg, data.amount_of_nodes_ever_queued);
+        JsonWriteKeyName(&msg, "number_of_nodes_ever_queued");
+        JsonWriteValueInteger(&msg, data.number_of_nodes_ever_queued);
 
         JsonWriteKeyName(&msg, "annotation");
         JsonWriteValueString(&msg, node_data->m_Annotation);
