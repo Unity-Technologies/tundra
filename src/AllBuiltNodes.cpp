@@ -280,16 +280,6 @@ bool SaveAllBuiltNodes(Driver *self)
         return true;
     };
 
-    auto NodeStillHasOutputFilesPresentOnDisk = [&](const Frozen::BuiltNode* built_node)
-    {
-        for (auto& outputfile : built_node->m_OutputFiles)
-        {
-            if (StatCacheStat(&self->m_StatCache, outputfile.m_Filename.Get(), outputfile.m_FilenameHash).Exists())
-                return true;
-        }
-        return false;
-    };
-
     auto IsPreviouslyBuiltNodeValidForWritingToBuiltNodes = [=](const Frozen::BuiltNode* built_node, const HashDigest* guid) -> bool {
         // Make sure this node is still relevant before saving.
         bool node_is_in_dag = BinarySearch(dag_node_guids, dag_node_count, *guid) != nullptr;
@@ -300,7 +290,13 @@ bool SaveAllBuiltNodes(Driver *self)
         if (!NodeWasUsedByThisDagPreviously(built_node, this_dag_hashed_identifier))
             return true;
 
-        return NodeStillHasOutputFilesPresentOnDisk(built_node);
+        for (auto& outputfile : built_node->m_OutputFiles)
+        {
+            // We want to make sure we keep all nodes that have at some point written files to disk which are still present
+            if (StatCacheStat(&self->m_StatCache, outputfile.m_Filename.Get(), outputfile.m_FilenameHash).Exists())
+                return true;
+        }
+        return false;
     };
 
     {
