@@ -301,6 +301,7 @@ static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, M
     // If signatures don't match, someone touched files on disk while we were checking input signature or action was executing.
     if (HashTimestampsOfNonGeneratedInputFiles(queue, node, true) != timestampsHashOfNonGeneratedInputFiles)
     {
+        Log(kWarning, "concurrent modification of inputs detected while executing `%s`.", node->m_DagNode->m_Annotation.Get());
         RuntimeNodeSetInputSignatureMightBeIncorrect(node);
         return runActionResult;
     }
