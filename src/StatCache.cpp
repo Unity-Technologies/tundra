@@ -75,7 +75,13 @@ FileInfo StatCacheStat(StatCache *self, const char *path, uint32_t hash)
   FileInfo file_info = GetFileInfo(path);
 
   if (existing_hashtable_entry == nullptr)
+  {
+    // There's a natural race condition here. Some other thread might come in,
+    // stat the file and insert it before us. We just let that happen. The DAG
+    // guarantees that we won't be writing to files that are being stat'd here,
+    // so the result of these races is benign.
     StatCacheInsert(self, hash, path, file_info);
+  }
   else
     StatCacheUpdate(self, hash, path, file_info);
 

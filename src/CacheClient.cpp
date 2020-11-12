@@ -166,6 +166,18 @@ CacheResult::Enum CacheClient::AttemptWrite(const Frozen::Dag* dag, const Frozen
     return Invoke_REAPI_Cache_Client(signature, stat_cache, dagNode->m_OutputFiles, thread_state, Operation::kOperationWrite, dag, dagNode, queue_lock, ingredients_file );
 }
 
+
+static const char* ModeNameFor(bool read, bool write)
+{
+    if (read && write)
+       return "readwrite";
+    if (read)
+       return "read";
+    if (write)
+       return "write";
+    return "disabled";
+}
+
 void GetCachingBehaviourSettingsFromEnvironment(bool* attemptReads, bool* attemptWrites)
 {
     *attemptReads = false;
@@ -183,6 +195,31 @@ void GetCachingBehaviourSettingsFromEnvironment(bool* attemptReads, bool* attemp
     if (behaviour == nullptr)
         Croak("%s is set, but %s is not.", kENV_CACHE_SERVER_ADDRESS,kENV_BEE_CACHE_BEHAVIOUR);
 
+    if (strcmp("readwrite", behaviour) == 0)
+    {
+        *attemptReads = true;
+        *attemptWrites = true;
+        return;
+    }
+
+    if (strcmp("read", behaviour) == 0)
+    {
+        *attemptReads = true;
+        return;
+    }
+
+    if (strcmp("write", behaviour) == 0)
+    {
+        *attemptWrites = true;
+        return;
+    }
+
+    if (strcmp("disabled", behaviour) == 0)
+    {
+        *attemptWrites = true;
+        return;
+    }
+
     for (const char* c_ptr = behaviour; ; c_ptr++)
     {
         char c = *c_ptr;
@@ -199,10 +236,12 @@ void GetCachingBehaviourSettingsFromEnvironment(bool* attemptReads, bool* attemp
             continue;
         }
         if (c == '_')
+        {
             continue;
+        }
 
-        Croak("The cache behaviour string provided: %s contains a character that is not R,W or _", behaviour);
+        Croak("The cache behaviour string provided: %s is not valid.  a character that is not read,readwrite or disabled", behaviour);
     }
 
-    Log(kDebug, "Caching enabled with %s=%s %s=%s and mode: %s%s%s\n", kENV_CACHE_SERVER_ADDRESS, server, kENV_REAPI_CACHE_CLIENT, reapi_cache_client, *attemptReads ? "R":"_", *attemptWrites ? "W":"_");
+    Log(kDebug, "Caching enabled with %s=%s %s=%s and mode: %s%s%s\n", kENV_CACHE_SERVER_ADDRESS, server, kENV_REAPI_CACHE_CLIENT, reapi_cache_client, ModeNameFor(*attemptReads, *attemptWrites));
 }
