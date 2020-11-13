@@ -216,7 +216,6 @@ void GetCachingBehaviourSettingsFromEnvironment(bool* attemptReads, bool* attemp
 
     if (strcmp("disabled", behaviour) == 0)
     {
-        *attemptWrites = true;
         return;
     }
 
