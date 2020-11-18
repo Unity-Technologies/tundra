@@ -99,7 +99,8 @@ struct DagNode
         kFlagAllowUnwrittenOutputFiles = 1 << 5,
         kFlagBanContentDigestForInputs = 1 << 6,
 
-        kFlagCacheableByLeafInputs = 1 << 7
+        kFlagCacheableByLeafInputs = 1 << 7,
+        kFlagLogUpToDateResults = 1 << 8,
     };
 
     FrozenString m_Action;

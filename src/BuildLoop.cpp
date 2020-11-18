@@ -286,7 +286,16 @@ static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, M
 
     bool haveToRunAction = CheckInputSignatureToSeeNodeNeedsExecuting(queue, thread_state, node);
     if (!haveToRunAction)
+    {
+        if (node->m_DagNode->m_Flags & Frozen::DagNode::kFlagLogUpToDateResults)
+        {
+            ExecResult result = {0, false};
+            MutexLock(queue_lock);
+            PrintNodeResult(&result, node->m_DagNode, "", thread_state->m_Queue, thread_state, false, TimerGet(), ValidationResult::Pass, nullptr, true);
+            MutexUnlock(queue_lock);
+        }
         return NodeBuildResult::kUpToDate;
+    }
 
     NodeBuildResult::Enum runActionResult = RunAction(queue, thread_state, node, queue_lock);
 
