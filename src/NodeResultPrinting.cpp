@@ -555,6 +555,20 @@ void PrintNodeResult(
             JsonWriteValueString(&msg, data.output_buffer);
         }
 
+        if (result->m_ReturnCode != 0)
+        {
+            JsonWriteKeyName(&msg, "cmdline");
+            JsonWriteValueString(&msg, data.node_data->m_Action.Get());
+
+            JsonWriteKeyName(&msg, "rsps");
+            JsonWriteStartArray(&msg);
+            for(auto& rspFile: data.node_data->m_FrontendResponseFiles)
+            {
+                JsonWriteValueString(&msg, rspFile.m_Filename.Get());
+            }
+            JsonWriteEndArray(&msg);
+        }
+
         JsonWriteEndObject(&msg);
         LogStructured(&msg);
     }
