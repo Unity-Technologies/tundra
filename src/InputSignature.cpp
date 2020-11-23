@@ -5,6 +5,7 @@
 #include "RuntimeNode.hpp"
 #include "Scanner.hpp"
 #include "FileInfo.hpp"
+#include "FileSystem.hpp"
 #include "AllBuiltNodes.hpp"
 #include "SignalHandler.hpp"
 #include "Exec.hpp"
@@ -398,6 +399,35 @@ static bool CalculateInputSignature(BuildQueue* queue, ThreadState* thread_state
     return true;
 }
 
+static void JsonWriteStructuredMsgData(JsonWriter* jsonWriter, const char* msg, const Frozen::DagNode* dagNode)
+{
+    JsonWriteKeyName(jsonWriter, "msg");
+    JsonWriteValueString(jsonWriter, msg);
+
+    JsonWriteKeyName(jsonWriter, "annotation");
+    JsonWriteValueString(jsonWriter, dagNode->m_Annotation);
+
+    JsonWriteKeyName(jsonWriter, "index");
+    JsonWriteValueInteger(jsonWriter, dagNode->m_OriginalIndex);
+}
+
+static void LogStructuredMsgObject(ThreadState *thread_state, const char* msg, const Frozen::DagNode* dagNode)
+{
+    if (!IsStructuredLogActive())
+        return;
+
+    MemAllocLinearScope allocScope(&thread_state->m_ScratchAlloc);
+
+    JsonWriter jsonWriter;
+    JsonWriteInit(&jsonWriter, &thread_state->m_ScratchAlloc);
+
+    JsonWriteStartObject(&jsonWriter);
+    JsonWriteStructuredMsgData(&jsonWriter, msg, dagNode);
+    JsonWriteEndObject(&jsonWriter);
+
+    LogStructured(&jsonWriter);
+}
+
 bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node)
 {
     CheckDoesNotHaveLock(&queue->m_Lock);
@@ -413,53 +443,13 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
     {
         // This is a new node - we must built it
         Log(kSpam, "T=%d: building %s - new node", thread_state->m_ThreadIndex, dagnode->m_Annotation.Get());
-
-        if (IsStructuredLogActive())
-        {
-            MemAllocLinearScope allocScope(&thread_state->m_ScratchAlloc);
-
-            JsonWriter msg;
-            JsonWriteInit(&msg, &thread_state->m_ScratchAlloc);
-            JsonWriteStartObject(&msg);
-
-            JsonWriteKeyName(&msg, "msg");
-            JsonWriteValueString(&msg, "newNode");
-
-            JsonWriteKeyName(&msg, "annotation");
-            JsonWriteValueString(&msg, dagnode->m_Annotation);
-
-            JsonWriteKeyName(&msg, "index");
-            JsonWriteValueInteger(&msg, dagnode->m_OriginalIndex);
-
-            JsonWriteEndObject(&msg);
-            LogStructured(&msg);
-        }
-
+        LogStructuredMsgObject(thread_state, "newNode", dagnode);
         return true;
     }
 
     if (queue->m_Config.m_DriverOptions->m_DontReusePreviousResults)
     {
-        if (IsStructuredLogActive())
-        {
-            MemAllocLinearScope allocScope(&thread_state->m_ScratchAlloc);
-
-            JsonWriter msg;
-            JsonWriteInit(&msg, &thread_state->m_ScratchAlloc);
-            JsonWriteStartObject(&msg);
-
-            JsonWriteKeyName(&msg, "msg");
-            JsonWriteValueString(&msg, "dontReusePreviousResults");
-
-            JsonWriteKeyName(&msg, "annotation");
-            JsonWriteValueString(&msg, dagnode->m_Annotation);
-
-            JsonWriteKeyName(&msg, "index");
-            JsonWriteValueInteger(&msg, dagnode->m_OriginalIndex);
-
-            JsonWriteEndObject(&msg);
-            LogStructured(&msg);
-        }
+        LogStructuredMsgObject(thread_state, "dontReusePreviousResults", dagnode);
         return true;
     }
 
@@ -467,127 +457,97 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
     StatCache *stat_cache = config.m_StatCache;
     DigestCache *digest_cache = config.m_DigestCache;
 
-    if (prev_builtnode->m_InputSignature != node->m_CurrentInputSignature)
-    {
-        // The input signature has changed (either direct inputs or includes)
-        // We need to rebuild this node.
-        char oldDigest[kDigestStringSize];
-        char newDigest[kDigestStringSize];
-        DigestToString(oldDigest, prev_builtnode->m_InputSignature);
-        DigestToString(newDigest, node->m_CurrentInputSignature);
-
-        Log(kSpam, "T=%d: building %s - input signature changed. was:%s now:%s", thread_state->m_ThreadIndex, dagnode->m_Annotation.Get(), oldDigest, newDigest);
-
-        if (IsStructuredLogActive())
-        {
-            MemAllocLinearScope allocScope(&thread_state->m_ScratchAlloc);
-
-            JsonWriter msg;
-            JsonWriteInit(&msg, &thread_state->m_ScratchAlloc);
-            JsonWriteStartObject(&msg);
-
-            JsonWriteKeyName(&msg, "msg");
-            JsonWriteValueString(&msg, "inputSignatureChanged");
-
-            JsonWriteKeyName(&msg, "annotation");
-            JsonWriteValueString(&msg, dagnode->m_Annotation);
-
-            JsonWriteKeyName(&msg, "index");
-            JsonWriteValueInteger(&msg, dagnode->m_OriginalIndex);
-
-            JsonWriteKeyName(&msg, "changes");
-            JsonWriteStartArray(&msg);
-
-            ReportInputSignatureChanges(&msg, queue->m_Config.m_Dag, node, dagnode, prev_builtnode, stat_cache, digest_cache, queue->m_Config.m_ScanCache, config.m_ShaDigestExtensions, config.m_ShaDigestExtensionCount, thread_state);
-
-            JsonWriteEndArray(&msg);
-            JsonWriteEndObject(&msg);
-            LogStructured(&msg);
-        }
-
-        return true;
-    }
-
-    else if (!prev_builtnode->m_WasBuiltSuccessfully)
+    switch (prev_builtnode->m_Result)
     {
         // The build progress failed the last time around - we need to retry it.
-        Log(kSpam, "T=%d: building %s - previous build failed", thread_state->m_ThreadIndex, dagnode->m_Annotation.Get());
+        case Frozen::BuiltNodeResult::kRanFailed:
+            Log(kSpam, "T=%d: building %s - previous build failed", thread_state->m_ThreadIndex, dagnode->m_Annotation.Get());
+            LogStructuredMsgObject(thread_state, "nodeRetryBuild", dagnode);
+            return true;
 
-        if (IsStructuredLogActive())
-        {
-            MemAllocLinearScope allocScope(&thread_state->m_ScratchAlloc);
+        // Input signatures changed or was suspicious (mtime set to a future date) the last time around - we need to retry it.
+        case Frozen::BuiltNodeResult::kRanSuccessfullyButInputSignatureMightBeIncorrect:
+            Log(kSpam, "T=%d: building %s - previous input signature might be incorrect", thread_state->m_ThreadIndex, dagnode->m_Annotation.Get());
+            LogStructuredMsgObject(thread_state, "previousInputSignatureMightBeIncorrect", dagnode);
+            return true;
 
-            JsonWriter msg;
-            JsonWriteInit(&msg, &thread_state->m_ScratchAlloc);
-            JsonWriteStartObject(&msg);
+        // Previous build was successful. Check input signature and outputs to determine if we need to run again.
+        case Frozen::BuiltNodeResult::kRanSuccessfullyWithGuaranteedCorrectInputSignature:
 
-            JsonWriteKeyName(&msg, "msg");
-            JsonWriteValueString(&msg, "nodeRetryBuild");
-
-            JsonWriteKeyName(&msg, "annotation");
-            JsonWriteValueString(&msg, dagnode->m_Annotation);
-
-            JsonWriteKeyName(&msg, "index");
-            JsonWriteValueInteger(&msg, dagnode->m_OriginalIndex);
-
-            JsonWriteEndObject(&msg);
-            LogStructured(&msg);
-        }
-
-        return true;
-    }
-
-    if (OutputFilesMissingFor(node->m_BuiltNode, stat_cache))
-    {
-        // One or more output files are missing - need to rebuild.
-        Log(kSpam, "T=%d: building %s - output files are missing", thread_state->m_ThreadIndex, dagnode->m_Annotation.Get());
-
-        if (IsStructuredLogActive())
-        {
-            MemAllocLinearScope allocScope(&thread_state->m_ScratchAlloc);
-
-            JsonWriter msg;
-            JsonWriteInit(&msg, &thread_state->m_ScratchAlloc);
-            JsonWriteStartObject(&msg);
-
-            JsonWriteKeyName(&msg, "msg");
-            JsonWriteValueString(&msg, "nodeOutputsMissing");
-
-            JsonWriteKeyName(&msg, "annotation");
-            JsonWriteValueString(&msg, dagnode->m_Annotation);
-
-            JsonWriteKeyName(&msg, "index");
-            JsonWriteValueInteger(&msg, dagnode->m_OriginalIndex);
-
-            JsonWriteKeyName(&msg, "files");
-            JsonWriteStartArray(&msg);
-            for (auto &f : dagnode->m_OutputFiles)
+            // The input signature has changed (either direct inputs or includes). We need to rebuild this node.
+            if (prev_builtnode->m_InputSignature != node->m_CurrentInputSignature)
             {
-                FileInfo i = StatCacheStat(stat_cache, f.m_Filename, f.m_FilenameHash);
-                if (!i.Exists())
-                    JsonWriteValueString(&msg, f.m_Filename);
-            }
-            JsonWriteEndArray(&msg);
+                char oldDigest[kDigestStringSize];
+                char newDigest[kDigestStringSize];
+                DigestToString(oldDigest, prev_builtnode->m_InputSignature);
+                DigestToString(newDigest, node->m_CurrentInputSignature);
 
-            JsonWriteKeyName(&msg, "directories");
-            JsonWriteStartArray(&msg);
-            for (auto &f : dagnode->m_OutputDirectories)
+                Log(kSpam, "T=%d: building %s - input signature changed. was:%s now:%s", thread_state->m_ThreadIndex, dagnode->m_Annotation.Get(), oldDigest, newDigest);
+
+                if (IsStructuredLogActive())
+                {
+                    MemAllocLinearScope allocScope(&thread_state->m_ScratchAlloc);
+
+                    JsonWriter msg;
+                    JsonWriteInit(&msg, &thread_state->m_ScratchAlloc);
+                    JsonWriteStartObject(&msg);
+                    JsonWriteStructuredMsgData(&msg, "inputSignatureChanged", dagnode);
+
+                    JsonWriteKeyName(&msg, "changes");
+                    JsonWriteStartArray(&msg);
+
+                    ReportInputSignatureChanges(&msg, queue->m_Config.m_Dag, node, dagnode, prev_builtnode, stat_cache, digest_cache, queue->m_Config.m_ScanCache, config.m_ShaDigestExtensions, config.m_ShaDigestExtensionCount, thread_state);
+
+                    JsonWriteEndArray(&msg);
+                    JsonWriteEndObject(&msg);
+                    LogStructured(&msg);
+                }
+                return true;
+            }
+
+            // One or more output files are missing - need to rebuild.
+            if (OutputFilesMissingFor(node->m_BuiltNode, stat_cache))
             {
-                FileInfo i = StatCacheStat(stat_cache, f.m_Filename, f.m_FilenameHash);
+                Log(kSpam, "T=%d: building %s - output files are missing", thread_state->m_ThreadIndex, dagnode->m_Annotation.Get());
 
-                if (!i.IsDirectory())
-                    JsonWriteValueString(&msg, f.m_Filename);
+                if (IsStructuredLogActive())
+                {
+                    MemAllocLinearScope allocScope(&thread_state->m_ScratchAlloc);
+
+                    JsonWriter msg;
+                    JsonWriteInit(&msg, &thread_state->m_ScratchAlloc);
+                    JsonWriteStartObject(&msg);
+                    JsonWriteStructuredMsgData(&msg, "nodeOutputsMissing", dagnode);
+
+                    JsonWriteKeyName(&msg, "files");
+                    JsonWriteStartArray(&msg);
+                    for (auto &f : dagnode->m_OutputFiles)
+                    {
+                        FileInfo i = StatCacheStat(stat_cache, f.m_Filename, f.m_FilenameHash);
+                        if (!i.Exists())
+                            JsonWriteValueString(&msg, f.m_Filename);
+                    }
+                    JsonWriteEndArray(&msg);
+
+                    JsonWriteKeyName(&msg, "directories");
+                    JsonWriteStartArray(&msg);
+                    for (auto &f : dagnode->m_OutputDirectories)
+                    {
+                        FileInfo i = StatCacheStat(stat_cache, f.m_Filename, f.m_FilenameHash);
+
+                        if (!i.IsDirectory())
+                            JsonWriteValueString(&msg, f.m_Filename);
+                    }
+                    JsonWriteEndArray(&msg);
+
+                    JsonWriteEndObject(&msg);
+                    LogStructured(&msg);
+                }
+                return true;
             }
-            JsonWriteEndArray(&msg);
 
-            JsonWriteEndObject(&msg);
-            LogStructured(&msg);
-        }
-
-        return true;
+            // Everything is up to date
+            return false;
     }
-
-    // Everything is up to date
-    return false;
+    Croak("MSVC cannot see the switch statement above can never be left");
 }
-

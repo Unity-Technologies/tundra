@@ -26,6 +26,7 @@
 #include "LeafInputSignature.hpp"
 #include "LoadFrozenData.hpp"
 #include "FindNodesByName.hpp"
+#include "FileSystem.hpp"
 
 #include <time.h>
 #include <stdio.h>
@@ -60,6 +61,8 @@ void DriverOptionsInit(DriverOptions *self)
     self->m_SilenceIfPossible = false;
     self->m_DontReusePreviousResults = false;
     self->m_DebugSigning = false;
+    self->m_ContinueOnFailure = false;
+    self->m_StandardInputCanary = false;
     self->m_JustPrintLeafInputSignature = nullptr;
     self->m_IdentificationColor = 0;
     self->m_ThreadCount = GetCpuCount();
@@ -128,14 +131,24 @@ bool DriverInitData(Driver *self)
         return false;
 
     ProfilerScope prof_scope("DriverInitData", 0);
-    // do not produce/overwrite structured log output file,
+
+    // do not produce/overwrite structured log output or state file,
     // if we're only reporting something and not doing an actual build
     if (self->m_Options.m_IncludesOutput == nullptr && !self->m_Options.m_ShowHelp && !self->m_Options.m_ShowTargets)
+    {
         SetStructuredLogFileName(self->m_DagData->m_StructuredLogFileName);
 
-    DigestCacheInit(&self->m_DigestCache, MB(128), self->m_DagData->m_DigestCacheFileName);
+        const char* stateFile = self->m_DagData->m_StateFileName.Get();
+        if (GetFileInfo(stateFile).Exists() && !RenameFile(stateFile, self->m_DagData->m_StateFileNameMapped.Get()))
+            Croak("Unable to rename state file '%s' => '%s'", stateFile, self->m_DagData->m_StateFileNameMapped.Get());
+        LoadFrozenData<Frozen::AllBuiltNodes>(self->m_DagData->m_StateFileNameMapped, &self->m_StateFile, &self->m_AllBuiltNodes);
+    }
+    else
+    {
+        LoadFrozenData<Frozen::AllBuiltNodes>(self->m_DagData->m_StateFileName, &self->m_StateFile, &self->m_AllBuiltNodes);
+    }
 
-    LoadFrozenData<Frozen::AllBuiltNodes>(self->m_DagData->m_StateFileName, &self->m_StateFile, &self->m_AllBuiltNodes);
+    DigestCacheInit(&self->m_DigestCache, MB(128), self->m_DagData->m_DigestCacheFileName);
 
     LoadFrozenData<Frozen::ScanData>(self->m_DagData->m_ScanCacheFileName, &self->m_ScanFile, &self->m_ScanData);
 
@@ -242,11 +255,15 @@ bool DriverInit(Driver *self, const DriverOptions *options)
     LinearAllocInit(&self->m_StatCacheAllocator, &self->m_Heap, MB(64), "stat cache");
     StatCacheInit(&self->m_StatCache, &self->m_StatCacheAllocator, &self->m_Heap);
 
+    FileSystemInit(s_DagFileName);
+
     return true;
 }
 
 void DriverDestroy(Driver *self)
 {
+    FileSystemDestroy();
+
     DigestCacheDestroy(&self->m_DigestCache);
 
     StatCacheDestroy(&self->m_StatCache);

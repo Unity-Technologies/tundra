@@ -27,10 +27,9 @@ struct NodeResultPrintData
     const bool *untouched_outputs;
     const char *output_buffer;
     int processed_node_count;
+    int number_of_nodes_ever_queued;
     MessageStatusLevel::Enum status_level;
     int return_code;
-    bool was_signalled;
-    bool was_aborted;
     bool was_preparation_error;
 };
 
@@ -361,7 +360,7 @@ static void PrintNodeResult(const NodeResultPrintData *data, BuildQueue *queue)
             auto &entry = data->node_data->m_EnvVars[i];
             printf("%s=%s\n", entry.m_Name.Get(), entry.m_Value.Get());
         }
-        if (data->return_code == 0 && !data->was_signalled)
+        if (data->return_code == 0)
         {
             if (data->validation_result == ValidationResult::UnexpectedConsoleOutputFail)
             {
@@ -380,10 +379,6 @@ static void PrintNodeResult(const NodeResultPrintData *data, BuildQueue *queue)
                         printf("%s\n", (const char *)data->node_data->m_OutputFiles[i].m_Filename);
             }
         }
-        if (data->was_signalled)
-            PrintDiagnostic("Was Signaled", "Yes");
-        if (data->was_aborted)
-            PrintDiagnostic("Was Aborted", "Yes");
         if (data->return_code != 0)
             PrintDiagnostic("ExitCode", data->return_code);
     }
@@ -485,8 +480,8 @@ void PrintNodeResult(
     bool was_preparation_error)
 {
     int processedNodeCount = queue->m_FinishedNodeCount;
-    bool failed = result->m_ReturnCode != 0 || result->m_WasSignalled || validationResult >= ValidationResult::UnexpectedConsoleOutputFail;
-    bool verbose = (failed && !result->m_WasAborted && !was_preparation_error) || always_verbose;
+    bool failed = result->m_ReturnCode != 0 || validationResult >= ValidationResult::UnexpectedConsoleOutputFail;
+    bool verbose = (failed && !was_preparation_error) || always_verbose;
 
     int duration = TimerDiffSeconds(time_exec_started, TimerGet());
 
@@ -498,11 +493,10 @@ void PrintNodeResult(
     data.validation_result = validationResult;
     data.untouched_outputs = untouched_outputs;
     data.processed_node_count = processedNodeCount;
+    data.number_of_nodes_ever_queued = queue->m_AmountOfNodesEverQueued;
     data.status_level = failed ? MessageStatusLevel::Failure : MessageStatusLevel::Success;
 
     data.return_code = was_preparation_error ? 1 : result->m_ReturnCode;
-    data.was_signalled = was_preparation_error ? 0 : result->m_WasSignalled;
-    data.was_aborted = was_preparation_error ? 0 : result->m_WasAborted;
     data.was_preparation_error = was_preparation_error;
 
     bool anyOutput = result->m_OutputBuffer.cursor > 0;
@@ -528,6 +522,12 @@ void PrintNodeResult(
         JsonWriteKeyName(&msg, "msg");
         JsonWriteValueString(&msg, "noderesult");
 
+        JsonWriteKeyName(&msg, "processed_node_count");
+        JsonWriteValueInteger(&msg, data.processed_node_count);
+
+        JsonWriteKeyName(&msg, "number_of_nodes_ever_queued");
+        JsonWriteValueInteger(&msg, data.number_of_nodes_ever_queued);
+
         JsonWriteKeyName(&msg, "annotation");
         JsonWriteValueString(&msg, node_data->m_Annotation);
 
@@ -537,7 +537,19 @@ void PrintNodeResult(
         JsonWriteKeyName(&msg, "exitcode");
         JsonWriteValueInteger(&msg, result->m_ReturnCode);
 
-        if (failed && data.output_buffer)
+        if (data.node_data->m_OutputFiles.GetCount() > 0)
+        {
+            JsonWriteKeyName(&msg, "outputfile");
+            JsonWriteValueString(&msg, data.node_data->m_OutputFiles[0].m_Filename);
+        }
+
+        if (data.node_data->m_OutputDirectories.GetCount() > 0)
+        {
+            JsonWriteKeyName(&msg, "outputdirectory");
+            JsonWriteValueString(&msg, data.node_data->m_OutputDirectories[0].m_Filename);
+        }
+
+        if (data.output_buffer)
         {
             JsonWriteKeyName(&msg, "stdout");
             JsonWriteValueString(&msg, data.output_buffer);

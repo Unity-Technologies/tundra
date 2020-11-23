@@ -44,6 +44,7 @@ struct CompileDagDerivedWorker
 
     BinarySegment *dependenciesArray_seg;
     BinarySegment *backlinksArray_seg;
+    BinarySegment *nonGeneratedInputIndices_seg;
     BinarySegment *leafInputsArray_seg;
     BinarySegment *dependentNodesThatThemselvesAreLeafInputCacheableArray_seg;
     BinarySegment *dependentNodesWithScannersArray_seg;
@@ -65,8 +66,8 @@ struct CompileDagDerivedWorker
     {
         for(int dep : node->m_ToUseDependencies)
         {
-            BufferAppendOneIfNotPresent(&combinedDependenciesBuffers[i], heap, dep);
-            AddToUseDependenciesOfDagNodeRecursive(dag->m_DagNodes + dep, i);
+            if (BufferAppendOneIfNotPresent(&combinedDependenciesBuffers[i], heap, dep))
+                AddToUseDependenciesOfDagNodeRecursive(dag->m_DagNodes + dep, i);
         }
     }
 
@@ -248,8 +249,8 @@ struct CompileDagDerivedWorker
         {
             for(int dep : dag->m_DagNodes[i].m_ToBuildDependencies)
             {
-                BufferAppendOneIfNotPresent(&combinedDependenciesBuffers[i], heap, dep);
-                AddToUseDependenciesOfDagNodeRecursive(dag->m_DagNodes + dep, i);
+                if (BufferAppendOneIfNotPresent(&combinedDependenciesBuffers[i], heap, dep))
+                    AddToUseDependenciesOfDagNodeRecursive(dag->m_DagNodes + dep, i);
             }
         }
 
@@ -277,6 +278,9 @@ struct CompileDagDerivedWorker
         BinarySegmentWritePointer(main_seg, BinarySegmentPosition(backlinksArray_seg));
 
         BinarySegmentWriteUint32(main_seg, node_count);
+        BinarySegmentWritePointer(main_seg, BinarySegmentPosition(nonGeneratedInputIndices_seg));
+
+        BinarySegmentWriteUint32(main_seg, node_count);
         BinarySegmentWritePointer(main_seg, BinarySegmentPosition(leafInputsArray_seg));
 
         BinarySegmentWriteUint32(main_seg, node_count);
@@ -293,12 +297,28 @@ struct CompileDagDerivedWorker
 
         DagRuntimeDataInit(&dagRuntimeData, dag, heap);
 
+        Buffer<int32_t> indices;
+        BufferInitWithCapacity(&indices, heap, 1024);
+
         for (int32_t nodeIndex = 0; nodeIndex < node_count; ++nodeIndex)
         {
             WriteArrayOfIndices(dependenciesArray_seg, combinedDependenciesBuffers[nodeIndex]);
             WriteArrayOfIndices(backlinksArray_seg, backlinksBuffers[nodeIndex]);
+
+            BufferClear(&indices);
+            int count = dag->m_DagNodes[nodeIndex].m_InputFiles.GetCount();
+            for (int i=0; i!=count; i++)
+            {
+                auto& inputFile = dag->m_DagNodes[nodeIndex].m_InputFiles[i];
+                if (IsFileGenerated(&dagRuntimeData, inputFile.m_FilenameHash, inputFile.m_Filename))
+                    continue;
+                BufferAppendOne(&indices, heap, i);
+            }
+
+            WriteArrayOfIndices(nonGeneratedInputIndices_seg, indices);
             WriteIntoCacheableNodeDataArraysFor(nodeIndex);
         }
+        BufferDestroy(&indices, heap);
 
         DagRuntimeDataDestroy(&dagRuntimeData);
 
@@ -319,6 +339,7 @@ static void CompileDagDerivedWorkerInit(CompileDagDerivedWorker* data, const Fro
 
     data->dependenciesArray_seg = BinaryWriterAddSegment(data->writer);
     data->backlinksArray_seg = BinaryWriterAddSegment(data->writer);
+    data->nonGeneratedInputIndices_seg = BinaryWriterAddSegment(data->writer);
     data->arraydata_seg = BinaryWriterAddSegment(data->writer);
     data->arraydata2_seg = BinaryWriterAddSegment(data->writer);
     data->leafInputsArray_seg = BinaryWriterAddSegment(data->writer);

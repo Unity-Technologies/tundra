@@ -5,6 +5,7 @@
 #include "RuntimeNode.hpp"
 #include "Scanner.hpp"
 #include "FileInfo.hpp"
+#include "FileSystem.hpp"
 #include "AllBuiltNodes.hpp"
 #include "SignalHandler.hpp"
 #include "Exec.hpp"
@@ -29,15 +30,6 @@
 #include <stdarg.h>
 #include <algorithm>
 #include <stdio.h>
-
-static int AvailableNodeCount(BuildQueue *queue)
-{
-    const uint32_t queue_mask = queue->m_QueueCapacity - 1;
-    uint32_t read_index = queue->m_QueueReadIndex;
-    uint32_t write_index = queue->m_QueueWriteIndex;
-
-    return (write_index - read_index) & queue_mask;
-}
 
 static RuntimeNode *GetRuntimeNodeForDagNodeIndex(BuildQueue *queue, int32_t src_index)
 {
@@ -82,35 +74,32 @@ static void LogFirstTimeEnqueue(MemAllocLinear* scratch, RuntimeNode* enqueuedNo
     LogStructured(&msg);
 }
 
-static int EnqueueNodeListWithoutWakingAwaiters(BuildQueue* queue, MemAllocLinear* scratch, const FrozenArray<int32_t>& nodesToEnqueue, RuntimeNode* enqueingNode)
+static int EnqueueNodeListReversedWithoutWakingAwaitersOnlyWhenNotEnqueuedBefore(BuildQueue* queue, MemAllocLinear* scratch, const FrozenArray<int32_t>& nodesToEnqueue, RuntimeNode* enqueingNode)
 {
     int enqueue_count = 0;
-    for (int32_t depDagIndex : nodesToEnqueue)
+
+    //we enqueue dependency lists in reverse. because our semantics say that the most urgent dependencies are in the list first, it's important that they
+    //end up on the top of the workstack, so they'll be processed first.
+    for(int i=nodesToEnqueue.GetCount(); i-- > 0;)
     {
-        enqueue_count += EnqueueNodeWithoutWakingAwaiters(queue, scratch, &queue->m_Config.m_RuntimeNodes[depDagIndex], enqueingNode);
+        int32_t depDagIndex = nodesToEnqueue[i];
+        enqueue_count += EnqueueNodeWithoutWakingAwaiters(queue, scratch, &queue->m_Config.m_RuntimeNodes[depDagIndex], enqueingNode, true);
     }
     return enqueue_count;
 }
 
-int EnqueueNodeWithoutWakingAwaiters(BuildQueue *queue, MemAllocLinear* scratch, RuntimeNode *runtime_node, RuntimeNode* queueing_node)
+int EnqueueNodeWithoutWakingAwaiters(BuildQueue *queue, MemAllocLinear* scratch, RuntimeNode *runtime_node, RuntimeNode* queueing_node, bool onlyEnqueueIfNotEnqueuedBefore)
 {
     // Did someone else get to the node first?
-    if (RuntimeNodeIsQueued(runtime_node) || RuntimeNodeIsActive(runtime_node) || runtime_node->m_Finished)
+    if (RuntimeNodeIsActive(runtime_node) || runtime_node->m_Finished)
         return 0;
 
-    uint32_t write_index = queue->m_QueueWriteIndex;
-    const uint32_t queue_mask = queue->m_QueueCapacity - 1;
-    int32_t *build_queue = queue->m_Queue;
-
-#if ENABLED(CHECKED_BUILD)
-    const int avail_init = AvailableNodeCount(queue);
-#endif
+    if (onlyEnqueueIfNotEnqueuedBefore && RuntimeNodeHasEverBeenQueued(runtime_node))
+        return 0;
 
     int runtime_node_index = int(runtime_node - queue->m_Config.m_RuntimeNodes);
 
-    build_queue[write_index] = runtime_node_index;
-    write_index = (write_index + 1) & queue_mask;
-    queue->m_QueueWriteIndex = write_index;
+    BufferAppendOne(&queue->m_WorkStack, queue->m_Config.m_Heap, runtime_node_index);
 
     if (!RuntimeNodeHasEverBeenQueued(runtime_node))
     {
@@ -121,9 +110,7 @@ int EnqueueNodeWithoutWakingAwaiters(BuildQueue *queue, MemAllocLinear* scratch,
     int enqueue_count = 1;
     RuntimeNodeFlagQueued(runtime_node);
 
-    CHECK(AvailableNodeCount(queue) == 1 + avail_init);
-
-    enqueue_count += EnqueueNodeListWithoutWakingAwaiters(queue, scratch, runtime_node->m_DagNode->m_ToUseDependencies, runtime_node);
+    enqueue_count += EnqueueNodeListReversedWithoutWakingAwaitersOnlyWhenNotEnqueuedBefore(queue, scratch, runtime_node->m_DagNode->m_ToUseDependencies, runtime_node);
 
     return enqueue_count;
 }
@@ -170,7 +157,7 @@ static void EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(BuildQueue *queue, T
             if (!AllDependenciesAreFinished(queue, waiter))
                 continue;
 
-            enqueue_count += EnqueueNodeWithoutWakingAwaiters(queue, &thread_state->m_ScratchAlloc, waiter, nullptr);
+            enqueue_count += EnqueueNodeWithoutWakingAwaiters(queue, &thread_state->m_ScratchAlloc, waiter, nullptr, false);
         }
     }
 
@@ -245,18 +232,56 @@ static void AttemptCacheWrite(BuildQueue* queue, ThreadState* thread_state, Runt
     MutexUnlock(&queue->m_Lock);
 }
 
+static HashDigest HashTimestampsOfNonGeneratedInputFiles(BuildQueue* queue, RuntimeNode* node, bool forceReadTimestampFromDisk, uint64_t* latestTimestampSeenForNonGeneratedInputFile = nullptr)
+{
+    HashState hashState;
+    HashInit(&hashState);
+
+    for (auto i : queue->m_Config.m_DagDerived->m_NodeNonGeneratedInputIndicies[node->m_DagNodeIndex])
+    {
+        auto &non_generated_input_file = node->m_DagNode->m_InputFiles[i];
+        if (forceReadTimestampFromDisk)
+            StatCacheMarkDirty(queue->m_Config.m_StatCache, non_generated_input_file.m_Filename, non_generated_input_file.m_FilenameHash);
+
+        uint64_t timeStamp = StatCacheStat(queue->m_Config.m_StatCache, non_generated_input_file.m_Filename, non_generated_input_file.m_FilenameHash).m_Timestamp;
+        if (latestTimestampSeenForNonGeneratedInputFile && timeStamp > *latestTimestampSeenForNonGeneratedInputFile)
+            *latestTimestampSeenForNonGeneratedInputFile = timeStamp;
+
+        HashAddInteger(&hashState, timeStamp);
+    }
+
+    HashDigest result;
+    HashFinalize(&hashState, &result);
+    return result;
+};
+
 static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, Mutex *queue_lock, ThreadState* thread_state, StatCache* stat_cache, const Frozen::DagDerived* dagDerived)
 {
     CheckDoesNotHaveLock(&queue->m_Lock);
 
-    if (IsNodeCacheableByLeafInputsAndCachingEnabled(queue,node))
-    {
-        CHECK(node->m_CurrentLeafInputSignature != nullptr);
-        bool stillTheSame = node->m_BuiltNode && node->m_BuiltNode->m_WasBuiltSuccessfully && node->m_BuiltNode->m_LeafInputSignature == node->m_CurrentLeafInputSignature->digest;
+    // Compute timestamps and record the latest file modification date we find for any input file not generated by the graph.
+    uint64_t latestTimestampSeenForNonGeneratedInputFile = 0;
+    auto timestampsHashOfNonGeneratedInputFiles = HashTimestampsOfNonGeneratedInputFiles(queue, node, false, &latestTimestampSeenForNonGeneratedInputFile);
 
-        if (!stillTheSame)
-            if (!VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLeafInputs(queue, thread_state, node, dagDerived))
-                return NodeBuildResult::kRanFailed;
+    // Check latest file timestamp against filesystem "now"
+    bool thereIsAtLeastOneInputFileDatedInTheFuture = false;
+    if (latestTimestampSeenForNonGeneratedInputFile >= FileSystem::g_LastSeenFileSystemTime)
+    {
+        // Make sure we are in sync with current file system "now"
+        auto fileSystemTimeNow = FileSystemUpdateLastSeenFileSystemTime();
+        if (latestTimestampSeenForNonGeneratedInputFile == fileSystemTimeNow)
+        {
+            // If the latest modification time of any non generated input file matches now, then we wait for the next file system mtime tick.
+            // The reason we do this is so we can safely detect changes done by the user either during graph execution or in between
+            // two tundra executions happening within the same file system mtime frame.
+            FileSystemWaitUntilFileModificationDateIsInThePast(latestTimestampSeenForNonGeneratedInputFile);
+        }
+        else if (latestTimestampSeenForNonGeneratedInputFile > fileSystemTimeNow)
+        {
+            // If any file not generated by the graph is dated in the future we can't wait. Or we don't want to wait, since that could potentially
+            // lock up tundra for a very long time. Instead we record this specific state and flag input signature as "might be incorrect".
+            thereIsAtLeastOneInputFileDatedInTheFuture = true;
+        }
     }
 
     bool haveToRunAction = CheckInputSignatureToSeeNodeNeedsExecuting(queue, thread_state, node);
@@ -265,8 +290,32 @@ static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, M
 
     NodeBuildResult::Enum runActionResult = RunAction(queue, thread_state, node, queue_lock);
 
-    if (runActionResult == NodeBuildResult::kRanSuccesfully && queue->m_Config.m_AttemptCacheWrites && IsNodeCacheableByLeafInputsAndCachingEnabled(queue,node))
+    // If we see any file not generated by the graph dated in the future we will always treat input signature as incorrect.
+    // Meaning for every build we will rebuild this node until filesystem mtime catches up with the file mtime date.
+    if (thereIsAtLeastOneInputFileDatedInTheFuture)
+    {
+        RuntimeNodeSetInputSignatureMightBeIncorrect(node);
+        return runActionResult;
+    }
+
+    // If signatures don't match, someone touched files on disk while we were checking input signature or action was executing.
+    if (HashTimestampsOfNonGeneratedInputFiles(queue, node, true) != timestampsHashOfNonGeneratedInputFiles)
+    {
+        Log(kWarning, "concurrent modification of inputs detected while executing `%s`.", node->m_DagNode->m_Annotation.Get());
+        RuntimeNodeSetInputSignatureMightBeIncorrect(node);
+        return runActionResult;
+    }
+
+    if (runActionResult == NodeBuildResult::kRanSuccesfully
+        && queue->m_Config.m_AttemptCacheWrites
+        && IsNodeCacheableByLeafInputsAndCachingEnabled(queue,node))
+    {
+        CHECK(node->m_CurrentLeafInputSignature != nullptr);
+        if (!VerifyAllVersionedFilesIncludedByGeneratedHeaderFilesWereAlreadyPartOfTheLeafInputs(queue, thread_state, node, dagDerived))
+            return NodeBuildResult::kRanFailed;
+
         AttemptCacheWrite(queue,thread_state,node);
+    }
 
     return runActionResult;
 }
@@ -277,7 +326,8 @@ static bool AttemptToMakeConsistentWithoutNeedingDependenciesBuilt(RuntimeNode* 
 
     if (node->m_BuiltNode)
     {
-        if (node->m_BuiltNode->m_LeafInputSignature == node->m_CurrentLeafInputSignature->digest && !OutputFilesMissingFor(node->m_BuiltNode, queue->m_Config.m_StatCache) && node->m_BuiltNode->m_WasBuiltSuccessfully)
+        auto wasSuccessfulWithGuaranteedCorrectInputSignature = node->m_BuiltNode->m_Result == Frozen::BuiltNodeResult::kRanSuccessfullyWithGuaranteedCorrectInputSignature;
+        if (wasSuccessfulWithGuaranteedCorrectInputSignature && node->m_BuiltNode->m_LeafInputSignature == node->m_CurrentLeafInputSignature->digest && !OutputFilesMissingFor(node->m_BuiltNode, queue->m_Config.m_StatCache))
         {
             node->m_BuildResult = NodeBuildResult::kUpToDate;
             FinishNode(queue, thread_state, node);
@@ -329,7 +379,7 @@ static void EnqueueToBuildDependencies(BuildQueue *queue, ThreadState *thread_st
     CheckHasLock(&queue->m_Lock);
 
     auto& dependencies = node->m_DagNode->m_ToBuildDependencies;
-    int enqueue_count = EnqueueNodeListWithoutWakingAwaiters(queue,&thread_state->m_ScratchAlloc, dependencies, node);
+    int enqueue_count = EnqueueNodeListReversedWithoutWakingAwaitersOnlyWhenNotEnqueuedBefore(queue,&thread_state->m_ScratchAlloc, dependencies, node);
 
     if (enqueue_count > 1)
         WakeWaiters(queue, enqueue_count-1);
@@ -380,7 +430,8 @@ static void ProcessNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
         {
             case NodeBuildResult::kRanFailed:
                 queue->m_FinalBuildResult = BuildResult::kBuildError;
-                SignalMainThreadToStartCleaningUp(queue);
+                if (!queue->m_Config.m_DriverOptions->m_ContinueOnFailure)
+                    SignalMainThreadToStartCleaningUp(queue);
                 break;
             case NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun:
                 if (queue->m_FinalBuildResult == BuildResult::kOk)
@@ -397,27 +448,29 @@ static RuntimeNode *NextNode(BuildQueue *queue)
 {
     CheckHasLock(&queue->m_Lock);
 
-    int avail_count = AvailableNodeCount(queue);
+    Buffer<int32_t>* workStack = &queue->m_WorkStack;
 
-    if (0 == avail_count)
-        return nullptr;
+    while(workStack->GetCount() > 0)
+    {
+        int32_t node_index = BufferPopOne(workStack);
 
-    uint32_t read_index = queue->m_QueueReadIndex;
+        RuntimeNode *runtime_node = queue->m_Config.m_RuntimeNodes + node_index;
 
-    int32_t node_index = queue->m_Queue[read_index];
+        if (RuntimeNodeIsActive(runtime_node) || runtime_node->m_Finished)
+        {
+            //this can happen in legit situations. we allow nodes to appear on the workstack more than once. This happens in situations where
+            //a node gets queued as not-very-urgent (aka at the end of a dependency list). But later, the same node is also a dependency of something
+            //that was queued at the top of the stack. In this case, we enqueue it again, ensuring it gets processed as fast as possible. We do not
+            //bother deleting the older entry from the workstack, and instead have this check & continue.
+            continue;
+        }
+        CHECK(RuntimeNodeIsQueued(runtime_node));
 
-    // Update read index
-    queue->m_QueueReadIndex = (read_index + 1) & (queue->m_QueueCapacity - 1);
-
-    RuntimeNode *runtime_node = queue->m_Config.m_RuntimeNodes + node_index;
-
-    CHECK(RuntimeNodeIsQueued(runtime_node));
-    CHECK(!RuntimeNodeIsActive(runtime_node));
-
-    RuntimeNodeFlagUnqueued(runtime_node);
-    RuntimeNodeFlagActive(runtime_node);
-
-    return runtime_node;
+        RuntimeNodeFlagUnqueued(runtime_node);
+        RuntimeNodeFlagActive(runtime_node);
+        return runtime_node;
+    }
+    return nullptr;
 }
 
 static bool ShouldKeepBuilding(BuildQueue *queue)

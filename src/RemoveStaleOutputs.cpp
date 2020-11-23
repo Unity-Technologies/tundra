@@ -183,6 +183,22 @@ void RemoveStaleOutputs(Driver *self)
         {
             Log(kDebug, "cleaned up %s", paths[i]);
         }
+        else if (GetFileInfo(paths[i]).IsFile())
+        {
+            Log(kWarning, "Failed deleting stale output file %s", paths[i]);
+
+            JsonWriter msg;
+            JsonWriteInit(&msg, &self->m_Allocator);
+
+            JsonWriteStartObject(&msg);
+            JsonWriteKeyName(&msg, "msg");
+            JsonWriteValueString(&msg, "removeStaleOutputFailed");
+            JsonWriteKeyName(&msg, "file");
+            JsonWriteValueString(&msg, paths[i]);
+            JsonWriteEndObject(&msg);
+
+            LogStructured(&msg);
+        }
     }
 
     uint32_t nuke_count = file_nuke_count + outputdir_nuke_table.m_RecordCount;

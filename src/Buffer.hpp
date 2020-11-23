@@ -143,10 +143,11 @@ bool BufferContains(Buffer<T>* buffer, const T& element)
 
 
 template <typename T, typename U>
-void BufferAppendOneIfNotPresent(Buffer<T> *buffer, MemAllocHeap *heap, U elem)
+bool BufferAppendOneIfNotPresent(Buffer<T> *buffer, MemAllocHeap *heap, U elem)
 {
     if (BufferContains(buffer, (T)elem))
-        return;
+        return false;
     T *dest = BufferAlloc(buffer, heap, 1);
     *dest = (T)elem;
+    return true;
 }

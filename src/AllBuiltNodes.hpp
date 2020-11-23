@@ -19,9 +19,19 @@ struct NodeInputFileData
 
 static_assert(sizeof(NodeInputFileData) == 16, "struct layout");
 
+namespace BuiltNodeResult
+{
+    enum Enum
+    {
+        kRanSuccessfullyWithGuaranteedCorrectInputSignature,
+        kRanSuccessfullyButInputSignatureMightBeIncorrect,
+        kRanFailed,
+    };
+}
+
 struct BuiltNode
 {
-    uint32_t m_WasBuiltSuccessfully;
+    BuiltNodeResult::Enum m_Result;
     HashDigest m_InputSignature;
     HashDigest m_LeafInputSignature;
     FrozenArray<FrozenFileAndHash> m_OutputFiles;
@@ -34,7 +44,7 @@ struct BuiltNode
 
 struct AllBuiltNodes
 {
-    static const uint32_t MagicNumber = 0x53532dc2 ^ kTundraHashMagic;
+    static const uint32_t MagicNumber = 0x53533dc2 ^ kTundraHashMagic;
 
     uint32_t m_MagicNumber;
 

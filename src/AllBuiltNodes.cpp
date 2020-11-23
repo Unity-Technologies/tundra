@@ -41,14 +41,14 @@ bool NodeWasUsedByThisDagPreviously(const Frozen::BuiltNode *previously_built_no
 }
 
 template <class TNodeType>
-static void save_node_sharedcode(bool nodeWasBuiltSuccesfully, const HashDigest *input_signature, const HashDigest* leafinput_signature, const TNodeType *src_node, const HashDigest *guid, const StateSavingSegments &segments, const SinglyLinkedPathList* additionalDiscoveredOutputFiles)
+static void save_node_sharedcode(Frozen::BuiltNodeResult::Enum builtNodeResult, const HashDigest *input_signature, const HashDigest* leafinput_signature, const TNodeType *src_node, const HashDigest *guid, const StateSavingSegments &segments, const SinglyLinkedPathList* additionalDiscoveredOutputFiles, bool emitDataForBeeWhy)
 {
     //we're writing to two arrays in one go.  the FrozenArray<HashDigest> m_NodeGuids and the FrozenArray<BuiltNode> m_BuiltNodes
     //the hashdigest is quick
     BinarySegmentWriteHashDigest(segments.guid, *guid);
 
     //the rest not so much
-    BinarySegmentWriteInt32(segments.built_nodes, nodeWasBuiltSuccesfully ? 1 : 0);
+    BinarySegmentWriteInt32(segments.built_nodes, builtNodeResult);
     BinarySegmentWriteHashDigest(segments.built_nodes, *input_signature);
     BinarySegmentWriteHashDigest(segments.built_nodes, *leafinput_signature);
 
@@ -83,7 +83,8 @@ static void save_node_sharedcode(bool nodeWasBuiltSuccesfully, const HashDigest 
         WriteFrozenFileAndHashIntoBuiltNodesStream(src_node->m_AuxOutputFiles[i]);
 
     BinarySegmentWritePointer(segments.built_nodes, BinarySegmentPosition(segments.string));
-    BinarySegmentWriteStringData(segments.string, src_node->m_Action);
+
+    BinarySegmentWriteStringData(segments.string, emitDataForBeeWhy ? src_node->m_Action : "");
 }
 
 
@@ -141,21 +142,36 @@ bool SaveAllBuiltNodes(Driver *self)
     int emitted_built_nodes_count = 0;
     uint32_t this_dag_hashed_identifier = self->m_DagData->m_HashedIdentifier;
 
+    // Collapse runtime state to persistent state
+    auto BuiltNodeResultFor = [](const RuntimeNode* runtime_node) -> Frozen::BuiltNodeResult::Enum {
+        switch (runtime_node->m_BuildResult)
+        {
+            case NodeBuildResult::kUpToDate:
+            case NodeBuildResult::kRanSuccesfully:
+            case NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun:
+                return RuntimeNodeGetInputSignatureMightBeIncorrect(runtime_node)
+                    ? Frozen::BuiltNodeResult::kRanSuccessfullyButInputSignatureMightBeIncorrect
+                    : Frozen::BuiltNodeResult::kRanSuccessfullyWithGuaranteedCorrectInputSignature;
+            case NodeBuildResult::kDidNotRun:
+            case NodeBuildResult::kRanFailed:
+                return Frozen::BuiltNodeResult::kRanFailed;
+        }
+        Croak("MSVC cannot see the switch statement above can never be left");
+    };
+
     auto EmitBuiltNodeFromRuntimeNode = [=, &emitted_built_nodes_count, &shared_strings](const RuntimeNode* runtime_node, const HashDigest *guid) -> void {
         emitted_built_nodes_count++;
         MemAllocLinear *scratch = &self->m_Allocator;
 
         const Frozen::DagNode* dag_node = runtime_node->m_DagNode;
 
-        bool nodeWasBuiltSuccessfully = runtime_node->m_BuildResult != NodeBuildResult::kRanFailed;
-
         HashDigest leafInputSignatureDigest = {};
         if (runtime_node->m_CurrentLeafInputSignature)
             leafInputSignatureDigest = runtime_node->m_CurrentLeafInputSignature->digest;
 
-        save_node_sharedcode(nodeWasBuiltSuccessfully, &runtime_node->m_CurrentInputSignature, &leafInputSignatureDigest, runtime_node->m_DagNode, guid, segments, runtime_node->m_DynamicallyDiscoveredOutputFiles);
+        save_node_sharedcode(BuiltNodeResultFor(runtime_node), &runtime_node->m_CurrentInputSignature, &leafInputSignatureDigest, runtime_node->m_DagNode, guid, segments, runtime_node->m_DynamicallyDiscoveredOutputFiles, self->m_DagData->m_EmitDataForBeeWhy);
 
-        int32_t file_count = dag_node->m_InputFiles.GetCount();
+        int32_t file_count = self->m_DagData->m_EmitDataForBeeWhy ? dag_node->m_InputFiles.GetCount() : 0;
         BinarySegmentWriteInt32(built_nodes_seg, file_count);
         BinarySegmentWritePointer(built_nodes_seg, BinarySegmentPosition(array_seg));
         for (int32_t i = 0; i < file_count; ++i)
@@ -211,10 +227,10 @@ bool SaveAllBuiltNodes(Driver *self)
 
     auto EmitBuiltNodeFromPreviouslyBuiltNode = [=, &emitted_built_nodes_count, &shared_strings](const Frozen::BuiltNode *built_node, const HashDigest *guid) -> void {
 
-        save_node_sharedcode(built_node->m_WasBuiltSuccessfully, &built_node->m_InputSignature, &built_node->m_LeafInputSignature, built_node, guid, segments, nullptr);
+        save_node_sharedcode(built_node->m_Result, &built_node->m_InputSignature, &built_node->m_LeafInputSignature, built_node, guid, segments, nullptr, self->m_DagData->m_EmitDataForBeeWhy);
         emitted_built_nodes_count++;
 
-        int32_t file_count = built_node->m_InputFiles.GetCount();
+        int32_t file_count = self->m_DagData->m_EmitDataForBeeWhy ? built_node->m_InputFiles.GetCount() : 0;
         BinarySegmentWriteInt32(built_nodes_seg, file_count);
         BinarySegmentWritePointer(built_nodes_seg, BinarySegmentPosition(array_seg));
         for (int32_t i = 0; i < file_count; ++i)
@@ -268,7 +284,19 @@ bool SaveAllBuiltNodes(Driver *self)
         // Make sure this node is still relevant before saving.
         bool node_is_in_dag = BinarySearch(dag_node_guids, dag_node_count, *guid) != nullptr;
 
-        return node_is_in_dag || !NodeWasUsedByThisDagPreviously(built_node, this_dag_hashed_identifier);
+        if (node_is_in_dag)
+            return true;
+
+        if (!NodeWasUsedByThisDagPreviously(built_node, this_dag_hashed_identifier))
+            return true;
+
+        for (auto& outputfile : built_node->m_OutputFiles)
+        {
+            // We want to make sure we keep all nodes that have at some point written files to disk which are still present
+            if (StatCacheStat(&self->m_StatCache, outputfile.m_Filename.Get(), outputfile.m_FilenameHash).Exists())
+                return true;
+        }
+        return false;
     };
 
     {

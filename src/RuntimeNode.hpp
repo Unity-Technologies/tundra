@@ -25,6 +25,7 @@ namespace RuntimeNodeFlags
     static const uint16_t kExplicitlyRequested = 1 << 3;
     static const uint16_t kExplicitlyRequestedThroughUseDependency = 1 << 4;
     static const uint16_t kAttemptedCacheLookup = 1 << 5;
+    static const uint16_t kInputSignatureMightBeIncorrect = 1 << 6;
 }
 
 namespace Frozen
@@ -121,4 +122,14 @@ inline bool RuntimeNodeIsExplicitlyRequestedThroughUseDependency(const RuntimeNo
 inline void RuntimeNodeSetExplicitlyRequestedThroughUseDependency(RuntimeNode *runtime_node)
 {
     runtime_node->m_Flags |= RuntimeNodeFlags::kExplicitlyRequestedThroughUseDependency;
+}
+
+inline void RuntimeNodeSetInputSignatureMightBeIncorrect(RuntimeNode *runtime_node)
+{
+    runtime_node->m_Flags |= RuntimeNodeFlags::kInputSignatureMightBeIncorrect;
+}
+
+inline bool RuntimeNodeGetInputSignatureMightBeIncorrect(const RuntimeNode *runtime_node)
+{
+    return 0 != (runtime_node->m_Flags & RuntimeNodeFlags::kInputSignatureMightBeIncorrect);
 }

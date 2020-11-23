@@ -1,4 +1,5 @@
 #include "Common.hpp"
+#include "BuildQueue.hpp"
 #include "PathUtil.hpp"
 #include "FileInfo.hpp"
 #include "Mutex.hpp"
@@ -99,7 +100,7 @@ void NORETURN Croak(const char *fmt, ...)
     if (DebuggerAttached())
         FlushAndAbort();
     else
-        exit(1);
+        exit(BuildResult::kBuildError);
 }
 
 void NORETURN CroakErrno(const char *fmt, ...)
@@ -114,7 +115,7 @@ void NORETURN CroakErrno(const char *fmt, ...)
     if (DebuggerAttached())
         FlushAndAbort();
     else
-        exit(1);
+        exit(BuildResult::kBuildError);
 }
 
 void NORETURN CroakAbort(const char *fmt, ...)

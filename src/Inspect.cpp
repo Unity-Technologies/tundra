@@ -212,6 +212,7 @@ static void DumpDag(const Frozen::Dag *data)
 
     printf("m_StateFileName : %s\n", data->m_StateFileName.Get());
     printf("m_StateFileNameTmp : %s\n", data->m_StateFileNameTmp.Get());
+    printf("m_StateFileNameMapped : %s\n", data->m_StateFileNameMapped.Get());
     printf("m_ScanCacheFileName : %s\n", data->m_ScanCacheFileName.Get());
     printf("m_ScanCacheFileNameTmp : %s\n", data->m_ScanCacheFileNameTmp.Get());
     printf("m_DigestCacheFileName : %s\n", data->m_DigestCacheFileName.Get());
@@ -241,7 +242,7 @@ static void DumpState(const Frozen::AllBuiltNodes *data)
 
         DigestToString(digest_str, data->m_NodeGuids[i]);
         printf("  guid: %s\n", digest_str);
-        printf("  m_WasBuiltSuccessfully: %d\n", node.m_WasBuiltSuccessfully);
+        printf("  m_Result: %d\n", node.m_Result);
         DigestToString(digest_str, node.m_InputSignature);
         printf("  input_signature: %s\n", digest_str);
         DigestToString(digest_str, node.m_LeafInputSignature);

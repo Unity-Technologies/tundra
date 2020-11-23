@@ -24,8 +24,6 @@ struct OutputBufferData
 struct ExecResult
 {
     int m_ReturnCode;
-    bool m_WasSignalled;
-    bool m_WasAborted;
     bool m_RequiresFrontendRerun;
     const Frozen::DagNode *m_FrozenNodeData;
     OutputBufferData m_OutputBuffer;

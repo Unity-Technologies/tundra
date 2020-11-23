@@ -79,8 +79,6 @@ ExecuteProcess(
     ExecResult result;
 
     result.m_ReturnCode = 1;
-    result.m_WasSignalled = false;
-    result.m_WasAborted = false;
     result.m_OutputBuffer.buffer = nullptr;
 
     if ((heap == nullptr && !stream_to_stdout) || (heap != nullptr && stream_to_stdout))
@@ -136,7 +134,7 @@ ExecuteProcess(
         }
 
         if (-1 == execv("/bin/sh", (char **)args))
-            exit(1);
+            Croak("Failed executing /bin/sh");
         /* we never get here */
         abort();
     }
@@ -256,21 +254,7 @@ ExecuteProcess(
         close(stdout_pipe[pipe_read]);
         close(stderr_pipe[pipe_read]);
 
-        if (WIFSIGNALED(return_code))
-        {
-            result.m_ReturnCode = 1;
-
-            int sig = WTERMSIG(return_code);
-            if (sig == SIGINT)
-                result.m_WasAborted = true;
-            else
-                result.m_WasSignalled = true;
-        }
-        else
-        {
-            result.m_ReturnCode = WEXITSTATUS(return_code);
-        }
-
+        result.m_ReturnCode = WEXITSTATUS(return_code);
         return result;
     }
 }

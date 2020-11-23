@@ -890,9 +890,11 @@ static bool CompileDag(const JsonObjectValue *root, BinaryWriter *writer, MemAll
     }
 
     BinarySegmentWriteInt32(main_seg, (int)FindIntValue(root, "DaysToKeepUnreferencedNodesAround", -1));
+    BinarySegmentWriteInt32(main_seg, (int)FindIntValue(root, "EmitDataForBeeWhy", 1));
 
     WriteStringPtr(main_seg, str_seg, FindStringValue(root, "StateFileName", ".tundra2.state"));
     WriteStringPtr(main_seg, str_seg, FindStringValue(root, "StateFileNameTmp", ".tundra2.state.tmp"));
+    WriteStringPtr(main_seg, str_seg, FindStringValue(root, "StateFileNameMapped", ".tundra2.state.mapped"));
 
     WriteStringPtr(main_seg, str_seg, FindStringValue(root, "ScanCacheFileName", ".tundra2.scancache"));
     WriteStringPtr(main_seg, str_seg, FindStringValue(root, "ScanCacheFileNameTmp", ".tundra2.scancache.tmp"));
@@ -937,7 +939,7 @@ static bool CreateDagFromJsonData(char *json_memory, const char *dag_fn)
             if (obj->m_Count == 0)
             {
                 Log(kInfo, "Nothing to do");
-                exit(0);
+                exit(BuildResult::kOk);
             }
 
             BinaryWriter writer;

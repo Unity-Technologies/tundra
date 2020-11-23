@@ -29,6 +29,8 @@ struct DriverOptions
     bool m_SilenceIfPossible;
     bool m_DontReusePreviousResults;
     bool m_DebugSigning;
+    bool m_ContinueOnFailure;
+    bool m_StandardInputCanary;
     bool m_Inspect;
     int m_IdentificationColor;
     int m_VisualMaxNodes;

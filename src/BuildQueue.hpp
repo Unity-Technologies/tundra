@@ -91,10 +91,7 @@ struct BuildQueue
     Mutex m_BuildFinishedMutex;
     bool m_BuildFinishedConditionalVariableSignaled;
 
-    int32_t *m_Queue;
-    uint32_t m_QueueCapacity;
-    uint32_t m_QueueReadIndex;
-    uint32_t m_QueueWriteIndex;
+    Buffer<int32_t> m_WorkStack;
     BuildQueueConfig m_Config;
 
     BuildResult::Enum m_FinalBuildResult;
