@@ -207,7 +207,7 @@ bool DigestCacheHasChanged(DigestCache *self, const char *filename, uint32_t has
     ReadWriteLockRead(&self->m_Lock);
     DigestCacheRecord *r = (DigestCacheRecord *)HashTableLookup(&self->m_Table, hash, filename);
 
-    if (r->m_Dirty)
+    if (r != nullptr && r->m_Dirty)
         r = nullptr;
 
     bool result;
