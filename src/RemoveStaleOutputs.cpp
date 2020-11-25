@@ -127,6 +127,7 @@ void RemoveStaleOutputs(Driver *self)
         if (wasChild)
             return;
 
+        add_parent_directories_to_nuke_table(path);
         //It's possible and valid for this file to not exist. We write entries into the buildstate for nodes that failed. For nodes that failed
         //we do not know if they did or did not happen to write their output files. We still want to delete potentially stray files should that
         //node be removed from the dag in the future. It's also possible that the output files didn't get written. in that case we should not try
@@ -138,8 +139,6 @@ void RemoveStaleOutputs(Driver *self)
         {
             HashSetInsert(&nuke_table, path_hash, path);
         }
-
-        add_parent_directories_to_nuke_table(path);
     };
 
 
