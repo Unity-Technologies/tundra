@@ -199,47 +199,44 @@ void GetCachingBehaviourSettingsFromEnvironment(bool* attemptReads, bool* attemp
     {
         *attemptReads = true;
         *attemptWrites = true;
-        return;
     }
-
-    if (strcmp("read", behaviour) == 0)
+    else if (strcmp("read", behaviour) == 0)
     {
         *attemptReads = true;
-        return;
     }
-
-    if (strcmp("write", behaviour) == 0)
+    else if (strcmp("write", behaviour) == 0)
     {
         *attemptWrites = true;
-        return;
     }
-
-    if (strcmp("disabled", behaviour) == 0)
+    else if (strcmp("disabled", behaviour) == 0)
     {
-        return;
+        // disable reads and writes
     }
-
-    for (const char* c_ptr = behaviour; ; c_ptr++)
+    else
     {
-        char c = *c_ptr;
-        if (c == 0)
-            break;
-        if (c == 'R')
+        // fallback to old cache behavior notation
+        for (const char* c_ptr = behaviour; ; c_ptr++)
         {
-            *attemptReads = true;
-            continue;
-        }
-        if (c == 'W')
-        {
-            *attemptWrites = true;
-            continue;
-        }
-        if (c == '_')
-        {
-            continue;
-        }
+            char c = *c_ptr;
+            if (c == 0)
+                break;
+            if (c == 'R')
+            {
+                *attemptReads = true;
+                continue;
+            }
+            if (c == 'W')
+            {
+                *attemptWrites = true;
+                continue;
+            }
+            if (c == '_')
+            {
+                continue;
+            }
 
-        Croak("The cache behaviour string provided: %s is not valid.  a character that is not read,readwrite or disabled", behaviour);
+            Croak("The cache behaviour string provided: %s is not valid. A character or string that is not read, write, readwrite or disabled.", behaviour);
+        }
     }
 
     Log(kDebug, "Caching enabled with %s=%s %s=%s and mode: %s%s%s\n", kENV_CACHE_SERVER_ADDRESS, server, kENV_REAPI_CACHE_CLIENT, reapi_cache_client, ModeNameFor(*attemptReads, *attemptWrites));
