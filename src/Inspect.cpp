@@ -88,6 +88,7 @@ static void DumpDag(const Frozen::Dag *data)
 {
     int node_count = data->m_NodeCount;
     printf("magic number: 0x%08x\n", data->m_MagicNumber);
+    printf("hashed identifier: 0x%08x\n", data->m_HashedIdentifier);
     printf("node count: %u\n", node_count);
     for (int i = 0; i < node_count; ++i)
     {
@@ -253,6 +254,9 @@ static void DumpState(const Frozen::AllBuiltNodes *data)
         printf("  aux outputs:\n");
         for (const FrozenFileAndHash& fileAndHash : node.m_AuxOutputFiles)
             printf("    (0x%08x) %s\n", fileAndHash.m_FilenameHash, fileAndHash.m_Filename.Get());
+        printf("  m_DagsWeHaveSeenThisNodeInPreviously:\n");
+        for (const auto& dagsWeHaveSeenThisNodeInPreviously : node.m_DagsWeHaveSeenThisNodeInPreviously)
+            printf("    0x%08x\n", dagsWeHaveSeenThisNodeInPreviously);
 
         printf("  input files:\n");
         for (int i=0; i!=node.m_InputFiles.GetCount(); i++)
