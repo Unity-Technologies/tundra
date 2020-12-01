@@ -431,6 +431,8 @@ int main(int argc, char *argv[])
 
 
     int finished_node_count = 0;
+    BuildResult::Enum build_result = BuildResult::kOk;
+    const char* frontend_rerun_reason = nullptr;
 
     if (!DriverInitData(&driver))
         goto leave;
@@ -443,7 +445,7 @@ int main(int argc, char *argv[])
     buildTitle = strdup(driver.m_DagData->m_BuildTitle.Get());
 #endif
 
-    BuildResult::Enum build_result = BuildResult::kOk;
+
     if (driver.m_Options.m_ShowTargets)
     {
         DriverShowTargets(&driver);
@@ -466,7 +468,6 @@ int main(int argc, char *argv[])
 
     RemoveStaleOutputs(&driver);
 
-    const char* frontend_rerun_reason = nullptr;
     build_result = DriverBuild(&driver, &finished_node_count, &frontend_rerun_reason, (const char**) argv, argc);
 
     //we need to copy the reason, as the pointer we get points to the dag that we're about to deallocate
