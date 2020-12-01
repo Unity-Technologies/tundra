@@ -345,7 +345,7 @@ static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, M
     {
         return AreNodeFileAndGlobSignaturesStillValid(node, thread_state, out_outOfDateSignaturePath)
             ? NodeBuildResult::kUpToDate
-            : NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun;
+            : NodeBuildResult::kUpToDataButDependeesRequireFrontendRerun;
     }
 
     NodeBuildResult::Enum runActionResult = RunAction(queue, thread_state, node, queue_lock);
@@ -519,6 +519,7 @@ static void ProcessNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
                     SignalMainThreadToStartCleaningUp(queue);
                 break;
             case NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun:
+            case NodeBuildResult::kUpToDataButDependeesRequireFrontendRerun:
                 if (queue->m_FinalBuildResult == BuildResult::kOk)
                 {
                     LogOutOfDateSignaturePath(node, outOfDateSignaturePath, &thread_state->m_ScratchAlloc);

@@ -149,6 +149,7 @@ bool SaveAllBuiltNodes(Driver *self)
             case NodeBuildResult::kUpToDate:
             case NodeBuildResult::kRanSuccesfully:
             case NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun:
+            case NodeBuildResult::kUpToDataButDependeesRequireFrontendRerun:
                 return RuntimeNodeGetInputSignatureMightBeIncorrect(runtime_node)
                     ? Frozen::BuiltNodeResult::kRanSuccessfullyButInputSignatureMightBeIncorrect
                     : Frozen::BuiltNodeResult::kRanSuccessfullyWithGuaranteedCorrectInputSignature;
@@ -269,8 +270,15 @@ bool SaveAllBuiltNodes(Driver *self)
         switch(runtime_node->m_BuildResult)
         {
             case NodeBuildResult::kDidNotRun:
-                return false;
+
+            //for kUpToDate it is very important that we prefer the previously built node over the runtime node.
+            //the previously built node will have the dynamically discovered outputfiles from the targetdirectories baked into its m_OutputFiles.
+            //these files are not present in the dag. If we were to prefer to write out the runtime version, we'd lose the information about the output
+            //files. the bee repo now has a test for this: TargetDirectory_WhenRemovingSingleOutputFile_GetsRebuilt
+            case NodeBuildResult::kUpToDataButDependeesRequireFrontendRerun:
             case NodeBuildResult::kUpToDate:
+                return false;
+
             case NodeBuildResult::kRanSuccesfully:
             case NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun:
             case NodeBuildResult::kRanFailed:
