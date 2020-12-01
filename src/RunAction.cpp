@@ -118,41 +118,8 @@ static ExecResult RunActualAction(RuntimeNode* node, ThreadState* thread_state, 
     return result;
 };
 
-NodeBuildResult::Enum PostRunActionBookkeeping(RuntimeNode* node, ThreadState* thread_state)
+void PostRunActionBookkeeping(RuntimeNode* node, ThreadState* thread_state)
 {
-    auto VerifyNodeGlobSignatures = [=]() -> bool {
-        for (const Frozen::DagGlobSignature &sig : node->m_DagNode->m_GlobSignatures)
-        {
-            HashDigest digest = CalculateGlobSignatureFor(sig.m_Path, sig.m_Filter, sig.m_Recurse, thread_state->m_Queue->m_Config.m_Heap, &thread_state->m_ScratchAlloc);
-
-            // Compare digest with the one stored in the signature block
-            if (0 != memcmp(&digest, &sig.m_Digest, sizeof digest))
-                return false;
-        }
-        return true;
-    };
-
-    auto VerifyFileSignatures = [=]() -> bool {
-        // Check timestamps of frontend files used to produce the DAG
-        for (const Frozen::DagFileSignature &sig : node->m_DagNode->m_FileSignatures)
-        {
-            const char *path = sig.m_Path;
-
-            uint64_t timestamp = sig.m_Timestamp;
-            FileInfo info = GetFileInfo(path);
-
-            if (info.m_Timestamp != timestamp)
-                return false;
-        }
-        return true;
-    };
-
-    bool requireFrontendRerun = false;
-    if (!VerifyNodeGlobSignatures())
-        requireFrontendRerun = true;
-    if (!VerifyFileSignatures())
-        requireFrontendRerun = true;
-
     if (node->m_DagNode->m_OutputDirectories.GetCount() > 0)
         node->m_DynamicallyDiscoveredOutputFiles = AllocateEmptyPathList(thread_state->m_ThreadIndex);
 
@@ -168,9 +135,6 @@ NodeBuildResult::Enum PostRunActionBookkeeping(RuntimeNode* node, ThreadState* t
         DigestCacheMarkDirty(digest_cache, output.m_Filename, output.m_FilenameHash);
         StatCacheMarkDirty(stat_cache, output.m_Filename, output.m_FilenameHash);
     }
-    return requireFrontendRerun
-        ? NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun
-        : NodeBuildResult::kRanSuccesfully;
 };
 
 NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node, Mutex *queue_lock)
@@ -328,7 +292,7 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
         }
     }
 
-    NodeBuildResult::Enum nodeBuildResult = PostRunActionBookkeeping(node, thread_state);
+    PostRunActionBookkeeping(node, thread_state);
 
     //maybe consider changing this to use a dedicated lock for printing, instead of using the queuelock.
     MutexLock(queue_lock);
@@ -339,7 +303,7 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
     ExecResultFreeMemory(&result);
 
     if (0 == result.m_ReturnCode && passedOutputValidation < ValidationResult::UnexpectedConsoleOutputFail)
-        return nodeBuildResult;
+        return NodeBuildResult::kRanSuccesfully;
 
     // Clean up output files after a failed build unless they are precious,
     // or unless the failure was from failing to write one of them

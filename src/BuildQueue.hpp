@@ -95,6 +95,7 @@ struct BuildQueue
     BuildQueueConfig m_Config;
 
     BuildResult::Enum m_FinalBuildResult;
+    const char* m_OutOfDateSignaturePath;
     uint32_t m_FinishedNodeCount;
     uint32_t m_AmountOfNodesEverQueued;
 

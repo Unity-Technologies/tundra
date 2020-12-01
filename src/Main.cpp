@@ -466,7 +466,17 @@ int main(int argc, char *argv[])
 
     RemoveStaleOutputs(&driver);
 
-    build_result = DriverBuild(&driver, &finished_node_count, (const char**) argv, argc);
+    const char* frontend_rerun_reason = nullptr;
+    build_result = DriverBuild(&driver, &finished_node_count, &frontend_rerun_reason, (const char**) argv, argc);
+
+    //we need to copy the reason, as the pointer we get points to the dag that we're about to deallocate
+    char frontend_rerun_reason_copy[kMaxPathLength];
+    frontend_rerun_reason_copy[0] = 0;
+    if (frontend_rerun_reason != nullptr)
+    {
+        strcpy(frontend_rerun_reason_copy, frontend_rerun_reason);
+        frontend_rerun_reason = nullptr;
+    }
 
     if (!SaveAllBuiltNodes(&driver))
         Log(kError, "Couldn't save AllBuiltNodes");
@@ -529,9 +539,10 @@ leave:
     bool haveTitle = strlen(buildTitle) > 0;
     if (haveTitle && (build_result != 0 || !options.m_SilenceIfPossible))
     {
+        MessageStatusLevel::Enum status = (build_result == BuildResult::kOk || build_result == BuildResult::kRequireFrontendRerun) ? MessageStatusLevel::Success : MessageStatusLevel::Failure;
         if (total_time < 60.0)
         {
-            PrintServiceMessage(build_result == 0 ? MessageStatusLevel::Success : MessageStatusLevel::Failure, "*** %s %s (%.2f seconds), %d items updated, %d evaluated", buildTitle, BuildResult::Names[build_result], total_time, g_Stats.m_ExecCount, finished_node_count);
+            PrintServiceMessage(status, "*** %s %s (%.2f seconds), %d items updated, %d evaluated", buildTitle, BuildResult::Names[build_result], total_time, g_Stats.m_ExecCount, finished_node_count);
         }
         else
         {
@@ -541,8 +552,10 @@ leave:
             int m = t / 60;
             t -= m * 60;
             int s = t;
-            PrintServiceMessage(build_result == 0 ? MessageStatusLevel::Success : MessageStatusLevel::Failure, "*** %s %s (%.2f seconds - %d:%02d:%02d), %d items updated, %d evaluated", buildTitle, BuildResult::Names[build_result], total_time, h, m, s, g_Stats.m_ExecCount, finished_node_count);
+            PrintServiceMessage(status, "*** %s %s (%.2f seconds - %d:%02d:%02d), %d items updated, %d evaluated", buildTitle, BuildResult::Names[build_result], total_time, h, m, s, g_Stats.m_ExecCount, finished_node_count);
         }
+        if (build_result == BuildResult::kRequireFrontendRerun && strlen(frontend_rerun_reason_copy) > 0)
+            PrintServiceMessage(MessageStatusLevel::Success, "*** additional run caused by: %s", frontend_rerun_reason_copy);
     }
 
     SetStructuredLogFileName(nullptr);

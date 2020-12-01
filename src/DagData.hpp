@@ -59,6 +59,20 @@ struct DagFileSignature
     uint8_t m_Padding[4];
     uint64_t m_Timestamp;
 };
+
+struct DagStatSignature
+{
+    enum Enum
+    {
+        File,
+        Directory,
+        DoesNotExist
+    };
+
+    FrozenString m_Path;
+    uint32_t m_StatResult;
+};
+
 static_assert(offsetof(DagFileSignature, m_Timestamp) == 8, "struct layout");
 static_assert(sizeof(DagFileSignature) == 16, "struct layout");
 
@@ -119,6 +133,7 @@ struct DagNode
 
     FrozenArray<int32_t> m_SharedResources;
     FrozenArray<DagFileSignature> m_FileSignatures;
+    FrozenArray<DagStatSignature> m_StatSignatures;
     FrozenArray<DagGlobSignature> m_GlobSignatures;
     FrozenArray<FrozenFileAndHash> m_CachingInputIgnoreList;
     uint32_t m_Flags;
@@ -137,7 +152,7 @@ struct SharedResourceData
 
 struct Dag
 {
-    static const uint32_t MagicNumber = 0x24efa246 ^ kTundraHashMagic;
+    static const uint32_t MagicNumber = 0x931fa246 ^ kTundraHashMagic;
 
     uint32_t m_MagicNumber;
 
@@ -153,6 +168,7 @@ struct Dag
     FrozenArray<SharedResourceData> m_SharedResources;
 
     FrozenArray<DagFileSignature> m_FileSignatures;
+    FrozenArray<DagStatSignature> m_StatSignatures;
     FrozenArray<DagGlobSignature> m_GlobSignatures;
 
     //we should remove this feature, and exluseively use the new .TargetDirectories that live on DagNode.

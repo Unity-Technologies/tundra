@@ -7,6 +7,7 @@
 #include "RuntimeNode.hpp"
 #include "BuildLoop.hpp"
 #include "Driver.hpp"
+#include "NodeResultPrinting.hpp"
 #include <stdarg.h>
 #include <algorithm>
 
@@ -74,6 +75,7 @@ void BuildQueueInit(BuildQueue *queue, const BuildQueueConfig *config, const cha
     BufferInitWithCapacity(&queue->m_WorkStack, heap, 1024);
     queue->m_Config = *config;
     queue->m_FinalBuildResult = BuildResult::kOk;
+    queue->m_OutOfDateSignaturePath = nullptr;
     queue->m_FinishedNodeCount = 0;
     queue->m_MainThreadWantsToCleanUp = false;
     queue->m_BuildFinishedConditionalVariableSignaled = false;
@@ -188,6 +190,7 @@ BuildResult::Enum BuildQueueBuild(BuildQueue *queue, MemAllocLinear* scratch)
 
     if (SignalGetReason())
         return BuildResult::kInterrupted;
+
     return queue->m_FinalBuildResult;
 }
 

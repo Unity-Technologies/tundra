@@ -6,6 +6,7 @@
 #include "Profiler.hpp"
 #include "FileSign.hpp"
 #include "DagDerivedCompiler.hpp"
+#include "FileInfoHelper.hpp"
 
 static bool ExitRequestingFrontendRun(const char *reason_fmt, ...)
 {
@@ -54,6 +55,19 @@ static bool DriverCheckDagSignatures(Driver *self, char *out_of_date_reason, int
             return false;
         }
     }
+
+    for (const Frozen::DagStatSignature &sig : dag_data->m_StatSignatures)
+    {
+        const char *path = sig.m_Path;
+        FileInfo info = GetFileInfo(path);
+
+        if (GetStatSignatureStatusFor(info) != sig.m_StatResult)
+        {
+            snprintf(out_of_date_reason, out_of_date_reason_maxlength, "StatSignature changed: %s", sig.m_Path.Get());
+            return false;
+        }
+    }
+
 
     // Check directory listing fingerprints
     // Note that the digest computation in here must match the one in LuaListDirectory

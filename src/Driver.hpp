@@ -102,7 +102,7 @@ void DriverRemoveStaleOutputs(Driver *self);
 
 void DriverCleanOutputs(Driver *self);
 
-BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count, const char** argv, int argc);
+BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count, const char** out_outOfDateSignaturePath, const char** argv, int argc);
 
 bool DriverInitData(Driver *self);
 
