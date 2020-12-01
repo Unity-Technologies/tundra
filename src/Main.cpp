@@ -429,7 +429,7 @@ int main(int argc, char *argv[])
     if (driver.m_Options.m_ProfileOutput)
         ProfilerInit(driver.m_Options.m_ProfileOutput, driver.m_Options.m_ThreadCount + 1);
 
-    BuildResult::Enum build_result = BuildResult::kSetupError;
+
     int finished_node_count = 0;
 
     if (!DriverInitData(&driver))
@@ -443,17 +443,17 @@ int main(int argc, char *argv[])
     buildTitle = strdup(driver.m_DagData->m_BuildTitle.Get());
 #endif
 
+    BuildResult::Enum build_result = BuildResult::kOk;
     if (driver.m_Options.m_ShowTargets)
     {
         DriverShowTargets(&driver);
         Log(kDebug, "Only showing targets - quitting");
-        build_result = BuildResult::kOk;
         goto leave;
     }
 
     if (driver.m_Options.m_IncludesOutput != nullptr)
     {
-        build_result = ReportIncludes(&driver) ? BuildResult::kOk : BuildResult::kSetupError;
+        build_result = ReportIncludes(&driver) ? BuildResult::kOk : BuildResult::kBuildError;
         Log(kDebug, "Only reporting includes - quitting");
         goto leave;
     }
