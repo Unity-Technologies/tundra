@@ -102,7 +102,6 @@ bool LoadOrBuildDag(Driver *self, const char *dag_fn)
     snprintf(dagderived_filename, sizeof dagderived_filename, "%s_derived", dag_fn);
     dagderived_filename[sizeof(dagderived_filename) - 1] = '\0';
 
-    FileInfo dag_info = GetFileInfo(dag_fn);
     FileInfo dagderived_info = GetFileInfo(dagderived_filename);
 
     if (self->m_Options.m_DagFileNameJson != nullptr)
