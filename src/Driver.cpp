@@ -71,6 +71,7 @@ void DriverOptionsInit(DriverOptions *self)
     self->m_ProfileOutput = nullptr;
     self->m_IncludesOutput = nullptr;
     self->m_VisualMaxNodes = 1000;
+    self->m_DagFileNameJson = nullptr;
 #if defined(TUNDRA_WIN32)
     self->m_RunUnprotected = true;
 #endif

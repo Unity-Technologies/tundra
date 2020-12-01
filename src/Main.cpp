@@ -66,6 +66,7 @@ static const struct OptionTemplate
     {'p', "profile", OptionType::kString, offsetof(DriverOptions, m_ProfileOutput), "Output build profile"},
     {'C', "working-dir", OptionType::kString, offsetof(DriverOptions, m_WorkingDir), "Set working directory before building"},
     {'R', "dagfile", OptionType::kString, offsetof(DriverOptions, m_DAGFileName), "filename of where tundra should store the mmapped dag file"},
+    {'O', "dagfilejson", OptionType::kString, offsetof(DriverOptions, m_DagFileNameJson), "Filename of the json to bake (only used in explicit baking mode)"},
     {'I', "report-includes", OptionType::kString, offsetof(DriverOptions, m_IncludesOutput), "Output included files into a json file and exit"},
     {'h', "help", OptionType::kBool, offsetof(DriverOptions, m_ShowHelp), "Show help"},
 #if defined(TUNDRA_WIN32)

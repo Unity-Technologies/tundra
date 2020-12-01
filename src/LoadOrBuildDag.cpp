@@ -84,37 +84,17 @@ bool LoadOrBuildDag(Driver *self, const char *dag_fn)
 
     snprintf(out_of_date_reason, out_of_date_reason_length, "(unknown reason)");
 
-    char json_filename[kMaxPathLength];
-    snprintf(json_filename, sizeof json_filename, "%s.json", dag_fn);
-    json_filename[sizeof(json_filename) - 1] = '\0';
-
     char dagderived_filename[kMaxPathLength];
     snprintf(dagderived_filename, sizeof dagderived_filename, "%s_derived", dag_fn);
     dagderived_filename[sizeof(dagderived_filename) - 1] = '\0';
 
     FileInfo dag_info = GetFileInfo(dag_fn);
     FileInfo dagderived_info = GetFileInfo(dagderived_filename);
-    FileInfo json_info = GetFileInfo(json_filename);
 
-    if (!dag_info.Exists() && !json_info.Exists())
-        return ExitRequestingFrontendRun("%s does not exist yet", json_filename);
-
-    bool frozeDag = false;
-    if (json_info.Exists())
+    if (self->m_Options.m_DagFileNameJson != nullptr)
     {
-        bool dagExists = dag_info.Exists();
-        if (!dagExists || json_info.m_Timestamp > dag_info.m_Timestamp)
-        {
-            const char* reason = dagExists ? "Timestamp of .json > .dag" : ".dag file didn't exist";
-
-            uint64_t time_exec_started = TimerGet();
-            if (!FreezeDagJson(json_filename, dag_fn))
-                return ExitRequestingFrontendRun("%s failed to freeze", json_filename);
-            frozeDag = true;
-            uint64_t now = TimerGet();
-            double duration = TimerDiffSeconds(time_exec_started, now);
-            PrintMessage(MessageStatusLevel::Success, duration, "Freezing %s into .dag (%s)", FindFileNameInside(json_filename), reason);
-        }
+        if (!FreezeDagJson(self->m_Options.m_DagFileNameJson, dag_fn))
+            return ExitRequestingFrontendRun("%s failed to freeze", self->m_Options.m_DagFileNameJson);
     }
 
     if (!LoadFrozenData<Frozen::Dag>(dag_fn, &self->m_DagFile, &self->m_DagData))
@@ -124,7 +104,7 @@ bool LoadOrBuildDag(Driver *self, const char *dag_fn)
         return ExitRequestingFrontendRun("%s couldn't be loaded", dag_fn);
     }
 
-    if (!dagderived_info.Exists() || frozeDag)
+    if (!dagderived_info.Exists() || self->m_Options.m_DagFileNameJson != nullptr)
     {
         if (!CompileDagDerived(self->m_DagData, &self->m_Heap, &self->m_Allocator, &self->m_StatCache, dagderived_filename))
             return ExitRequestingFrontendRun("failed to create derived dag file %s", dagderived_filename);
