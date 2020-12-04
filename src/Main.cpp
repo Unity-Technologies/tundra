@@ -7,7 +7,6 @@
 #include "Profiler.hpp"
 #include "DagData.hpp"
 #include "NodeResultPrinting.hpp"
-#include "DynamicOutputDirectories.hpp"
 #include "LeafInputSignature.hpp"
 #include "RemoveStaleOutputs.hpp"
 #include "AllBuiltNodes.hpp"
@@ -437,8 +436,6 @@ int main(int argc, char *argv[])
     if (!DriverInitData(&driver))
         goto leave;
 
-    InitializeDynamicOutputDirectories(driver.m_Options.m_ThreadCount);
-
 #if TUNDRA_WIN32
     buildTitle = _strdup(driver.m_DagData->m_BuildTitle.Get());
 #else
@@ -489,8 +486,6 @@ int main(int argc, char *argv[])
         Log(kWarning, "Couldn't save SHA1 digest cache");
 
 leave:
-
-    DestroyDynamicOutputDirectories();
 
     DriverDestroy(&driver);
 

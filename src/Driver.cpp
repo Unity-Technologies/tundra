@@ -20,7 +20,6 @@
 #include "Profiler.hpp"
 #include "NodeResultPrinting.hpp"
 #include "FileSign.hpp"
-#include "DynamicOutputDirectories.hpp"
 #include "PathUtil.hpp"
 #include "CacheClient.hpp"
 #include "LeafInputSignature.hpp"
@@ -277,6 +276,11 @@ void DriverDestroy(Driver *self)
             DestroyLeafInputSignatureData(&self->m_Heap, node.m_CurrentLeafInputSignature);
         if (HashSetIsInitialized(&node.m_ImplicitInputs))
             HashSetDestroy(&node.m_ImplicitInputs);
+        if (node.m_DynamicallyDiscoveredOutputFiles != nullptr)
+        {
+            node.m_DynamicallyDiscoveredOutputFiles->Destroy();
+            HeapFree(&self->m_Heap, node.m_DynamicallyDiscoveredOutputFiles);
+        }
     }
 
     BufferDestroy(&self->m_RuntimeNodes, &self->m_Heap);

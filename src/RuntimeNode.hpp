@@ -4,6 +4,7 @@
 #include "Hash.hpp"
 #include "Buffer.hpp"
 #include "HashTable.hpp"
+#include "DynamicallyGrowingCollectionOfPaths.hpp"
 
 namespace NodeBuildResult
 {
@@ -53,7 +54,7 @@ struct RuntimeNode
     bool m_Finished;
     HashDigest m_CurrentInputSignature;
 
-    SinglyLinkedPathList* m_DynamicallyDiscoveredOutputFiles;
+    DynamicallyGrowingCollectionOfPaths* m_DynamicallyDiscoveredOutputFiles;
     LeafInputSignatureData* m_CurrentLeafInputSignature;
     HashSet<kFlagPathStrings> m_ImplicitInputs;
 };

@@ -9,7 +9,6 @@
 #include "LeafInputSignature.hpp"
 #include "Driver.hpp"
 #include "SortedArrayUtil.hpp"
-#include "DynamicOutputDirectories.hpp"
 
 bool OutputFilesMissingFor(const Frozen::BuiltNode* builtNode, StatCache *stat_cache)
 {
@@ -41,7 +40,7 @@ bool NodeWasUsedByThisDagPreviously(const Frozen::BuiltNode *previously_built_no
 }
 
 template <class TNodeType>
-static void save_node_sharedcode(Frozen::BuiltNodeResult::Enum builtNodeResult, const HashDigest *input_signature, const HashDigest* leafinput_signature, const TNodeType *src_node, const HashDigest *guid, const StateSavingSegments &segments, const SinglyLinkedPathList* additionalDiscoveredOutputFiles, bool emitDataForBeeWhy)
+static void save_node_sharedcode(Frozen::BuiltNodeResult::Enum builtNodeResult, const HashDigest *input_signature, const HashDigest* leafinput_signature, const TNodeType *src_node, const HashDigest *guid, const StateSavingSegments &segments, const DynamicallyGrowingCollectionOfPaths* additionalDiscoveredOutputFiles, bool emitDataForBeeWhy)
 {
     //we're writing to two arrays in one go.  the FrozenArray<HashDigest> m_NodeGuids and the FrozenArray<BuiltNode> m_BuiltNodes
     //the hashdigest is quick
@@ -59,20 +58,20 @@ static void save_node_sharedcode(Frozen::BuiltNodeResult::Enum builtNodeResult, 
     };
 
     int32_t file_count = src_node->m_OutputFiles.GetCount();
-    BinarySegmentWriteInt32(segments.built_nodes, file_count + (additionalDiscoveredOutputFiles == nullptr ? 0 : additionalDiscoveredOutputFiles->count));
+    BinarySegmentWriteInt32(segments.built_nodes, file_count + (additionalDiscoveredOutputFiles == nullptr ? 0 : additionalDiscoveredOutputFiles->Count()));
     BinarySegmentWritePointer(segments.built_nodes, BinarySegmentPosition(segments.array));
     for (int32_t i = 0; i < file_count; ++i)
         WriteFrozenFileAndHashIntoBuiltNodesStream(src_node->m_OutputFiles[i]);
 
     if (additionalDiscoveredOutputFiles != nullptr)
     {
-        auto iterator = additionalDiscoveredOutputFiles->head;
-        while(iterator)
+        int additionalOutputFilesCount = additionalDiscoveredOutputFiles->Count();
+        for (int32_t i = 0; i < additionalOutputFilesCount; ++i)
         {
             BinarySegmentWritePointer(segments.array, BinarySegmentPosition(segments.string));
-            BinarySegmentWriteStringData(segments.string, iterator->path);
-            BinarySegmentWriteInt32(segments.array, Djb2Hash(iterator->path));
-            iterator = iterator->next;
+            const char* path = additionalDiscoveredOutputFiles->Get(i);
+            BinarySegmentWriteStringData(segments.string, path);
+            BinarySegmentWriteInt32(segments.array, Djb2Hash(path));
         }
     }
 

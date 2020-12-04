@@ -20,7 +20,6 @@
 #include "SharedResources.hpp"
 #include "InputSignature.hpp"
 #include "MakeDirectories.hpp"
-#include "DynamicOutputDirectories.hpp"
 #include "BuildLoop.hpp"
 #include "RunAction.hpp"
 #include "FileInfo.hpp"
@@ -121,11 +120,14 @@ static ExecResult RunActualAction(RuntimeNode* node, ThreadState* thread_state, 
 void PostRunActionBookkeeping(RuntimeNode* node, ThreadState* thread_state)
 {
     if (node->m_DagNode->m_OutputDirectories.GetCount() > 0)
-        node->m_DynamicallyDiscoveredOutputFiles = AllocateEmptyPathList(thread_state->m_ThreadIndex);
+    {
+        node->m_DynamicallyDiscoveredOutputFiles = (DynamicallyGrowingCollectionOfPaths*) HeapAllocate(thread_state->m_Queue->m_Config.m_Heap, sizeof(DynamicallyGrowingCollectionOfPaths));
+        node->m_DynamicallyDiscoveredOutputFiles->Initialize(&thread_state->m_LocalHeap);
+    }
 
     for(const auto& d: node->m_DagNode->m_OutputDirectories)
     {
-        AppendDirectoryListingToList(d.m_Filename.Get(), thread_state->m_ThreadIndex, *node->m_DynamicallyDiscoveredOutputFiles);
+        node->m_DynamicallyDiscoveredOutputFiles->AddFilesInDirectory(d.m_Filename.Get());
     }
 
     auto& digest_cache = thread_state->m_Queue->m_Config.m_DigestCache;
