@@ -5,52 +5,34 @@
 void DynamicallyGrowingCollectionOfPaths::Add(const char* path)
 {
     int stringLengthIncludingTerminator = strlen(path) + 1;
-    uint32_t requiredPayloadBytes = stringLengthIncludingTerminator;
+    char* payloadBlock = BufferAlloc(&m_PathData, m_Heap, stringLengthIncludingTerminator);
+    memcpy(payloadBlock, path, stringLengthIncludingTerminator);
 
-    while (requiredPayloadBytes > (currentPayloadBlockSizeInBytes - payloadOffsetForNextPath))
-    {
-        payloadBlock = (char*) HeapReallocate(heap, payloadBlock, currentPayloadBlockSizeInBytes * 2);
-        currentPayloadBlockSizeInBytes *= 2;
-    }
-    memcpy(payloadBlock + payloadOffsetForNextPath, path, stringLengthIncludingTerminator);
-
-    if (currentOffsetsSizeInInts == numberOfStoredPaths)
-    {
-        offsetsBlock = (uint32_t*) HeapReallocate(heap, offsetsBlock, currentOffsetsSizeInInts * 2 * sizeof(uint32_t));
-        currentOffsetsSizeInInts *= 2;
-    }
-
-    offsetsBlock[numberOfStoredPaths++] = payloadOffsetForNextPath;
-    payloadOffsetForNextPath += stringLengthIncludingTerminator;
+    uint32_t* offset = BufferAlloc(&m_PathOffsets, m_Heap, 1);
+    *offset = payloadBlock - m_PathData.begin();
 }
 
 uint32_t DynamicallyGrowingCollectionOfPaths::Count() const
 {
-    return numberOfStoredPaths;
+    return m_PathOffsets.m_Size;
 }
 
 const char* DynamicallyGrowingCollectionOfPaths::Get(uint32_t index) const
 {
-    return &payloadBlock[offsetsBlock[index]];
+    return &m_PathData[m_PathOffsets[index]];
 }
 
 void DynamicallyGrowingCollectionOfPaths::Initialize(MemAllocHeap* heap)
 {
-    this->heap = heap;
-
-    offsetsBlock = (uint32_t*) HeapAllocate(heap, 8 * sizeof(uint32_t));
-    currentOffsetsSizeInInts = 8;
-    numberOfStoredPaths = 0;
-
-    payloadBlock = (char*) HeapAllocate(heap, 1024);
-    currentPayloadBlockSizeInBytes = 1024;
-    payloadOffsetForNextPath = 0;
+    m_Heap = heap;
+    BufferInitWithCapacity(&m_PathData, heap, 1024);
+    BufferInitWithCapacity(&m_PathOffsets, heap, 8);
 }
 
 void DynamicallyGrowingCollectionOfPaths::Destroy()
 {
-    HeapFree(heap, offsetsBlock);
-    HeapFree(heap, payloadBlock);
+    BufferDestroy(&m_PathData, m_Heap);
+    BufferDestroy(&m_PathOffsets, m_Heap);
 }
 
 static void Callback(void* ctx, const FileInfo& fileInfo, const char* path)
