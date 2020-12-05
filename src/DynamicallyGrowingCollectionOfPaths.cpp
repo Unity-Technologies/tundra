@@ -8,8 +8,7 @@ void DynamicallyGrowingCollectionOfPaths::Add(const char* path)
     char* payloadBlock = BufferAlloc(&m_PathData, m_Heap, stringLengthIncludingTerminator);
     memcpy(payloadBlock, path, stringLengthIncludingTerminator);
 
-    uint32_t* offset = BufferAlloc(&m_PathOffsets, m_Heap, 1);
-    *offset = payloadBlock - m_PathData.begin();
+    BufferAppendOne(&m_PathOffsets, m_Heap, payloadBlock - m_PathData.begin());
 }
 
 uint32_t DynamicallyGrowingCollectionOfPaths::Count() const
