@@ -225,9 +225,11 @@ bool SaveAllBuiltNodes(Driver *self)
             BinarySegmentWriteUint32(array_seg, this_dag_hashed_identifier);
     };
 
-    auto EmitBuiltNodeFromPreviouslyBuiltNode = [=, &emitted_built_nodes_count, &shared_strings](const Frozen::BuiltNode *built_node, const HashDigest *guid) -> void {
+    auto EmitBuiltNodeFromPreviouslyBuiltNode = [=, &emitted_built_nodes_count, &shared_strings](const Frozen::BuiltNode *built_node, const HashDigest *guid, const HashDigest* leafInputSignature = nullptr) -> void {
 
-        save_node_sharedcode(built_node->m_Result, &built_node->m_InputSignature, &built_node->m_LeafInputSignature, built_node, guid, segments, nullptr, self->m_DagData->m_EmitDataForBeeWhy);
+        if (leafInputSignature == nullptr)
+            leafInputSignature = &built_node->m_LeafInputSignature;
+        save_node_sharedcode(built_node->m_Result, &built_node->m_InputSignature, leafInputSignature, built_node, guid, segments, nullptr, self->m_DagData->m_EmitDataForBeeWhy);
         emitted_built_nodes_count++;
 
         int32_t file_count = self->m_DagData->m_EmitDataForBeeWhy ? built_node->m_InputFiles.GetCount() : 0;
@@ -256,6 +258,33 @@ bool SaveAllBuiltNodes(Driver *self)
         BinarySegmentWrite(array_seg, built_node->m_DagsWeHaveSeenThisNodeInPreviously.GetArray(), dag_count * sizeof(uint32_t));
     };
 
+    auto EmitBuiltNodeFromBothRuntimeNodeAndPreviouslyBuiltNode = [=](const RuntimeNode* runtime_node, const Frozen::BuiltNode* built_node, const HashDigest* guid)
+    {
+        switch (runtime_node->m_BuildResult)
+        {
+            case NodeBuildResult::kUpToDate:
+            case NodeBuildResult::kUpToDataButDependeesRequireFrontendRerun:
+                break;
+            case NodeBuildResult::kRanFailed:
+            case NodeBuildResult::kRanSuccesfully:
+            case NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun:
+                //ok so the runtime node actually ran. In this case the previously built node is useless, and we should emit completely from the runtime node.
+                return EmitBuiltNodeFromRuntimeNode(runtime_node, guid);
+            default:
+                Croak("Unexpected nodebuilt result %d",runtime_node->m_BuildResult);
+        }
+
+        //ok, so the runtime node did not run, but was up to date. This situation is why this code path exists, because in this situation
+        //the data we want to write out needs to come partially from the previously built node: the m_OutputFiles, since they contain output
+        //files found in the node's targetdirectories after the node has succesfully ran in the past.
+        //But some other data needs to come from the runtime node: the leaf input signature. It's possible, and likely, for the leaf input signature
+        //of a node to change, but its actual direct-input-signature to not change. If we did not take special care in this scenario, the leaf input signature
+        //of the node right now, will always be different from the leafinputsignature stored in the buildstate, which will cause never ending cache-queries (and misses)
+        //to occur. To solve that we need to write the new leafinput signature into the buildstate.
+
+        EmitBuiltNodeFromPreviouslyBuiltNode(built_node, guid, &runtime_node->m_CurrentLeafInputSignature->digest);
+    };
+
     auto RuntimeNodeGuidForRuntimeNodeIndex = [=](size_t index) -> const HashDigest * {
         int dag_index = int(runtime_nodes[index].m_DagNode - dag_nodes);
         return dag_node_guids + dag_index;
@@ -269,15 +298,8 @@ bool SaveAllBuiltNodes(Driver *self)
         switch(runtime_node->m_BuildResult)
         {
             case NodeBuildResult::kDidNotRun:
-
-            //for kUpToDate it is very important that we prefer the previously built node over the runtime node.
-            //the previously built node will have the dynamically discovered outputfiles from the targetdirectories baked into its m_OutputFiles.
-            //these files are not present in the dag. If we were to prefer to write out the runtime version, we'd lose the information about the output
-            //files. the bee repo now has a test for this: TargetDirectory_WhenRemovingSingleOutputFile_GetsRebuilt
             case NodeBuildResult::kUpToDataButDependeesRequireFrontendRerun:
             case NodeBuildResult::kUpToDate:
-                return false;
-
             case NodeBuildResult::kRanSuccesfully:
             case NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun:
             case NodeBuildResult::kRanFailed:
@@ -345,16 +367,23 @@ bool SaveAllBuiltNodes(Driver *self)
 
             if (compare > 0)
             {
-                //the first in line from the builtnodes actually has a lower GUID, we need to write that one out first.
+                //for this one, we only have a previously built node. let's write it out.
                 EmitBuiltNodeFromPreviouslyBuiltNode(previously_built_node, previously_built_guid);
 
                 previously_built_nodes_iterator++;
-                continue;
+            } else if (compare < 0)
+            {
+                //for this one, we only have a runtime node, let's write it out.
+                EmitBuiltNodeFromRuntimeNode(first_runtimenode_in_line, runtime_node_guid);
+                runtime_nodes_iterator++;
+            } else
+            {
+                //for this one, we have both a previously built node, and a runtime node. We have a special codepath for that
+                EmitBuiltNodeFromBothRuntimeNodeAndPreviouslyBuiltNode(first_runtimenode_in_line, previously_built_node, runtime_node_guid);
+                runtime_nodes_iterator++;
+                previously_built_nodes_iterator++;
             }
 
-            //ok, so now the RuntimeNode first in line has the lowest guid, let's write it out.
-            EmitBuiltNodeFromRuntimeNode(first_runtimenode_in_line, runtime_node_guid);
-            runtime_nodes_iterator++;
 
             if (compare == 0)
             {
