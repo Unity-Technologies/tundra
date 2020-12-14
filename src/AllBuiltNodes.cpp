@@ -298,6 +298,7 @@ bool SaveAllBuiltNodes(Driver *self)
         switch(runtime_node->m_BuildResult)
         {
             case NodeBuildResult::kDidNotRun:
+                return false;
             case NodeBuildResult::kUpToDataButDependeesRequireFrontendRerun:
             case NodeBuildResult::kUpToDate:
             case NodeBuildResult::kRanSuccesfully:
@@ -305,7 +306,7 @@ bool SaveAllBuiltNodes(Driver *self)
             case NodeBuildResult::kRanFailed:
                 return true;
         }
-        Croak("Unexpected NodeBuildResult");
+        Croak("Unexpected NodeBuildResult %d",runtime_node->m_BuildResult);
         return true;
     };
 
