@@ -89,20 +89,29 @@ static int EnqueueNodeListReversedWithoutWakingAwaitersOnlyWhenNotEnqueuedBefore
     return enqueue_count;
 }
 
+static bool IsNodeCacheableByLeafInputsAndCachingEnabled(BuildQueue* queue, RuntimeNode* node)
+{
+    if (!queue->m_Config.m_AttemptCacheReads && !queue->m_Config.m_AttemptCacheWrites)
+        return false;
+    return 0 != (node->m_DagNode->m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs);
+}
+
 int EnqueueNodeWithoutWakingAwaiters(BuildQueue *queue, MemAllocLinear* scratch, RuntimeNode *runtime_node, RuntimeNode* queueing_node, bool onlyEnqueueIfNotEnqueuedBefore)
 {
     // Did someone else get to the node first?
     if (RuntimeNodeIsActive(runtime_node) || runtime_node->m_Finished)
         return 0;
 
-    if (onlyEnqueueIfNotEnqueuedBefore && RuntimeNodeHasEverBeenQueued(runtime_node))
+    bool runtimeNodeHasEverBeenQueued = RuntimeNodeHasEverBeenQueued(runtime_node);
+
+    if (onlyEnqueueIfNotEnqueuedBefore && runtimeNodeHasEverBeenQueued)
         return 0;
 
     int runtime_node_index = int(runtime_node - queue->m_Config.m_RuntimeNodes);
 
     BufferAppendOne(&queue->m_WorkStack, queue->m_Config.m_Heap, runtime_node_index);
 
-    if (!RuntimeNodeHasEverBeenQueued(runtime_node))
+    if (!runtimeNodeHasEverBeenQueued)
     {
         LogFirstTimeEnqueue(scratch, runtime_node, queueing_node);
         queue->m_AmountOfNodesEverQueued++;
@@ -112,6 +121,20 @@ int EnqueueNodeWithoutWakingAwaiters(BuildQueue *queue, MemAllocLinear* scratch,
     RuntimeNodeFlagQueued(runtime_node);
 
     enqueue_count += EnqueueNodeListReversedWithoutWakingAwaitersOnlyWhenNotEnqueuedBefore(queue, scratch, runtime_node->m_DagNode->m_ToUseDependencies, runtime_node);
+
+
+    if (onlyEnqueueIfNotEnqueuedBefore && !runtimeNodeHasEverBeenQueued)
+    {
+      //This is the first time we've enqueued this node. if this node is not cacheable, we will immediately also enqueue its m_ToBuildDependencies.
+      //This "eagerly enqueues" nodes as soon as possible, which has a positive effect on the accuracy of the build's progress indicator.
+      //It's not actually required for correctness, as when we process a node and its m_ToBuildDependencies are not finished, they will be automatically enqueued.
+      //If the node is cacheable we do not want to do this. If we are able to get a cache hit on the node, its m_ToBuildDependencies will never have to be
+      //executed.
+      if (!IsNodeCacheableByLeafInputsAndCachingEnabled(queue, runtime_node))
+      {
+        enqueue_count += EnqueueNodeListReversedWithoutWakingAwaitersOnlyWhenNotEnqueuedBefore(queue, scratch, runtime_node->m_DagNode->m_ToBuildDependencies, runtime_node);
+      }
+    }
 
     return enqueue_count;
 }
@@ -195,12 +218,6 @@ static void FinishNode(BuildQueue* queue, ThreadState* thread_state, RuntimeNode
     EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(queue, thread_state, node);
 }
 
-static bool IsNodeCacheableByLeafInputsAndCachingEnabled(BuildQueue* queue, RuntimeNode* node)
-{
-    if (!queue->m_Config.m_AttemptCacheReads && !queue->m_Config.m_AttemptCacheWrites)
-        return false;
-    return 0 != (node->m_DagNode->m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs);
-}
 
 static void AttemptCacheWrite(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node)
 {
