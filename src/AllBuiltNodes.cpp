@@ -372,23 +372,18 @@ bool SaveAllBuiltNodes(Driver *self)
                 EmitBuiltNodeFromPreviouslyBuiltNode(previously_built_node, previously_built_guid);
 
                 previously_built_nodes_iterator++;
-            } else if (compare < 0)
+            }
+            else if (compare < 0)
             {
                 //for this one, we only have a runtime node, let's write it out.
                 EmitBuiltNodeFromRuntimeNode(first_runtimenode_in_line, runtime_node_guid);
                 runtime_nodes_iterator++;
-            } else
+            }
+            else
             {
                 //for this one, we have both a previously built node, and a runtime node. We have a special codepath for that
                 EmitBuiltNodeFromBothRuntimeNodeAndPreviouslyBuiltNode(first_runtimenode_in_line, previously_built_node, runtime_node_guid);
                 runtime_nodes_iterator++;
-                previously_built_nodes_iterator++;
-            }
-
-
-            if (compare == 0)
-            {
-                //the BuiltNode array had a matching node for this RuntimeNode. We're going to drop it, since the RuntimeNode has newer information.
                 previously_built_nodes_iterator++;
             }
         }
