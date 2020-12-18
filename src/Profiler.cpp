@@ -110,7 +110,7 @@ void ProfilerWriteOutput()
     // JSON does not support comments, so emit "how to use this" as a fake string value
     fputs("\"instructions_readme\": \"1) Open Chrome, 2) go to chrome://tracing, 3) click Load, 4) navigate to this file.\",\n", f);
     fputs("\"traceEvents\":[\n", f);
-    fputs("{ \"cat\":\"\", \"pid\":1, \"tid\":0, \"ts\":0, \"ph\":\"M\", \"name\":\"process_name\", \"args\": { \"name\":\"tundra\" } }\n", f);
+    fputs("{ \"cat\":\"\", \"pid\":\"bee_backend\", \"tid\":0, \"ts\":0, \"ph\":\"M\", \"name\":\"process_name\", \"args\": { \"name\":\"bee_backend\" } }\n", f);
     for (int i = 0; i < s_ProfilerState.m_ThreadCount; ++i)
     {
         const ProfilerThread &thread = s_ProfilerState.m_Threads[i];
@@ -132,7 +132,7 @@ void ProfilerWriteOutput()
                 cnameEntry = buffer;
             }
 
-            fprintf(f, ",{ \"pid\":1, \"tid\":%d, \"ts\":%.0f, \"dur\":%.0f, \"ph\":\"X\", \"name\": \"%s\", %s \"args\": { \"durationMS\":%.0f, \"detail\":\"%s\" }}\n", i, timeUs, durUs, name, cnameEntry, durUs * 0.001, info);
+            fprintf(f, ",{ \"pid\":\"bee_backend\", \"tid\":%d, \"ts\":%.0f, \"dur\":%.0f, \"ph\":\"X\", \"name\": \"%s\", %s \"args\": { \"durationMS\":%.0f, \"detail\":\"%s\" }}\n", i, timeUs, durUs, name, cnameEntry, durUs * 0.001, info);
         }
     }
     fputs("\n]\n", f);
