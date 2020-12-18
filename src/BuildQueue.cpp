@@ -167,8 +167,9 @@ BuildResult::Enum BuildQueueBuild(BuildQueue *queue, MemAllocLinear* scratch)
     for (auto requestedNode:  queue->m_Config.m_RequestedNodes)
     {
         RuntimeNode *runtime_node = runtime_nodes + requestedNode;
-        EnqueueNodeWithoutWakingAwaiters(queue, queue->m_Config.m_LinearAllocator, runtime_node, nullptr, false);
+        EnqueueNodeWithoutWakingAwaiters(queue, queue->m_Config.m_LinearAllocator, runtime_node, nullptr);
     }
+    SortWorkingStack(queue);
 
     CondBroadcast(&queue->m_WorkAvailable);
 

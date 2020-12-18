@@ -44,6 +44,7 @@ struct CompileDagDerivedWorker
 
     BinarySegment *dependenciesArray_seg;
     BinarySegment *backlinksArray_seg;
+    BinarySegment *pointsArray_seg;
     BinarySegment *nonGeneratedInputIndices_seg;
     BinarySegment *leafInputsArray_seg;
     BinarySegment *dependentNodesThatThemselvesAreLeafInputCacheableArray_seg;
@@ -278,6 +279,9 @@ struct CompileDagDerivedWorker
         BinarySegmentWritePointer(main_seg, BinarySegmentPosition(backlinksArray_seg));
 
         BinarySegmentWriteUint32(main_seg, node_count);
+        BinarySegmentWritePointer(main_seg, BinarySegmentPosition(pointsArray_seg));
+
+        BinarySegmentWriteUint32(main_seg, node_count);
         BinarySegmentWritePointer(main_seg, BinarySegmentPosition(nonGeneratedInputIndices_seg));
 
         BinarySegmentWriteUint32(main_seg, node_count);
@@ -300,10 +304,34 @@ struct CompileDagDerivedWorker
         Buffer<int32_t> indices;
         BufferInitWithCapacity(&indices, heap, 1024);
 
+        Buffer<uint32_t> all_nodes_depending_on_me;
+        BufferInitWithCapacity(&all_nodes_depending_on_me, heap, 1024);
+
         for (int32_t nodeIndex = 0; nodeIndex < node_count; ++nodeIndex)
         {
             WriteArrayOfIndices(dependenciesArray_seg, combinedDependenciesBuffers[nodeIndex]);
             WriteArrayOfIndices(backlinksArray_seg, backlinksBuffers[nodeIndex]);
+
+            auto calculateCumulativePoints = [&](int nodeindex) -> uint32_t
+            {
+                std::function<void(int,Buffer<uint32_t>&)> add_backlinks_to_buffer = [&](int node_index, Buffer<uint32_t>& buffer)
+                {
+                    for(int backlink: backlinksBuffers[node_index])
+                        if (BufferAppendOneIfNotPresent(&buffer, heap, backlink))
+                            add_backlinks_to_buffer(backlink, buffer);
+                };
+
+                add_backlinks_to_buffer(nodeindex, all_nodes_depending_on_me);
+
+                //opportunity for later: have different nodes have different amount of points. right now we just treat
+                //each node as 1 point.
+                int points = all_nodes_depending_on_me.GetCount();
+
+                BufferClear(&all_nodes_depending_on_me);
+                return points;
+            };
+
+            BinarySegmentWriteUint32(pointsArray_seg, calculateCumulativePoints(nodeIndex));
 
             BufferClear(&indices);
             int count = dag->m_DagNodes[nodeIndex].m_InputFiles.GetCount();
@@ -319,6 +347,7 @@ struct CompileDagDerivedWorker
             WriteIntoCacheableNodeDataArraysFor(nodeIndex);
         }
         BufferDestroy(&indices, heap);
+        BufferDestroy(&all_nodes_depending_on_me, heap);
 
         DagRuntimeDataDestroy(&dagRuntimeData);
 
@@ -339,6 +368,7 @@ static void CompileDagDerivedWorkerInit(CompileDagDerivedWorker* data, const Fro
 
     data->dependenciesArray_seg = BinaryWriterAddSegment(data->writer);
     data->backlinksArray_seg = BinaryWriterAddSegment(data->writer);
+    data->pointsArray_seg = BinaryWriterAddSegment(data->writer);
     data->nonGeneratedInputIndices_seg = BinaryWriterAddSegment(data->writer);
     data->arraydata_seg = BinaryWriterAddSegment(data->writer);
     data->arraydata2_seg = BinaryWriterAddSegment(data->writer);
