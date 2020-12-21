@@ -198,7 +198,7 @@ static bool IsNodeCacheableByLeafInputsAndCachingEnabled(BuildQueue* queue, Runt
 {
     if (!queue->m_Config.m_AttemptCacheReads && !queue->m_Config.m_AttemptCacheWrites)
         return false;
-    return 0 != (node->m_DagNode->m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs);
+    return 0 != (node->m_DagNode->m_FlagsAndActionType & Frozen::DagNode::kFlagCacheableByLeafInputs);
 }
 
 static void AttemptCacheWrite(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node)

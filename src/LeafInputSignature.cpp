@@ -215,7 +215,7 @@ void PrintLeafInputSignature(BuildQueue* buildQueue, const char* outputFile)
 {
     const Frozen::DagNode& dagNode = buildQueue->m_Config.m_DagNodes[buildQueue->m_Config.m_RequestedNodes[0]];
 
-    if (0 == (dagNode.m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs))
+    if (0 == (dagNode.m_FlagsAndActionType & Frozen::DagNode::kFlagCacheableByLeafInputs))
     {
         Croak("Requested node %s is not cacheable by leaf inputs\n", dagNode.m_Annotation.Get());
     }

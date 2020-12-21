@@ -24,6 +24,7 @@
 #include "BuildLoop.hpp"
 #include "RunAction.hpp"
 #include "FileInfo.hpp"
+#include "Actions.hpp"
 #include <stdarg.h>
 #include <algorithm>
 #include <stdio.h>
@@ -80,12 +81,12 @@ static ExecResult WriteTextFile(const char *payload, const char *target_file, Me
 
 static bool IsWriteFileAction(RuntimeNode* node)
 {
-    return node->m_DagNode->m_Flags & Frozen::DagNode::kFlagIsWriteTextFileAction;
+    return (node->m_DagNode->m_FlagsAndActionType & Frozen::DagNode::kFlagActionTypeMask) == ActionType::kWriteTextFile;
 }
 
 static bool AllowUnwrittenOutputFiles(RuntimeNode* node)
 {
-    return node->m_DagNode->m_Flags & Frozen::DagNode::kFlagAllowUnwrittenOutputFiles;
+    return node->m_DagNode->m_FlagsAndActionType & Frozen::DagNode::kFlagAllowUnwrittenOutputFiles;
 }
 
 static ExecResult RunActualAction(RuntimeNode* node, ThreadState* thread_state, Mutex* queue_lock, ValidationResult::Enum* out_validationresult)
@@ -94,7 +95,7 @@ static ExecResult RunActualAction(RuntimeNode* node, ThreadState* thread_state, 
     if (IsWriteFileAction(node))
     {
         *out_validationresult = ValidationResult::Pass;
-        return WriteTextFile(node_data->m_Action, node_data->m_OutputFiles[0].m_Filename, thread_state->m_Queue->m_Config.m_Heap);
+        return WriteTextFile(node_data->m_WriteTextPayload, node_data->m_OutputFiles[0].m_Filename, thread_state->m_Queue->m_Config.m_Heap);
     }
 
     // Repack frozen env to pointers on the stack.
@@ -217,7 +218,7 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
 
 
     // See if we need to remove the output files before running anything.
-    if (0 == (node_data->m_Flags & Frozen::DagNode::kFlagOverwriteOutputs))
+    if (0 == (node_data->m_FlagsAndActionType & Frozen::DagNode::kFlagOverwriteOutputs))
     {
         for (const FrozenFileAndHash &output : node_data->m_OutputFiles)
         {
@@ -343,7 +344,7 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
 
     // Clean up output files after a failed build unless they are precious,
     // or unless the failure was from failing to write one of them
-    if (0 == (Frozen::DagNode::kFlagPreciousOutputs & node_data->m_Flags) && !(0 == result.m_ReturnCode && passedOutputValidation == ValidationResult::UnwrittenOutputFileFail))
+    if (0 == (Frozen::DagNode::kFlagPreciousOutputs & node_data->m_FlagsAndActionType) && !(0 == result.m_ReturnCode && passedOutputValidation == ValidationResult::UnwrittenOutputFileFail))
     {
         for (const FrozenFileAndHash &output : node_data->m_OutputFiles)
         {

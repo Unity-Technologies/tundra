@@ -23,7 +23,7 @@ static bool HasAnyNonNewLine(const char *buffer)
 ValidationResult::Enum ValidateExecResultAgainstAllowedOutput(ExecResult *result, const Frozen::DagNode *node_data)
 {
     auto &allowed = node_data->m_AllowedOutputSubstrings;
-    bool allowOutput = node_data->m_Flags & Frozen::DagNode::kFlagAllowUnexpectedOutput;
+    bool allowOutput = node_data->m_FlagsAndActionType & Frozen::DagNode::kFlagAllowUnexpectedOutput;
 
     if (allowOutput && allowed.GetCount() == 0)
         return ValidationResult::Pass;

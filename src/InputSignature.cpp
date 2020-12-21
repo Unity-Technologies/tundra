@@ -328,7 +328,7 @@ static bool CalculateInputSignature(BuildQueue* queue, ThreadState* thread_state
     if (scanner)
         HashSetInit(&node->m_ImplicitInputs, queue->m_Config.m_Heap);
 
-    bool force_use_timestamp = dagnode->m_Flags & Frozen::DagNode::kFlagBanContentDigestForInputs;
+    bool force_use_timestamp = dagnode->m_FlagsAndActionType & Frozen::DagNode::kFlagBanContentDigestForInputs;
 
     // Roll back scratch allocator after all file scans
     MemAllocLinearScope alloc_scope(&thread_state->m_ScratchAlloc);
@@ -392,8 +392,8 @@ static bool CalculateInputSignature(BuildQueue* queue, ThreadState* thread_state
     for (const FrozenString &input : dagnode->m_AllowedOutputSubstrings)
         HashAddString(&sighash, (const char *)input);
 
-    HashAddInteger(&sighash, (dagnode->m_Flags & Frozen::DagNode::kFlagAllowUnexpectedOutput) ? 1 : 0);
-    HashAddInteger(&sighash, (dagnode->m_Flags & Frozen::DagNode::kFlagAllowUnwrittenOutputFiles) ? 1 : 0);
+    HashAddInteger(&sighash, (dagnode->m_FlagsAndActionType & Frozen::DagNode::kFlagAllowUnexpectedOutput) ? 1 : 0);
+    HashAddInteger(&sighash, (dagnode->m_FlagsAndActionType & Frozen::DagNode::kFlagAllowUnwrittenOutputFiles) ? 1 : 0);
 
     HashFinalize(&sighash, &node->m_CurrentInputSignature);
     return true;
