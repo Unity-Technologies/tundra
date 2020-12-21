@@ -25,6 +25,10 @@ namespace ActionType {
 
     const char* ToString(Enum value)
     {
-        return kCommandNames[static_cast<size_t>(value)];
+        size_t index = static_cast<size_t>(value);
+        if (index >= kNumCommandNames)
+            return kCommandNames[kUnknown];
+
+        return kCommandNames[index];
     }
 }
