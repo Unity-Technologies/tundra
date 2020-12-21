@@ -87,6 +87,9 @@ FileInfo GetFileInfo(const char *path)
         flags |= FileInfo::kFlagSymlink;
 #endif
 
+    if ((stbuf.st_mode & S_IWRITE) == 0)
+      flags |= FileInfo::kFlagReadOnly;
+
     result.m_Flags = flags;
     // Do not allow directories to expose real timestamps, as it's not reliable behaviour across platforms
     result.m_Timestamp = (flags & FileInfo::kFlagDirectory) ? kDirectoryTimestamp : stbuf.st_mtime;
