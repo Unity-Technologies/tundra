@@ -101,48 +101,55 @@ void JsonWriteValueString(JsonWriter *writer, const char *value, size_t maxLen)
     if (writer->m_PrependComma)
         JsonWriteChar(writer, ',');
 
-    JsonWriteChar(writer, '"');
-
-    size_t len = 0;
-    while (*value != 0 && len < maxLen)
+    if (value == nullptr)
     {
-        char ch = *(value++);
-        if (ch == '"')
-        {
-            JsonWrite(writer, "\\\"", 2);
-        }
-        else if (ch == '\\')
-        {
-            JsonWrite(writer, "\\\\", 2);
-        }
-        else if (ch == 0x0A)
-        {
-            JsonWrite(writer, "\\n", 2);
-        }
-        else if (ch == 0x0D)
-        {
-            JsonWrite(writer, "\\r", 2);
-        }
-        else if (ch == 0x09)
-        {
-            JsonWrite(writer, "\\t", 2);
-        }
-        else if (ch == 0x0C)
-        {
-            JsonWrite(writer, "\\f", 2);
-        }
-        else if (ch == 0x08)
-        {
-            JsonWrite(writer, "\\b", 2);
-        }
-        else
-        {
-            JsonWriteChar(writer, ch);
-        }
-        ++len;
+        JsonWrite(writer, "null", 4);
     }
+    else
+    {
+        JsonWriteChar(writer, '"');
 
-    JsonWriteChar(writer, '"');
+        size_t len = 0;
+        while (*value != 0 && len < maxLen)
+        {
+            char ch = *(value++);
+            if (ch == '"')
+            {
+                JsonWrite(writer, "\\\"", 2);
+            }
+            else if (ch == '\\')
+            {
+                JsonWrite(writer, "\\\\", 2);
+            }
+            else if (ch == 0x0A)
+            {
+                JsonWrite(writer, "\\n", 2);
+            }
+            else if (ch == 0x0D)
+            {
+                JsonWrite(writer, "\\r", 2);
+            }
+            else if (ch == 0x09)
+            {
+                JsonWrite(writer, "\\t", 2);
+            }
+            else if (ch == 0x0C)
+            {
+                JsonWrite(writer, "\\f", 2);
+            }
+            else if (ch == 0x08)
+            {
+                JsonWrite(writer, "\\b", 2);
+            }
+            else
+            {
+                JsonWriteChar(writer, ch);
+            }
+            ++len;
+        }
+
+        JsonWriteChar(writer, '"');
+    }
 
     writer->m_PrependComma = true;
 }
@@ -173,4 +180,22 @@ void JsonWriteToFile(JsonWriter *writer, FILE *fp)
     }
 }
 
+const char* JsonWriteToString(JsonWriter* writer, MemAllocLinear* heap)
+{
+    char* output = static_cast<char*>(LinearAllocate(heap, writer->m_TotalSize + 1, 1));
+    char* write = output;
 
+    size_t remaining = writer->m_TotalSize;
+    JsonBlock* block = writer->m_Head;
+    while (remaining > 0)
+    {
+        size_t sizeThisBlock = (remaining < JsonBlock::kBlockSize) ? remaining : JsonBlock::kBlockSize;
+        memcpy(write, block->m_Data, sizeThisBlock);
+        remaining -= sizeThisBlock;
+        write += sizeThisBlock;
+        block = block->m_Next;
+    }
+
+    *write = 0;
+    return output;
+}
