@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include "Exec.hpp"
 
 namespace ActionType
 {
@@ -14,3 +15,6 @@ namespace ActionType
     Enum FromString(const char* name);
     const char* ToString(Enum value);
 }
+
+ExecResult WriteTextFile(const char* payload, const char* target_file, MemAllocHeap* heap);
+

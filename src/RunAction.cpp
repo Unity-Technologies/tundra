@@ -45,40 +45,6 @@ static int SlowCallback(void *user_data)
     return sendNextCallbackIn;
 }
 
-static ExecResult WriteTextFile(const char *payload, const char *target_file, MemAllocHeap *heap)
-{
-    ExecResult result;
-    char tmpBuffer[1024];
-
-    memset(&result, 0, sizeof(result));
-
-    FILE *f = fopen(target_file, "wb");
-    if (!f)
-    {
-        InitOutputBuffer(&result.m_OutputBuffer, heap);
-
-        snprintf(tmpBuffer, sizeof(tmpBuffer), "Error opening for writing the file: %s, error: %s", target_file, strerror(errno));
-        EmitOutputBytesToDestination(&result, tmpBuffer, strlen(tmpBuffer));
-
-        result.m_ReturnCode = 1;
-        return result;
-    }
-    int length = strlen(payload);
-    int written = fwrite(payload, sizeof(char), length, f);
-    fclose(f);
-
-    if (written == length)
-        return result;
-
-    InitOutputBuffer(&result.m_OutputBuffer, heap);
-
-    snprintf(tmpBuffer, sizeof(tmpBuffer), "fwrite was supposed to write %d bytes to %s, but wrote %d bytes", length, target_file, written);
-    EmitOutputBytesToDestination(&result, tmpBuffer, strlen(tmpBuffer));
-
-    result.m_ReturnCode = 1;
-    return result;
-}
-
 static bool IsRunShellCommandAction(RuntimeNode* node)
 {
     return (node->m_DagNode->m_FlagsAndActionType & Frozen::DagNode::kFlagActionTypeMask) == ActionType::kRunShellCommand;
