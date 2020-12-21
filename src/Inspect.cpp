@@ -5,6 +5,7 @@
 #include "DigestCache.hpp"
 #include "MemoryMappedFile.hpp"
 #include "Inspect.hpp"
+#include "Actions.hpp"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,9 +31,9 @@ static void DumpDagDerived(const Frozen::DagDerived* data, const Frozen::Dag* da
         if (dag)
         {
             printf("  flags:");
-            if (dagNode->m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs)
+            if (dagNode->m_FlagsAndActionType & Frozen::DagNode::kFlagCacheableByLeafInputs)
                 printf("    kFlagCacheableByLeafInputs");
-           if (dagNode->m_Flags & Frozen::DagNode::kFlagOverwriteOutputs)
+           if (dagNode->m_FlagsAndActionType & Frozen::DagNode::kFlagOverwriteOutputs)
                 printf("    kFlagOverwriteOutputs");
         }
 
@@ -101,11 +102,12 @@ static void DumpDag(const Frozen::Dag *data)
 
         printf("  guid: %s\n", digest_str);
         printf("  flags:");
-        if (node.m_Flags & Frozen::DagNode::kFlagPreciousOutputs)
+        if (node.m_FlagsAndActionType & Frozen::DagNode::kFlagPreciousOutputs)
             printf(" precious");
-        if (node.m_Flags & Frozen::DagNode::kFlagOverwriteOutputs)
+        if (node.m_FlagsAndActionType & Frozen::DagNode::kFlagOverwriteOutputs)
             printf(" overwrite");
 
+        printf("\n  type: %s\n", ActionType::ToString(static_cast<ActionType::Enum>(node.m_FlagsAndActionType & Frozen::DagNode::kFlagActionTypeMask)));
         printf("\n  action: %s\n", node.m_Action.Get());
         printf("  annotation: %s\n", node.m_Annotation.Get());
 

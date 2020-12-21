@@ -73,7 +73,7 @@ struct CompileDagDerivedWorker
 
     static bool IsLeafInputCacheable(const Frozen::DagNode& dagNode)
     {
-        return HasFlag(dagNode.m_Flags, Frozen::DagNode::kFlagCacheableByLeafInputs);
+        return HasFlag(dagNode.m_FlagsAndActionType, Frozen::DagNode::kFlagCacheableByLeafInputs);
     }
 
     void WriteIndexArray(BinarySegment* segment, Buffer<int32_t>& buffer)

@@ -36,7 +36,7 @@ HashDigest CalculateLeafInputHashOffline(MemAllocHeap* heap, const Frozen::Dag* 
         for (auto& f: dagNode.m_OutputFiles)
             HashAddString(ingredient_stream, &hashState, "output", f.m_Filename.Get());
 
-        int relevantFlags = dagNode.m_Flags & ~Frozen::DagNode::kFlagCacheableByLeafInputs;
+        int relevantFlags = dagNode.m_FlagsAndActionType & ~(Frozen::DagNode::kFlagCacheableByLeafInputs | Frozen::DagNode::kFlagActionTypeMask);
 
         //if our flags are completely default, let's not add them to the stream, it makes the ingredient stream easier
         //to parse/compare for a human.
