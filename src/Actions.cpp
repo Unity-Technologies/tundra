@@ -67,3 +67,21 @@ ExecResult WriteTextFile(const char* payload, const char* target_file, MemAllocH
     result.m_ReturnCode = 1;
     return result;
 }
+
+#if !defined(TUNDRA_APPLE) && !defined(TUNDRA_WIN32)
+
+ExecResult CopyFile(const char* src_file, const char* target_file, StatCache* stat_cache, MemAllocHeap* heap)
+{
+    ExecResult result;
+    memset(&result, 0, sizeof(result));
+
+    const char notImplMsg[] = "CopyFile is not implemented yet.";
+
+    result.m_ReturnCode = -1;
+    InitOutputBuffer(&result.m_OutputBuffer, heap);
+    EmitOutputBytesToDestination(&result, notImplMsg, strlen(notImplMsg));
+
+    return result;
+}
+
+#endif
