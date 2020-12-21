@@ -103,7 +103,7 @@ static void ReportChangedInputFiles(JsonWriter *msg, const FrozenArray<Frozen::N
 
 static void ReportValueWithOptionalTruncation(JsonWriter *msg, const char *keyName, const char *truncatedKeyName, const FrozenString &value)
 {
-    size_t len = strlen(value);
+    size_t len = value ? strlen(value) : 0;
     const size_t maxLen = KB(64);
     JsonWriteKeyName(msg, keyName);
     JsonWriteValueString(msg, value, maxLen);
