@@ -581,9 +581,17 @@ ExecResult ExecuteProcess(
     if (!SetupResponseFile(cmd_line, new_cmd, sizeof new_cmd, responseFile, sizeof responseFile))
         return result;
 
-    const char *cmd_to_use = new_cmd[0] == 0 ? cmd_line : new_cmd;
-    _snprintf(buffer, sizeof(buffer), "cmd.exe /c \"%s\"", cmd_to_use);
-    buffer[sizeof(buffer) - 1] = '\0';
+    const char* cmd_to_use = new_cmd[0] == 0 ? cmd_line : new_cmd;
+
+    if (execute_direct)
+    {
+        strcpy_s(buffer, sizeof(buffer), cmd_to_use);
+    }
+    else
+    {
+        _snprintf(buffer, sizeof(buffer), "cmd.exe /c \"%s\"", cmd_to_use);
+        buffer[sizeof(buffer) - 1] = '\0';
+    }
 
     HANDLE job_object = CreateJobObject(NULL, NULL);
     if (!job_object)
