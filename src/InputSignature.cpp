@@ -389,6 +389,8 @@ static bool CalculateInputSignature(BuildQueue* queue, ThreadState* thread_state
         });
     }
 
+    HashAddInteger(&sighash, (uint8_t)dagnode->m_FlagsAndActionType & Frozen::DagNode::kFlagActionTypeMask);
+
     for (const FrozenString &input : dagnode->m_AllowedOutputSubstrings)
         HashAddString(&sighash, (const char *)input);
 
