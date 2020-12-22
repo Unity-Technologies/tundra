@@ -1,6 +1,7 @@
 #include "Actions.hpp"
 #include <string.h>
 
+// This order should match the order of enum members in Actions.hpp
 constexpr const char* kCommandNames[] = {
     "<unknown>",
     "RunShellCommand",
