@@ -6,7 +6,7 @@ namespace ActionType
 {
     enum Enum : uint8_t
     {
-    	kUnknown = 0,
+        kUnknown = 0,
         kRunShellCommand = 1,
         kWriteTextFile = 2
     };
