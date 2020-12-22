@@ -64,6 +64,55 @@ EmitData(ExecResult *execResult, int fd)
     return 0;
 }
 
+static const char**
+TokenizeCommandLine(const char *cmd_line, MemAllocHeap *heap) {
+    const size_t len = strlen(cmd_line);
+    char* buffer = static_cast<char*>(HeapAllocate(heap, len));
+    strcpy(buffer, cmd_line);
+
+    bool isInQuotes = false;
+    size_t tokens = 1;
+    for(char* cursor = buffer; cursor < buffer + len; ++cursor)
+    {
+        if (*cursor == '\\')
+        {
+            // Skip escaped characters
+            ++cursor;
+            continue;
+        }
+        else if (*cursor == '"')
+        {
+            isInQuotes = !isInQuotes;
+            continue;
+        }
+        else if (isspace(*cursor) && !isInQuotes)
+        {
+            ++tokens;
+            // Deal with runs of multiple whitespace characters
+            while (isspace(*cursor))
+                *(cursor++) = 0;
+        }
+    }
+
+    char** tokenPtrs = HeapAllocateArray<char*>(heap, tokens + 1);
+    char** nextTokenPtr = tokenPtrs;
+    for (char* cursor = buffer; cursor < buffer + len; ++cursor)
+    {
+        if (*cursor != 0)
+        {
+            *nextTokenPtr = cursor;
+            ++nextTokenPtr;
+            while(*cursor)
+                ++cursor;
+        } else {
+            while (!*cursor)
+                ++cursor;
+        }
+    }
+    *nextTokenPtr = 0;
+    return tokenPtrs;
+}
+
 ExecResult
 ExecuteProcess(
     const char *cmd_line,
@@ -111,7 +160,7 @@ ExecuteProcess(
 
     if (0 == (child = fork()))
     {
-        const char *args[] = {"/bin/sh", "-c", cmd_line, NULL};
+        const char *shell_wrapped_args[] = {"/bin/sh", "-c", cmd_line, NULL};
 
         close(stdout_pipe[pipe_read]);
         close(stderr_pipe[pipe_read]);
@@ -134,8 +183,21 @@ ExecuteProcess(
             setenv(env_vars[i].m_Name, env_vars[i].m_Value, /*overwrite:*/ 1);
         }
 
-        if (-1 == execv("/bin/sh", (char **)args))
-            Croak("Failed executing /bin/sh");
+        const char* processName;
+        const char** args;
+        if (execute_direct)
+        {
+            args = TokenizeCommandLine(cmd_line, heap);
+            processName = args[0];
+        }
+        else
+        {
+            processName = "/bin/sh";
+            args = shell_wrapped_args;
+        }
+
+        if (-1 == execv(processName, (char **)args))
+            Croak("Failed executing %s", processName);
         /* we never get here */
         abort();
     }
