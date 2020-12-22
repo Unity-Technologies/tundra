@@ -510,6 +510,7 @@ static int WaitForFinish(HANDLE processHandle, int (*callback_on_slow)(void *use
 
 ExecResult ExecuteProcess(
     const char *cmd_line,
+    bool execute_direct,
     int env_count,
     const EnvVariable *env_vars,
     MemAllocHeap *heap,

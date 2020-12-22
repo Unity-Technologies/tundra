@@ -67,6 +67,7 @@ EmitData(ExecResult *execResult, int fd)
 ExecResult
 ExecuteProcess(
     const char *cmd_line,
+    bool execute_direct,
     int env_count,
     const EnvVariable *env_vars,
     MemAllocHeap *heap,

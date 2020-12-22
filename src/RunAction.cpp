@@ -45,9 +45,10 @@ static int SlowCallback(void *user_data)
     return sendNextCallbackIn;
 }
 
-static bool IsRunShellCommandAction(RuntimeNode* node)
+static bool BypassNodeIfActionIsEmpty(RuntimeNode* node)
 {
-    return (node->m_DagNode->m_FlagsAndActionType & Frozen::DagNode::kFlagActionTypeMask) == ActionType::kRunShellCommand;
+    ActionType::Enum actionType = static_cast<ActionType::Enum>(node->m_DagNode->m_FlagsAndActionType & Frozen::DagNode::kFlagActionTypeMask);
+    return actionType == ActionType::kRunShellCommand || actionType == ActionType::kExecuteDirect;
 }
 
 static bool AllowUnwrittenOutputFiles(RuntimeNode* node)
@@ -62,6 +63,7 @@ static ExecResult RunActualAction(RuntimeNode* node, ThreadState* thread_state, 
     switch(actionType)
     {
         case ActionType::kRunShellCommand:
+        case ActionType::kExecuteDirect:
         {
             // Repack frozen env to pointers on the stack.
             int env_count = node_data->m_EnvVars.GetCount();
@@ -79,7 +81,7 @@ static ExecResult RunActualAction(RuntimeNode* node, ThreadState* thread_state, 
             slowCallbackData.build_queue = thread_state->m_Queue;
 
             int job_id = thread_state->m_ThreadIndex;
-            auto result = ExecuteProcess(node_data->m_Action, env_count, env_vars, thread_state->m_Queue->m_Config.m_Heap, job_id, false, SlowCallback, &slowCallbackData);
+            auto result = ExecuteProcess(node_data->m_Action, actionType == ActionType::kExecuteDirect, env_count, env_vars, thread_state->m_Queue->m_Config.m_Heap, job_id, false, SlowCallback, &slowCallbackData);
             *out_validationresult = ValidateExecResultAgainstAllowedOutput(&result, node_data);
             return result;
         }
@@ -174,7 +176,7 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
 
     const char *cmd_line = node_data->m_Action;
 
-    if (IsRunShellCommandAction(node) && (!cmd_line || cmd_line[0] == '\0'))
+    if (BypassNodeIfActionIsEmpty(node) && (!cmd_line || cmd_line[0] == '\0'))
         return NodeBuildResult::kRanSuccesfully;
 
     StatCache *stat_cache = queue->m_Config.m_StatCache;

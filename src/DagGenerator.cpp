@@ -315,6 +315,7 @@ static bool WriteNodes(
 
         switch (actionType) {
             case ActionType::kRunShellCommand:
+            case ActionType::kExecuteDirect:
                 WriteStringPtr(node_data_seg, str_seg, action);
                 break;
             case ActionType::kWriteTextFile:

@@ -17,7 +17,8 @@ namespace ActionType
         kUnknown = 0,
         kRunShellCommand = 1,
         kWriteTextFile = 2,
-    	kCopyFiles = 3
+    	kCopyFiles = 3,
+    	kExecuteDirect = 4
     };
 
     Enum FromString(const char* name);
