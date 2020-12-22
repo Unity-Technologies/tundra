@@ -82,7 +82,7 @@ struct DagNode
     enum
     {
         // Bottom 8 bits are reserved for the action type
-    	kFlagActionTypeMask = (1 << 8) - 1,
+        kFlagActionTypeMask = (1 << 8) - 1,
     	
         // Set in m_Flags if it is safe to overwrite the output files in place.  If
         // this flag is not present, the build system will remove the output files
