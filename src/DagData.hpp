@@ -118,6 +118,7 @@ struct DagNode
 
     FrozenString m_Action;
     FrozenString m_Annotation;
+    FrozenString m_ProfilerOutput;
     FrozenArray<int32_t> m_ToBuildDependencies;
     FrozenArray<int32_t> m_ToUseDependencies;
     FrozenArray<FrozenFileAndHash> m_InputFiles;
@@ -152,7 +153,7 @@ struct SharedResourceData
 
 struct Dag
 {
-    static const uint32_t MagicNumber = 0x931fa246 ^ kTundraHashMagic;
+    static const uint32_t MagicNumber = 0x9ea0a246 ^ kTundraHashMagic;
 
     uint32_t m_MagicNumber;
 

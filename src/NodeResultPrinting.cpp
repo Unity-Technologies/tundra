@@ -551,6 +551,13 @@ void PrintNodeResult(
                 JsonWriteEndArray(&msg);
             }
         }
+
+        if (data.node_data->m_ProfilerOutput.Get())
+        {
+            JsonWriteKeyName(&msg, "profiler_output");
+            JsonWriteValueString(&msg, data.node_data->m_ProfilerOutput.Get());
+        }
+
         if (data.node_data->m_OutputFiles.GetCount() > 0)
         {
             JsonWriteKeyName(&msg, "outputfile");

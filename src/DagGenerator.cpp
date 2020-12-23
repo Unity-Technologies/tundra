@@ -302,6 +302,7 @@ static bool WriteNodes(
 
         const char *action = FindStringValue(node, "Action");
         const char *annotation = FindStringValue(node, "Annotation");
+        const char *profilerOutput = FindStringValue(node, "ProfilerOutput");
         const JsonArrayValue *toBuildDependencies = FindArrayValue(node, "ToBuildDependencies");
         if (toBuildDependencies == nullptr)
             toBuildDependencies = FindArrayValue(node, "Deps");
@@ -325,6 +326,8 @@ static bool WriteNodes(
             WriteStringPtr(node_data_seg, writetextfile_payloads_seg, writetextfile_payload);
 
         WriteStringPtr(node_data_seg, str_seg, annotation);
+
+        WriteStringPtr(node_data_seg, str_seg, profilerOutput);
 
         auto writeDependencyIndexList = [=](const JsonArrayValue* deps)->void{
             if (deps)
