@@ -103,14 +103,20 @@ void ProfilerWriteOutput()
         return;
     }
 
+    bool justRawTraceEvents = strstr(s_ProfilerState.m_FileName, "traceevents") != nullptr;
+
     // See https://docs.google.com/document/d/1CvAClvFfyA5R-PhYUmn5OOQtYMH4h6I0nSsKchNAySU/edit for
     // Chrome Tracing profiler format description
 
-    fputs("{\n", f);
-    // JSON does not support comments, so emit "how to use this" as a fake string value
-    fputs("\"instructions_readme\": \"1) Open Chrome, 2) go to chrome://tracing, 3) click Load, 4) navigate to this file.\",\n", f);
-    fputs("\"traceEvents\":[\n", f);
+    if (!justRawTraceEvents)
+    {
+        fputs("{\n", f);
+        // JSON does not support comments, so emit "how to use this" as a fake string value
+        fputs("\"instructions_readme\": \"1) Open Chrome, 2) go to chrome://tracing, 3) click Load, 4) navigate to this file.\",\n", f);
+        fputs("\"traceEvents\":[\n", f);
+    }
     fputs("{ \"cat\":\"\", \"pid\":\"bee_backend\", \"tid\":0, \"ts\":0, \"ph\":\"M\", \"name\":\"process_name\", \"args\": { \"name\":\"bee_backend\" } }\n", f);
+
     for (int i = 0; i < s_ProfilerState.m_ThreadCount; ++i)
     {
         const ProfilerThread &thread = s_ProfilerState.m_Threads[i];
@@ -135,8 +141,14 @@ void ProfilerWriteOutput()
             fprintf(f, ",{ \"pid\":\"bee_backend\", \"tid\":%d, \"ts\":%.0f, \"dur\":%.0f, \"ph\":\"X\", \"name\": \"%s\", %s \"args\": { \"durationMS\":%.0f, \"detail\":\"%s\" }}\n", i, timeUs, durUs, name, cnameEntry, durUs * 0.001, info);
         }
     }
-    fputs("\n]\n", f);
-    fputs("}\n", f);
+    if (!justRawTraceEvents)
+    {
+        fputs("\n]\n", f);
+        fputs("}\n", f);
+    } else {
+        //in raw trace events mode, every line should be a tracevent plus a comma
+        fputs(",", f);
+    }
 
     fclose(f);
 }
