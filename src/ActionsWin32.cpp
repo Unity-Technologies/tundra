@@ -98,7 +98,7 @@ ExecResult CopyFile(const char* src_file, const char* target_file, StatCache* st
       CloseHandle(hFile);
     }
 
-    if (result.m_ReturnCode < 0)
+    if (result.m_ReturnCode != 0)
     {
       LPWSTR messageBuffer = nullptr;
       FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
