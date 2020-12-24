@@ -320,6 +320,9 @@ static bool WriteNodes(
             case ActionType::kWriteTextFile:            
                 WriteStringPtr(node_data_seg, writetextfile_payloads_seg, writetextfile_payload);
                 break;
+            case ActionType::kCopyFile:
+                BinarySegmentWriteNullPointer(node_data_seg);
+                break;
             case ActionType::kUnknown:
                 return false;
         }
@@ -355,6 +358,11 @@ static bool WriteNodes(
 
         writeDependencyIndexList(toBuildDependencies);
         writeDependencyIndexList(toUseDependencies);
+
+        if (actionType == ActionType::kCopyFile && (inputs->m_Count != 1 || outputs->m_Count != 1))
+        {
+            return false;
+        }
 
         WriteFileArray(node_data_seg, array2_seg, str_seg, inputs);
         WriteFileArray(node_data_seg, array2_seg, str_seg, filesThatMightBeIncluded);
