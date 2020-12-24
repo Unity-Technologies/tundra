@@ -44,6 +44,7 @@
 
 #if TUNDRA_WIN32
 std::wstring ToWideString(const char* input);
+std::string ToMultiByteUTF8String(const wchar_t* input);
 bool ConvertToLongPath(std::wstring* path);
 #endif
 
