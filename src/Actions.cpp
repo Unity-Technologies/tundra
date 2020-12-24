@@ -5,7 +5,8 @@
 constexpr const char* kCommandNames[] = {
     "<unknown>",
     "RunShellCommand",
-    "WriteTextFile"
+    "WriteTextFile",
+    "CopyFile"
 };
 constexpr size_t kNumCommandNames = sizeof(kCommandNames) / sizeof(kCommandNames[0]);
 

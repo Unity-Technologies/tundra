@@ -88,6 +88,11 @@ static ExecResult RunActualAction(RuntimeNode* node, ThreadState* thread_state, 
             *out_validationresult = ValidationResult::Pass;
             return WriteTextFile(node_data->m_WriteTextPayload, node_data->m_OutputFiles[0].m_Filename, thread_state->m_Queue->m_Config.m_Heap);
         }
+        case ActionType::kCopyFile:
+        {
+            *out_validationresult = ValidationResult::Pass;
+            return CopyFile(node_data->m_InputFiles[0].m_Filename, node_data->m_OutputFiles[0].m_Filename, thread_state->m_Queue->m_Config.m_StatCache, thread_state->m_Queue->m_Config.m_Heap);
+        }
         case ActionType::kUnknown:
         default:
         {
