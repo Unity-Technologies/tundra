@@ -50,8 +50,11 @@ ExecResult CopyFile(const char* src_file, const char* target_file, StatCache* st
       }
     }
 
+    std::wstring src_file_wide = ToWideString(src_file);
+    std::wstring target_file_wide = ToWideString(target_file);
+
     BOOL cancel = false;
-    if (CopyFileEx(src_file, target_file, NULL, NULL, &cancel, COPY_FILE_COPY_SYMLINK) == 0)
+    if (CopyFileExW(src_file_wide.c_str(), target_file_wide.c_str(), NULL, NULL, &cancel, COPY_FILE_COPY_SYMLINK) == 0)
       result.m_ReturnCode = GetLastError();
 
     // Mark the stat cache dirty regardless of whether we failed or not - the target file is in an unknown state now
@@ -59,10 +62,10 @@ ExecResult CopyFile(const char* src_file, const char* target_file, StatCache* st
 
     if (result.m_ReturnCode != 0)
     {
-      LPSTR messageBuffer = nullptr;
-      FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-        NULL, result.m_ReturnCode, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)& messageBuffer, 0, NULL);
-      snprintf(tmpBuffer, sizeof(tmpBuffer), "Copying the file failed: %s", messageBuffer);
+      LPWSTR messageBuffer = nullptr;
+      FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL, result.m_ReturnCode, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPWSTR)& messageBuffer, 0, NULL);
+      snprintf(tmpBuffer, sizeof(tmpBuffer), "Copying the file failed: %s", ToMultiByteUTF8String(messageBuffer).c_str());
       LocalFree(messageBuffer);
       break;
     }
@@ -81,7 +84,7 @@ ExecResult CopyFile(const char* src_file, const char* target_file, StatCache* st
     }
 
     // Force the file to have the current timestamp
-    HANDLE hFile = CreateFileA(target_file, FILE_WRITE_ATTRIBUTES, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    HANDLE hFile = CreateFileW(target_file_wide.c_str(), FILE_WRITE_ATTRIBUTES, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (hFile == INVALID_HANDLE_VALUE)
     {
       result.m_ReturnCode = GetLastError();
@@ -97,24 +100,24 @@ ExecResult CopyFile(const char* src_file, const char* target_file, StatCache* st
 
     if (result.m_ReturnCode < 0)
     {
-      LPSTR messageBuffer = nullptr;
-      FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-        NULL, result.m_ReturnCode, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)& messageBuffer, 0, NULL);
-      snprintf(tmpBuffer, sizeof(tmpBuffer), "Updating the timestamp on the file failed: %s", messageBuffer);
+      LPWSTR messageBuffer = nullptr;
+      FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL, result.m_ReturnCode, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPWSTR)& messageBuffer, 0, NULL);
+      snprintf(tmpBuffer, sizeof(tmpBuffer), "Updating the timestamp on the file failed: %s", ToMultiByteUTF8String(messageBuffer).c_str());
       LocalFree(messageBuffer);
       break;
     }
 
     if (dst_file_info.IsReadOnly())
     {
-      DWORD currentAttributes = GetFileAttributes(target_file);
-      if (!SetFileAttributes(target_file, currentAttributes & ~FILE_ATTRIBUTE_READONLY))
+      DWORD currentAttributes = GetFileAttributesW(target_file_wide.c_str());
+      if (!SetFileAttributesW(target_file_wide.c_str(), currentAttributes & ~FILE_ATTRIBUTE_READONLY))
       {
         result.m_ReturnCode = GetLastError();
-        LPSTR messageBuffer = nullptr;
-        FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-          NULL, result.m_ReturnCode, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)& messageBuffer, 0, NULL);
-        snprintf(tmpBuffer, sizeof(tmpBuffer), "Clearing the readonly flag on the file failed: %s", messageBuffer);
+        LPWSTR messageBuffer = nullptr;
+        FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+          NULL, result.m_ReturnCode, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPWSTR)& messageBuffer, 0, NULL);
+        snprintf(tmpBuffer, sizeof(tmpBuffer), "Clearing the readonly flag on the file failed: %s", ToMultiByteUTF8String(messageBuffer).c_str());
         LocalFree(messageBuffer);
         break;
       }

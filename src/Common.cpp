@@ -403,6 +403,14 @@ std::wstring ToWideString(const char* input)
     return result;
 }
 
+std::string ToMultiByteUTF8String(const wchar_t* input)
+{
+    int size = WideCharToMultiByte(CP_UTF8, 0, input, wcslen(input), 0, 0, NULL, NULL);
+    std::string result(size, L'\0');
+    if (size) WideCharToMultiByte(CP_UTF8, 0, input, wcslen(input), &result[0], size, NULL, NULL);
+    return result;
+}
+
 bool ConvertToLongPath(std::wstring* path)
 {
     if (path == nullptr) return false;
