@@ -127,7 +127,9 @@ static void ReportInputSignatureChanges(
     int sha_extension_hash_count,
     ThreadState *thread_state)
 {
-    if (strcmp(dagnode->m_Action, previously_built_node->m_Action) != 0)
+    if ((dagnode->m_Action == nullptr && previously_built_node->m_Action != nullptr)
+      ||(dagnode->m_Action != nullptr && previously_built_node->m_Action == nullptr)
+      ||(dagnode->m_Action != nullptr && previously_built_node->m_Action != nullptr && strcmp(dagnode->m_Action, previously_built_node->m_Action) != 0))
     {
         JsonWriteStartObject(msg);
 
