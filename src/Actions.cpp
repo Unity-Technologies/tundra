@@ -6,7 +6,7 @@ constexpr const char* kCommandNames[] = {
     "<unknown>",
     "RunShellCommand",
     "WriteTextFile",
-    "CopyFile"
+    "CopyFiles"
 };
 constexpr size_t kNumCommandNames = sizeof(kCommandNames) / sizeof(kCommandNames[0]);
 
@@ -71,7 +71,7 @@ ExecResult WriteTextFile(const char* payload, const char* target_file, MemAllocH
 
 #if !defined(TUNDRA_APPLE) && !defined(TUNDRA_WIN32)
 
-ExecResult CopyFile(const char* src_file, const char* target_file, StatCache* stat_cache, MemAllocHeap* heap)
+ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash* target_files, size_t files_count, StatCache* stat_cache, MemAllocHeap* heap)
 {
     ExecResult result;
     memset(&result, 0, sizeof(result));

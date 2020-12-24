@@ -17,7 +17,7 @@ namespace ActionType
         kUnknown = 0,
         kRunShellCommand = 1,
         kWriteTextFile = 2,
-    	kCopyFile = 3
+    	kCopyFiles = 3
     };
 
     Enum FromString(const char* name);
@@ -25,7 +25,8 @@ namespace ActionType
 }
 
 struct StatCache;
+struct FrozenFileAndHash;
 
 ExecResult WriteTextFile(const char* payload, const char* target_file, MemAllocHeap* heap);
-ExecResult CopyFile(const char* src_file, const char* target_file, StatCache* stat_cache, MemAllocHeap* heap);
+ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash* target_files, size_t files_count, StatCache* stat_cache, MemAllocHeap* heap);
 

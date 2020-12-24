@@ -317,10 +317,10 @@ static bool WriteNodes(
             case ActionType::kRunShellCommand:
                 WriteStringPtr(node_data_seg, str_seg, action);
                 break;
-            case ActionType::kWriteTextFile:            
+            case ActionType::kWriteTextFile:
                 WriteStringPtr(node_data_seg, writetextfile_payloads_seg, writetextfile_payload);
                 break;
-            case ActionType::kCopyFile:
+            case ActionType::kCopyFiles:
                 BinarySegmentWriteNullPointer(node_data_seg);
                 break;
             case ActionType::kUnknown:
@@ -359,7 +359,7 @@ static bool WriteNodes(
         writeDependencyIndexList(toBuildDependencies);
         writeDependencyIndexList(toUseDependencies);
 
-        if (actionType == ActionType::kCopyFile && (inputs->m_Count != 1 || outputs->m_Count != 1))
+        if (actionType == ActionType::kCopyFiles && (inputs->m_Count != outputs->m_Count))
         {
             return false;
         }
