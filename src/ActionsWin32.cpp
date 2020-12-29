@@ -103,7 +103,7 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
             break;
         }
 
-        if (dst_file_info.IsReadOnly())
+        if (src_file_info.IsReadOnly())
         {
             DWORD currentAttributes = GetFileAttributesW(target_file_wide.c_str());
             if (!SetFileAttributesW(target_file_wide.c_str(), currentAttributes & ~FILE_ATTRIBUTE_READONLY))
