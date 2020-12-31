@@ -69,7 +69,7 @@ ExecResult WriteTextFile(const char* payload, const char* target_file, MemAllocH
     return result;
 }
 
-#if !defined(TUNDRA_APPLE) && !defined(TUNDRA_WIN32)
+#if !defined(TUNDRA_APPLE) && !defined(TUNDRA_WIN32) && !defined(TUNDRA_LINUX)
 
 ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash* target_files, size_t files_count, StatCache* stat_cache, MemAllocHeap* heap)
 {
