@@ -10,7 +10,11 @@
 
 #include <sys/time.h>
 #include <sys/stat.h>
-#include <fnctl.h>
+#include <fcntl.h>
+#include <linux/fs.h>
+#ifdef FICLONE
+#include <sys/ioctl.h>
+#endif
 
 ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash* target_files, size_t files_count, StatCache* stat_cache, MemAllocHeap* heap)
 {
@@ -117,16 +121,17 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
                 break;
             }
 
-            // See if it is on the same filesystem (which it usually will be) - if it is, we can try using the FICLONE ioctl to do a lightweight copy-on-write copy
-            struct stat dst_stat;
-            if (fstat(out_file, &dst_stat) != 0)
-            {
-                result.m_ReturnCode = -1;
-                snprintf(tmpBuffer, sizeof(tmpBuffer), "The properties of the destination file %s could not be retrieved: %s", target_file, strerror(errno));
-                break;
-            }
-
             do {
+#ifdef FICLONE
+                // See if it is on the same filesystem (which it usually will be) - if it is, we can try using the FICLONE ioctl to do a lightweight copy-on-write copy
+                struct stat dst_stat;
+                if (fstat(out_file, &dst_stat) != 0)
+                {
+                    result.m_ReturnCode = -1;
+                    snprintf(tmpBuffer, sizeof(tmpBuffer), "The properties of the destination file %s could not be retrieved: %s", target_file, strerror(errno));
+                    break;
+                }
+
                 if (src_stat.st_dev == dst_stat.st_dev)
                 {
                     // Try the IOCTL. We don't particularly care about errors here, we'll just fall back if this fails
@@ -136,6 +141,7 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
                         break;
                     }
                 }
+#endif
 
                 // Otherwise, next fastest method is to ask the kernel to do the copy using splice
                 size_t bytes_in, bytes_out;
