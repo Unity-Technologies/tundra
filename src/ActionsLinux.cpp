@@ -88,9 +88,7 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
             }
 
             if (dst_file_info.Exists())
-            {
-                _unlink(target_file);
-            }
+                unlink(target_file);
 
             if (symlink(link_contents, target_file) != 0)
             {
@@ -182,7 +180,7 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
             if (dst_file_info.m_Size != src_stat.st_size)
             {
                 result.m_ReturnCode = -1;
-                snprintf(tmpBuffer, sizeof(tmpBuffer), "The copied file %s is %llu bytes, but the source file %s was %llu bytes.", target_file, dst_file_info.m_Size, src_file, src_file_info.m_Size);
+                snprintf(tmpBuffer, sizeof(tmpBuffer), "The copied file %s is %llu bytes, but the source file %s was %llu bytes.", target_file, dst_file_info.m_Size, src_file, src_stat.st_size);
                 break;
             }
         }
