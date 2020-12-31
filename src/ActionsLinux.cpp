@@ -11,6 +11,7 @@
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <unistd.h>
 #include <linux/fs.h>
 #ifdef FICLONE
 #include <sys/ioctl.h>
