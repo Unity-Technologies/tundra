@@ -146,7 +146,7 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
                 size_t bytes_in, bytes_out;
                 do
                 {
-                    bytes_in = splice(in_file, NULL, temporary_pipe[0], NULL, src_stat.st_blksize, 0);
+                    bytes_in = splice(in_file, NULL, temporary_pipe[1], NULL, src_stat.st_blksize, 0);
                     if (bytes_in == -1)
                     {
                         result.m_ReturnCode = -1;
@@ -154,7 +154,7 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
                         break;
                     }
 
-                    bytes_out = splice(temporary_pipe[1], NULL, out_file, NULL, bytes_in, 0);
+                    bytes_out = splice(temporary_pipe[0], NULL, out_file, NULL, bytes_in, 0);
                     if (bytes_out == -1)
                     {
                         result.m_ReturnCode = -1;
