@@ -66,17 +66,20 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
             break;
         }
 
-        // If we copied a symbolic link, we don't need to do any more work
-        if (src_file_info.IsSymlink())
-            continue;
-
         // Force the file to have the current timestamp
-        result.m_ReturnCode = utimes(target_file, NULL);
+        if (src_file_info.IsSymlink())
+            result.m_ReturnCode = lutimes(target_file, NULL);
+        else
+            result.m_ReturnCode = utimes(target_file, NULL);
         if (result.m_ReturnCode < 0)
         {
             snprintf(tmpBuffer, sizeof(tmpBuffer), "Updating the timestamp on the file %s failed: %s", target_file, strerror(errno));
             break;
         }
+
+        // Nothing else to do for symlinks
+        if (src_file_info.IsSymlink())
+            continue;
 
         if (src_file_info.IsReadOnly())
         {
