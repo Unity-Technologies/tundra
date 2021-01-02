@@ -36,7 +36,7 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
         LinearAllocReset(&scratch);
 
         const char* src_file = src_files[i].m_Filename;
-        const char* target_file = target_files[i].m_Filename;
+        const char* dst_file = target_files[i].m_Filename;
 
         // The StatCache is not used for the file info because we need full stat info (file modes, etc) which FileInfo doesn't give us
         struct stat src_stat;
@@ -54,20 +54,20 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
             break;
         }
 
-        FileInfo dst_file_info = StatCacheStat(stat_cache, target_file);
+        FileInfo dst_file_info = StatCacheStat(stat_cache, dst_file);
         if (dst_file_info.Exists())
         {
             if (dst_file_info.IsDirectory())
             {
                 result.m_ReturnCode = -1;
-                snprintf(tmpBuffer, sizeof(tmpBuffer), "The target path %s already exists as a directory.", target_file);
+                snprintf(tmpBuffer, sizeof(tmpBuffer), "The target path %s already exists as a directory.", dst_file);
                 break;
             }
 
             if (dst_file_info.IsReadOnly())
             {
                 result.m_ReturnCode = -1;
-                snprintf(tmpBuffer, sizeof(tmpBuffer), "The target path %s already exists and is read-only.", target_file);
+                snprintf(tmpBuffer, sizeof(tmpBuffer), "The target path %s already exists and is read-only.", dst_file);
                 break;
             }
         }
@@ -78,8 +78,8 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
 
             // Add 2 bytes, 1 for the null character and one so we can tell that the readlink return value did not get truncated
             size_t bufferSize = src_stat.st_size + 2; 
-            char* link_contents = static_cast<char*>(LinearAllocate(&scratch, bufferSize, 1));
-            int link_size = readlink(src_file, link_contents, bufferSize);
+            char* link_target = static_cast<char*>(LinearAllocate(&scratch, bufferSize, 1));
+            int link_size = readlink(src_file, link_target, bufferSize);
             if (link_size == bufferSize)
             {
                 result.m_ReturnCode = -1;
@@ -88,17 +88,17 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
             }
 
             if (dst_file_info.Exists())
-                unlink(target_file);
+                unlink(dst_file);
 
-            if (symlink(link_contents, target_file) != 0)
+            if (symlink(link_target, dst_file) != 0)
             {
                 result.m_ReturnCode = -1;
-                snprintf(tmpBuffer, sizeof(tmpBuffer), "The target symlink %s could not be created.", target_file);
+                snprintf(tmpBuffer, sizeof(tmpBuffer), "The target symlink %s could not be created.", dst_file);
                 break;
             }
 
             // Mark the stat cache dirty
-            StatCacheMarkDirty(stat_cache, target_file, target_files[i].m_FilenameHash);
+            StatCacheMarkDirty(stat_cache, dst_file, target_files[i].m_FilenameHash);
         }
         else
         {
@@ -112,33 +112,21 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
             }
 
             // Ensure that the target file is opened with a writable mode, even if the input file was readonly
-            out_file = open(target_file, O_WRONLY | O_CREAT | O_TRUNC, src_stat.st_mode | S_IWUSR);
+            out_file = open(dst_file, O_WRONLY | O_CREAT | O_TRUNC, src_stat.st_mode | S_IWUSR);
             if (out_file == -1)
             {
                 result.m_ReturnCode = -1;
-                snprintf(tmpBuffer, sizeof(tmpBuffer), "The destination file %s could not be opened for writing: %s", src_file, strerror(errno));
+                snprintf(tmpBuffer, sizeof(tmpBuffer), "The destination file %s could not be opened for writing: %s", dst_file, strerror(errno));
                 break;
             }
 
             do {
 #ifdef FICLONE
-                // See if it is on the same filesystem (which it usually will be) - if it is, we can try using the FICLONE ioctl to do a lightweight copy-on-write copy
-                struct stat dst_stat;
-                if (fstat(out_file, &dst_stat) != 0)
+                // Try the IOCTL. We don't particularly care about errors here, we'll just fall back if this fails
+                if (ioctl(out_file, FICLONE, in_file) != -1)
                 {
-                    result.m_ReturnCode = -1;
-                    snprintf(tmpBuffer, sizeof(tmpBuffer), "The properties of the destination file %s could not be retrieved: %s", target_file, strerror(errno));
+                    // It worked!
                     break;
-                }
-
-                if (src_stat.st_dev == dst_stat.st_dev)
-                {
-                    // Try the IOCTL. We don't particularly care about errors here, we'll just fall back if this fails
-                    if (ioctl(out_file, FICLONE, in_file) != -1)
-                    {
-                        // It worked!
-                        break;
-                    }
                 }
 #endif
 
@@ -158,7 +146,7 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
                     if (bytes_out == -1)
                     {
                         result.m_ReturnCode = -1;
-                        snprintf(tmpBuffer, sizeof(tmpBuffer), "Writing to the destination file %s failed: %s", target_file, strerror(errno));
+                        snprintf(tmpBuffer, sizeof(tmpBuffer), "Writing to the destination file %s failed: %s", dst_file, strerror(errno));
                         break;
                     }
                 } while (bytes_out > 0);
@@ -172,16 +160,19 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
             out_file = -1;
 
             // Mark the stat cache dirty regardless of whether we failed or not - the target file is in an unknown state now
-            StatCacheMarkDirty(stat_cache, target_file, target_files[i].m_FilenameHash);
+            StatCacheMarkDirty(stat_cache, dst_file, target_files[i].m_FilenameHash);
 
-            // Verify that the copied file is the same size as the source.
-            // It's OK to use the statcache for this now because we've finished modifying the file
-            dst_file_info = StatCacheStat(stat_cache, target_file);
-            if (dst_file_info.m_Size != src_stat.st_size)
+            if (result.m_ReturnCode == 0)
             {
-                result.m_ReturnCode = -1;
-                snprintf(tmpBuffer, sizeof(tmpBuffer), "The copied file %s is %llu bytes, but the source file %s was %llu bytes.", target_file, dst_file_info.m_Size, src_file, src_stat.st_size);
-                break;
+                // Verify that the copied file is the same size as the source.
+                // It's OK to use the statcache for this now because we've finished modifying the file
+                dst_file_info = StatCacheStat(stat_cache, dst_file);
+                if (dst_file_info.m_Size != src_stat.st_size)
+                {
+                    result.m_ReturnCode = -1;
+                    snprintf(tmpBuffer, sizeof(tmpBuffer), "The copied file %s is %llu bytes, but the source file %s was %llu bytes.", dst_file, dst_file_info.m_Size, src_file, src_stat.st_size);
+                    break;
+                }
             }
         }
 
