@@ -53,9 +53,11 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
             }
         }
 
-        copyfile_state_t state = copyfile_state_alloc();
-        result.m_ReturnCode = copyfile(src_file, target_file, state, COPYFILE_ALL | COPYFILE_UNLINK | COPYFILE_CLONE | COPYFILE_DATA_SPARSE);
-        copyfile_state_free(state);
+        int copyfile_flags = COPYFILE_ALL | COPYFILE_UNLINK | COPYFILE_CLONE;
+        // copyfile on older versions of macOS chokes if you ask to a sparse copy of data when the file is 0 bytes
+        if (src_file_info.m_Size > 0)
+            copyfile_flags |= COPYFILE_DATA_SPARSE;
+        result.m_ReturnCode = copyfile(src_file, target_file, nullptr, copyfile_flags);
 
         // Mark the stat cache dirty regardless of whether we failed or not - the target file is in an unknown state now
         StatCacheMarkDirty(stat_cache, target_file, target_files[i].m_FilenameHash);
