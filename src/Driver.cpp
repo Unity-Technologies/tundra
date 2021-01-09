@@ -295,7 +295,7 @@ void DriverDestroy(Driver *self)
     HeapDestroy(&self->m_Heap);
 }
 
-BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count, const char** out_outOfDateSignaturePath, const char** argv, int argc)
+BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count, const char** out_frontend_rerun_reason, const char** argv, int argc)
 {
     const Frozen::Dag *dag = self->m_DagData;
 
@@ -369,8 +369,12 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count, const 
         MutexDestroy(&debug_signing_mutex);
     }
 
+    if (build_result == BuildResult::kRequireFrontendRerun)
+    {
+        *out_frontend_rerun_reason = BuildQueueGetFrontendRerunReason(&build_queue, &self->m_Heap);
+    }
+
     *out_finished_node_count = build_queue.m_FinishedNodeCount;
-    *out_outOfDateSignaturePath = build_queue.m_OutOfDateSignaturePath;
 leave:
     // Shut down build queue
     BuildQueueDestroy(&build_queue);

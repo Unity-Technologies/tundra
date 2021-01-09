@@ -431,7 +431,7 @@ int main(int argc, char *argv[])
 
     int finished_node_count = 0;
     BuildResult::Enum build_result = BuildResult::kOk;
-    const char* frontend_rerun_reason = nullptr;
+    const char* frontend_rerun_reason = "";
 
     if (!DriverInitData(&driver))
         goto leave;
@@ -466,15 +466,6 @@ int main(int argc, char *argv[])
     RemoveStaleOutputs(&driver);
 
     build_result = DriverBuild(&driver, &finished_node_count, &frontend_rerun_reason, (const char**) argv, argc);
-
-    //we need to copy the reason, as the pointer we get points to the dag that we're about to deallocate
-    char frontend_rerun_reason_copy[kMaxPathLength];
-    frontend_rerun_reason_copy[0] = 0;
-    if (frontend_rerun_reason != nullptr)
-    {
-        strcpy(frontend_rerun_reason_copy, frontend_rerun_reason);
-        frontend_rerun_reason = nullptr;
-    }
 
     if (!SaveAllBuiltNodes(&driver))
         Log(kError, "Couldn't save AllBuiltNodes");
@@ -550,8 +541,8 @@ leave:
             int s = t;
             PrintServiceMessage(status, "*** %s %s (%.2f seconds - %d:%02d:%02d), %d items updated, %d evaluated", buildTitle, BuildResult::Names[build_result], total_time, h, m, s, g_Stats.m_ExecCount, finished_node_count);
         }
-        if (build_result == BuildResult::kRequireFrontendRerun && strlen(frontend_rerun_reason_copy) > 0)
-            PrintServiceMessage(MessageStatusLevel::Success, "*** additional run caused by: %s", frontend_rerun_reason_copy);
+        if (build_result == BuildResult::kRequireFrontendRerun && strlen(frontend_rerun_reason) > 0)
+            PrintServiceMessage(status, "*** additional run caused by: %s", frontend_rerun_reason);
     }
 
     SetStructuredLogFileName(nullptr);
