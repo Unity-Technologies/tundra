@@ -53,7 +53,6 @@ struct BuildQueueConfig
     int m_SharedResourcesCount;
     bool m_AttemptCacheReads;
     bool m_AttemptCacheWrites;
-
 };
 
 struct BuildQueue;
@@ -65,6 +64,11 @@ struct ThreadState
     int m_ThreadIndex;
     int m_ProfilerThreadId;
     BuildQueue *m_Queue;
+
+    // For tracking which invalidated glob/file signature is causing a frontend rerun to be required
+    // Only storing one of each type is sufficient for figuring out what message to give the user
+    const Frozen::DagGlobSignature *m_GlobCausingFrontendRerun;
+    const Frozen::DagFileSignature *m_FileCausingFrontendRerun;
 };
 
 namespace BuildResult
@@ -112,3 +116,5 @@ BuildResult::Enum BuildQueueBuild(BuildQueue *queue, MemAllocLinear* scratch);
 void BuildQueueDestroy(BuildQueue *queue);
 
 bool HasBuildStoppingFailures(const BuildQueue *queue);
+
+const char* BuildQueueGetFrontendRerunReason(BuildQueue* queue, MemAllocHeap* heap);

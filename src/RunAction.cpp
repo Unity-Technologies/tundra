@@ -120,7 +120,10 @@ NodeBuildResult::Enum PostRunActionBookkeeping(RuntimeNode* node, ThreadState* t
 
             // Compare digest with the one stored in the signature block
             if (0 != memcmp(&digest, &sig.m_Digest, sizeof digest))
+            {
+                thread_state->m_GlobCausingFrontendRerun = &sig;
                 return false;
+            }
         }
         return true;
     };
@@ -135,7 +138,10 @@ NodeBuildResult::Enum PostRunActionBookkeeping(RuntimeNode* node, ThreadState* t
             FileInfo info = GetFileInfo(path);
 
             if (info.m_Timestamp != timestamp)
+            {
+                thread_state->m_FileCausingFrontendRerun = &sig;
                 return false;
+            }
         }
         return true;
     };
