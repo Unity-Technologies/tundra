@@ -430,6 +430,7 @@ int main(int argc, char *argv[])
 
     BuildResult::Enum build_result = BuildResult::kSetupError;
     int finished_node_count = 0;
+    const char* frontend_rerun_reason = "";
 
     if (!DriverInitData(&driver))
         goto leave;
@@ -465,7 +466,7 @@ int main(int argc, char *argv[])
 
     RemoveStaleOutputs(&driver);
 
-    build_result = DriverBuild(&driver, &finished_node_count, (const char**) argv, argc);
+    build_result = DriverBuild(&driver, &finished_node_count, &frontend_rerun_reason, (const char**) argv, argc);
 
     if (!SaveAllBuiltNodes(&driver))
         Log(kError, "Couldn't save AllBuiltNodes");
@@ -530,7 +531,7 @@ leave:
     {
         if (total_time < 60.0)
         {
-            PrintServiceMessage(build_result == 0 ? MessageStatusLevel::Success : MessageStatusLevel::Failure, "*** %s %s (%.2f seconds), %d items updated, %d evaluated", buildTitle, BuildResult::Names[build_result], total_time, g_Stats.m_ExecCount, finished_node_count);
+            PrintServiceMessage(build_result == 0 ? MessageStatusLevel::Success : MessageStatusLevel::Failure, "*** %s %s%s (%.2f seconds), %d items updated, %d evaluated", buildTitle, BuildResult::Names[build_result], frontend_rerun_reason, total_time, g_Stats.m_ExecCount, finished_node_count);
         }
         else
         {
@@ -540,7 +541,7 @@ leave:
             int m = t / 60;
             t -= m * 60;
             int s = t;
-            PrintServiceMessage(build_result == 0 ? MessageStatusLevel::Success : MessageStatusLevel::Failure, "*** %s %s (%.2f seconds - %d:%02d:%02d), %d items updated, %d evaluated", buildTitle, BuildResult::Names[build_result], total_time, h, m, s, g_Stats.m_ExecCount, finished_node_count);
+            PrintServiceMessage(build_result == 0 ? MessageStatusLevel::Success : MessageStatusLevel::Failure, "*** %s %s%s (%.2f seconds - %d:%02d:%02d), %d items updated, %d evaluated", buildTitle, BuildResult::Names[build_result], frontend_rerun_reason, total_time, h, m, s, g_Stats.m_ExecCount, finished_node_count);
         }
     }
 
