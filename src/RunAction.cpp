@@ -23,6 +23,7 @@
 #include "BuildLoop.hpp"
 #include "RunAction.hpp"
 #include "FileInfo.hpp"
+#include "Actions.hpp"
 #include <stdarg.h>
 #include <algorithm>
 #include <stdio.h>
@@ -43,79 +44,71 @@ static int SlowCallback(void *user_data)
     return sendNextCallbackIn;
 }
 
-static ExecResult WriteTextFile(const char *payload, const char *target_file, MemAllocHeap *heap)
+static bool IsRunShellCommandAction(RuntimeNode* node)
 {
-    ExecResult result;
-    char tmpBuffer[1024];
-
-    memset(&result, 0, sizeof(result));
-
-    FILE *f = fopen(target_file, "wb");
-    if (!f)
-    {
-        InitOutputBuffer(&result.m_OutputBuffer, heap);
-
-        snprintf(tmpBuffer, sizeof(tmpBuffer), "Error opening for writing the file: %s, error: %s", target_file, strerror(errno));
-        EmitOutputBytesToDestination(&result, tmpBuffer, strlen(tmpBuffer));
-
-        result.m_ReturnCode = 1;
-        return result;
-    }
-    int length = strlen(payload);
-    int written = fwrite(payload, sizeof(char), length, f);
-    fclose(f);
-
-    if (written == length)
-        return result;
-
-    InitOutputBuffer(&result.m_OutputBuffer, heap);
-
-    snprintf(tmpBuffer, sizeof(tmpBuffer), "fwrite was supposed to write %d bytes to %s, but wrote %d bytes", length, target_file, written);
-    EmitOutputBytesToDestination(&result, tmpBuffer, strlen(tmpBuffer));
-
-    result.m_ReturnCode = 1;
-    return result;
-}
-
-static bool IsWriteFileAction(RuntimeNode* node)
-{
-    return node->m_DagNode->m_Flags & Frozen::DagNode::kFlagIsWriteTextFileAction;
+    return (node->m_DagNode->m_FlagsAndActionType & Frozen::DagNode::kFlagActionTypeMask) == ActionType::kRunShellCommand;
 }
 
 static bool AllowUnwrittenOutputFiles(RuntimeNode* node)
 {
-    return node->m_DagNode->m_Flags & Frozen::DagNode::kFlagAllowUnwrittenOutputFiles;
+    return node->m_DagNode->m_FlagsAndActionType & Frozen::DagNode::kFlagAllowUnwrittenOutputFiles;
 }
 
 static ExecResult RunActualAction(RuntimeNode* node, ThreadState* thread_state, Mutex* queue_lock, ValidationResult::Enum* out_validationresult)
 {
     auto& node_data = node->m_DagNode;
-    if (IsWriteFileAction(node))
+    ActionType::Enum actionType = static_cast<ActionType::Enum>(node_data->m_FlagsAndActionType & Frozen::DagNode::kFlagActionTypeMask);
+    switch(actionType)
     {
-        *out_validationresult = ValidationResult::Pass;
-        return WriteTextFile(node_data->m_Action, node_data->m_OutputFiles[0].m_Filename, thread_state->m_Queue->m_Config.m_Heap);
+        case ActionType::kRunShellCommand:
+        {
+            // Repack frozen env to pointers on the stack.
+            int env_count = node_data->m_EnvVars.GetCount();
+            EnvVariable *env_vars = (EnvVariable *)alloca(env_count * sizeof(EnvVariable));
+            for (int i = 0; i < env_count; ++i)
+            {
+                env_vars[i].m_Name = node_data->m_EnvVars[i].m_Name;
+                env_vars[i].m_Value = node_data->m_EnvVars[i].m_Value;
+            }
+
+            SlowCallbackData slowCallbackData;
+            slowCallbackData.node_data = node_data;
+            slowCallbackData.time_of_start = TimerGet();
+            slowCallbackData.queue_lock = queue_lock;
+            slowCallbackData.build_queue = thread_state->m_Queue;
+
+            int job_id = thread_state->m_ThreadIndex;
+            auto result = ExecuteProcess(node_data->m_Action, env_count, env_vars, thread_state->m_Queue->m_Config.m_Heap, job_id, false, SlowCallback, &slowCallbackData);
+            *out_validationresult = ValidateExecResultAgainstAllowedOutput(&result, node_data);
+            return result;
+        }
+        case ActionType::kWriteTextFile:
+        {
+            *out_validationresult = ValidationResult::Pass;
+            return WriteTextFile(node_data->m_WriteTextPayload, node_data->m_OutputFiles[0].m_Filename, thread_state->m_Queue->m_Config.m_Heap);
+        }
+        case ActionType::kCopyFiles:
+        {
+            *out_validationresult = ValidationResult::Pass;
+            return CopyFiles(node_data->m_InputFiles.GetArray(), node_data->m_OutputFiles.GetArray(), node_data->m_InputFiles.GetCount(), thread_state->m_Queue->m_Config.m_StatCache, thread_state->m_Queue->m_Config.m_Heap);
+        }
+        case ActionType::kUnknown:
+        default:
+        {
+            // Unknown action - fail with an appropriate error message
+            *out_validationresult = ValidationResult::Pass;
+
+            ExecResult result;
+            char tmpBuffer[1024];
+            InitOutputBuffer(&result.m_OutputBuffer, thread_state->m_Queue->m_Config.m_Heap);
+            snprintf(tmpBuffer, sizeof(tmpBuffer), "Unknown action type %d (%s)", actionType, ActionType::ToString(actionType));
+            EmitOutputBytesToDestination(&result, tmpBuffer, strlen(tmpBuffer));
+            result.m_ReturnCode = -1;
+
+            return result;
+        }
     }
-
-    // Repack frozen env to pointers on the stack.
-    int env_count = node_data->m_EnvVars.GetCount();
-    EnvVariable *env_vars = (EnvVariable *)alloca(env_count * sizeof(EnvVariable));
-    for (int i = 0; i < env_count; ++i)
-    {
-        env_vars[i].m_Name = node_data->m_EnvVars[i].m_Name;
-        env_vars[i].m_Value = node_data->m_EnvVars[i].m_Value;
-    }
-
-    SlowCallbackData slowCallbackData;
-    slowCallbackData.node_data = node_data;
-    slowCallbackData.time_of_start = TimerGet();
-    slowCallbackData.queue_lock = queue_lock;
-    slowCallbackData.build_queue = thread_state->m_Queue;
-
-    int job_id = thread_state->m_ThreadIndex;
-    auto result = ExecuteProcess(node_data->m_Action, env_count, env_vars, thread_state->m_Queue->m_Config.m_Heap, job_id, false, SlowCallback, &slowCallbackData);
-    *out_validationresult = ValidateExecResultAgainstAllowedOutput(&result, node_data);
-    return result;
-};
+}
 
 void PostRunActionBookkeeping(RuntimeNode* node, ThreadState* thread_state)
 {
@@ -147,7 +140,7 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
 
     const char *cmd_line = node_data->m_Action;
 
-    if (!IsWriteFileAction(node) && (!cmd_line || cmd_line[0] == '\0'))
+    if (IsRunShellCommandAction(node) && (!cmd_line || cmd_line[0] == '\0'))
         return NodeBuildResult::kRanSuccesfully;
 
     StatCache *stat_cache = queue->m_Config.m_StatCache;
@@ -183,7 +176,7 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
 
 
     // See if we need to remove the output files before running anything.
-    if (0 == (node_data->m_Flags & Frozen::DagNode::kFlagOverwriteOutputs))
+    if (0 == (node_data->m_FlagsAndActionType & Frozen::DagNode::kFlagOverwriteOutputs))
     {
         for (const FrozenFileAndHash &output : node_data->m_OutputFiles)
         {
@@ -309,7 +302,7 @@ NodeBuildResult::Enum RunAction(BuildQueue *queue, ThreadState *thread_state, Ru
 
     // Clean up output files after a failed build unless they are precious,
     // or unless the failure was from failing to write one of them
-    if (0 == (Frozen::DagNode::kFlagPreciousOutputs & node_data->m_Flags) && !(0 == result.m_ReturnCode && passedOutputValidation == ValidationResult::UnwrittenOutputFileFail))
+    if (0 == (Frozen::DagNode::kFlagPreciousOutputs & node_data->m_FlagsAndActionType) && !(0 == result.m_ReturnCode && passedOutputValidation == ValidationResult::UnwrittenOutputFileFail))
     {
         for (const FrozenFileAndHash &output : node_data->m_OutputFiles)
         {

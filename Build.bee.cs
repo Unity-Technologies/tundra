@@ -216,13 +216,16 @@ class Build
             if (config.CodeGen == CodeGen.Debug && config.Platform == Platform.HostPlatform && configFile.FileExists())
             {
                 JObject configObject = JObject.Parse(configFile.ReadAllText());
-                var unityCheckout = (string)configObject["unityCheckout"];
-                if (unityCheckout != null)
+                var externalDeployPaths = (JArray)configObject["externalDeployPaths"];
+                if (externalDeployPaths != null)
                 {
-                    var deployDir = new NPath(unityCheckout).Combine($"External/tundra/builds/build/{DirNameForConfig(config).ToLower()}/master/");
                     var alias = "debug-deploy";
-                    Console.WriteLine($"Setting up {alias} alias to {deployDir}");
-                    Backend.Current.AddAliasDependency(alias, tundra.DeployTo(deployDir).Path);
+
+                    foreach (NPath path in externalDeployPaths.Select(t => new NPath(t.ToString())))
+                    {
+                        Console.WriteLine($"Setting up {alias} alias to {path}");
+                        Backend.Current.AddAliasDependency(alias, tundra.DeployTo(path).Path);
+                    }
                 }
             }
         }

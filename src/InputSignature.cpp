@@ -103,7 +103,7 @@ static void ReportChangedInputFiles(JsonWriter *msg, const FrozenArray<Frozen::N
 
 static void ReportValueWithOptionalTruncation(JsonWriter *msg, const char *keyName, const char *truncatedKeyName, const FrozenString &value)
 {
-    size_t len = strlen(value);
+    size_t len = value ? strlen(value) : 0;
     const size_t maxLen = KB(64);
     JsonWriteKeyName(msg, keyName);
     JsonWriteValueString(msg, value, maxLen);
@@ -127,7 +127,9 @@ static void ReportInputSignatureChanges(
     int sha_extension_hash_count,
     ThreadState *thread_state)
 {
-    if (strcmp(dagnode->m_Action, previously_built_node->m_Action) != 0)
+    if ((dagnode->m_Action == nullptr && previously_built_node->m_Action != nullptr)
+      ||(dagnode->m_Action != nullptr && previously_built_node->m_Action == nullptr)
+      ||(dagnode->m_Action != nullptr && previously_built_node->m_Action != nullptr && strcmp(dagnode->m_Action, previously_built_node->m_Action) != 0))
     {
         JsonWriteStartObject(msg);
 
@@ -328,7 +330,7 @@ static bool CalculateInputSignature(BuildQueue* queue, ThreadState* thread_state
     if (scanner)
         HashSetInit(&node->m_ImplicitInputs, queue->m_Config.m_Heap);
 
-    bool force_use_timestamp = dagnode->m_Flags & Frozen::DagNode::kFlagBanContentDigestForInputs;
+    bool force_use_timestamp = dagnode->m_FlagsAndActionType & Frozen::DagNode::kFlagBanContentDigestForInputs;
 
     // Roll back scratch allocator after all file scans
     MemAllocLinearScope alloc_scope(&thread_state->m_ScratchAlloc);
@@ -389,11 +391,13 @@ static bool CalculateInputSignature(BuildQueue* queue, ThreadState* thread_state
         });
     }
 
+    HashAddInteger(&sighash, (uint8_t)dagnode->m_FlagsAndActionType & Frozen::DagNode::kFlagActionTypeMask);
+
     for (const FrozenString &input : dagnode->m_AllowedOutputSubstrings)
         HashAddString(&sighash, (const char *)input);
 
-    HashAddInteger(&sighash, (dagnode->m_Flags & Frozen::DagNode::kFlagAllowUnexpectedOutput) ? 1 : 0);
-    HashAddInteger(&sighash, (dagnode->m_Flags & Frozen::DagNode::kFlagAllowUnwrittenOutputFiles) ? 1 : 0);
+    HashAddInteger(&sighash, (dagnode->m_FlagsAndActionType & Frozen::DagNode::kFlagAllowUnexpectedOutput) ? 1 : 0);
+    HashAddInteger(&sighash, (dagnode->m_FlagsAndActionType & Frozen::DagNode::kFlagAllowUnwrittenOutputFiles) ? 1 : 0);
 
     HashFinalize(&sighash, &node->m_CurrentInputSignature);
     return true;

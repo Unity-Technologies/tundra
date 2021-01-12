@@ -168,7 +168,7 @@ void HashUpdate(HashState *h, const void *data, size_t size);
 // Add string data to be hashed.
 inline void HashAddString(HashState *self, const char *s)
 {
-    HashUpdate(self, s, strlen(s));
+    HashUpdate(self, s, s ? strlen(s) : 0);
 }
 
 inline void HashAddString(FILE* debug_hash_fd, HashState* state, const char* label, const char* str)

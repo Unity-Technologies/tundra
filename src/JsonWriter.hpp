@@ -32,3 +32,4 @@ void JsonWriteValueInteger(JsonWriter *writer, int64_t value);
 void JsonWriteNewline(JsonWriter *writer);
 
 void JsonWriteToFile(JsonWriter *writer, FILE *fp);
+const char* JsonWriteToString(JsonWriter* writer, MemAllocLinear* heap);

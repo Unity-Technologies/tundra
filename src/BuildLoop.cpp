@@ -92,9 +92,8 @@ static bool IsNodeCacheableByLeafInputsAndCachingEnabled(BuildQueue* queue, Runt
 {
     if (!queue->m_Config.m_AttemptCacheReads && !queue->m_Config.m_AttemptCacheWrites)
         return false;
-    return 0 != (node->m_DagNode->m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs);
+    return 0 != (node->m_DagNode->m_FlagsAndActionType & Frozen::DagNode::kFlagCacheableByLeafInputs);
 }
-
 
 static bool AllDependenciesAreFinished(BuildQueue *queue, RuntimeNode *runtime_node)
 {
@@ -236,7 +235,6 @@ static void FinishNode(BuildQueue* queue, ThreadState* thread_state, RuntimeNode
 
     EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(queue, thread_state, node);
 }
-
 
 static void AttemptCacheWrite(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node)
 {

@@ -18,7 +18,7 @@ void FindDependentNodesFromRootIndex_IncludingSelf_NotRecursingIntoCacheableNode
         const int dag_bit = 1 << (dag_index & 31);
         if (0 == (node_visited_bits[dag_word] & dag_bit))
         {
-            if ((dagNode.m_Flags & Frozen::DagNode::kFlagCacheableByLeafInputs) && !isRootSearchNode)
+            if ((dagNode.m_FlagsAndActionType & Frozen::DagNode::kFlagCacheableByLeafInputs) && !isRootSearchNode)
             {
                 if (dependenciesThatAreCacheableThemselves)
                     BufferAppendOne(dependenciesThatAreCacheableThemselves, heap, dag_index);

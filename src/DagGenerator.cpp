@@ -13,6 +13,7 @@
 #include "BuildQueue.hpp"
 #include "LeafInputSignature.hpp"
 #include "FileInfoHelper.hpp"
+#include "Actions.hpp"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -300,6 +301,7 @@ static bool WriteNodes(
         const int32_t i = order[ni].m_Node;
         const JsonObjectValue *node = nodes->m_Values[i]->AsObject();
 
+        const char* type = FindStringValue(node, "ActionType");
         const char *action = FindStringValue(node, "Action");
         const char *annotation = FindStringValue(node, "Annotation");
         const char *profilerOutput = FindStringValue(node, "ProfilerOutput");
@@ -320,10 +322,34 @@ static bool WriteNodes(
         const JsonArrayValue *cachingInputIgnoreList = FindArrayValue(node, "CachingInputIgnoreList");
         const char *writetextfile_payload = FindStringValue(node, "WriteTextFilePayload");
 
-        if (writetextfile_payload == nullptr)
-            WriteStringPtr(node_data_seg, str_seg, action);
-        else
-            WriteStringPtr(node_data_seg, writetextfile_payloads_seg, writetextfile_payload);
+        // For compatibility with DAG.json writer code which isn't emitting this field yet, we allow it to be
+        // omitted and pick a sensible default.
+        //
+        // In the future we will still want to allow the field to be omitted for the most common type of action,
+        // but we will want to get rid of 'magically detect that it is a WriteTextFile action if there is a
+        // WriteTextFilePayload' and enforce that all actions other than the most common one actually specify what
+        // kind of action they are.
+        ActionType::Enum actionType = (writetextfile_payload != nullptr) ? ActionType::kWriteTextFile : ActionType::kRunShellCommand;
+        if (type != nullptr)
+            actionType = ActionType::FromString(type);
+
+        // WriteTextFilePayload for non-WriteTextFile actions is invalid, and so is a WriteTextFile action with no WriteTextFilePayload
+        if ((writetextfile_payload != nullptr) ^ (actionType == ActionType::kWriteTextFile))
+            return false;
+
+        switch (actionType) {
+            case ActionType::kRunShellCommand:
+                WriteStringPtr(node_data_seg, str_seg, action);
+                break;
+            case ActionType::kWriteTextFile:
+                WriteStringPtr(node_data_seg, writetextfile_payloads_seg, writetextfile_payload);
+                break;
+            case ActionType::kCopyFiles:
+                BinarySegmentWriteNullPointer(node_data_seg);
+                break;
+            case ActionType::kUnknown:
+                return false;
+        }
 
         WriteStringPtr(node_data_seg, str_seg, annotation);
 
@@ -358,6 +384,11 @@ static bool WriteNodes(
 
         writeDependencyIndexList(toBuildDependencies);
         writeDependencyIndexList(toUseDependencies);
+
+        if (actionType == ActionType::kCopyFiles && (inputs->m_Count != outputs->m_Count))
+        {
+            return false;
+        }
 
         WriteFileArray(node_data_seg, array2_seg, str_seg, inputs);
         WriteFileArray(node_data_seg, array2_seg, str_seg, filesThatMightBeIncluded);
@@ -439,6 +470,8 @@ static bool WriteNodes(
 
         uint32_t flags = 0;
 
+        flags |= static_cast<uint8_t>(actionType);
+
         flags |= GetNodeFlag(node, "OverwriteOutputs", Frozen::DagNode::kFlagOverwriteOutputs, true);
         flags |= GetNodeFlag(node, "PreciousOutputs", Frozen::DagNode::kFlagPreciousOutputs);
         flags |= GetNodeFlag(node, "AllowUnexpectedOutput", Frozen::DagNode::kFlagAllowUnexpectedOutput, false);
@@ -451,9 +484,6 @@ static bool WriteNodes(
             if (0==strcmp(cachingMode, "ByLeafInputs"))
                 flags |= Frozen::DagNode::kFlagCacheableByLeafInputs;
         }
-
-        if (writetextfile_payload != nullptr)
-            flags |= Frozen::DagNode::kFlagIsWriteTextFileAction;
 
         BinarySegmentWriteUint32(node_data_seg, flags);
 

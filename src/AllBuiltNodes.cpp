@@ -81,9 +81,16 @@ static void save_node_sharedcode(Frozen::BuiltNodeResult::Enum builtNodeResult, 
     for (int32_t i = 0; i < file_count; ++i)
         WriteFrozenFileAndHashIntoBuiltNodesStream(src_node->m_AuxOutputFiles[i]);
 
-    BinarySegmentWritePointer(segments.built_nodes, BinarySegmentPosition(segments.string));
+    if (src_node->m_Action && emitDataForBeeWhy)
+    {
+        BinarySegmentWritePointer(segments.built_nodes, BinarySegmentPosition(segments.string));
+        BinarySegmentWriteStringData(segments.string, src_node->m_Action);
+    }
+    else
+    {
+        BinarySegmentWriteNullPointer(segments.built_nodes);
+    }
 
-    BinarySegmentWriteStringData(segments.string, emitDataForBeeWhy ? src_node->m_Action : "");
 }
 
 

@@ -95,28 +95,33 @@ struct DagNode
 {
     enum
     {
+        // Bottom 8 bits are reserved for the action type
+        kFlagActionTypeMask = (1 << 8) - 1,
+
         // Set in m_Flags if it is safe to overwrite the output files in place.  If
         // this flag is not present, the build system will remove the output files
         // before running the action. This is useful to prevent tools that
         // sometimes misbehave in the presence of old output files. ar is a good
         // example.
-        kFlagOverwriteOutputs = 1 << 0,
+        kFlagOverwriteOutputs = 1 << 8,
 
         // Keep output files even if the build fails. Useful mostly to retain files
         // for incremental linking.
-        kFlagPreciousOutputs = 1 << 1,
+        kFlagPreciousOutputs = 1 << 9,
 
         //if not set, we fail the build when a command prints anything unexpected to stdout or stderr
-        kFlagAllowUnexpectedOutput = 1 << 3,
+        kFlagAllowUnexpectedOutput = 1 << 10,
 
-        kFlagIsWriteTextFileAction = 1 << 4,
-        kFlagAllowUnwrittenOutputFiles = 1 << 5,
-        kFlagBanContentDigestForInputs = 1 << 6,
+        kFlagAllowUnwrittenOutputFiles = 1 << 11,
+        kFlagBanContentDigestForInputs = 1 << 12,
 
-        kFlagCacheableByLeafInputs = 1 << 7
+        kFlagCacheableByLeafInputs = 1 << 13
     };
 
-    FrozenString m_Action;
+    union {
+        FrozenString m_Action;
+        FrozenString m_WriteTextPayload;
+    };
     FrozenString m_Annotation;
     FrozenString m_ProfilerOutput;
     FrozenArray<int32_t> m_ToBuildDependencies;
@@ -137,7 +142,7 @@ struct DagNode
     FrozenArray<DagStatSignature> m_StatSignatures;
     FrozenArray<DagGlobSignature> m_GlobSignatures;
     FrozenArray<FrozenFileAndHash> m_CachingInputIgnoreList;
-    uint32_t m_Flags;
+    uint32_t m_FlagsAndActionType;
     uint32_t m_OriginalIndex;
     uint32_t m_DagNodeIndex;
 };
@@ -153,7 +158,7 @@ struct SharedResourceData
 
 struct Dag
 {
-    static const uint32_t MagicNumber = 0x9ea0a246 ^ kTundraHashMagic;
+    static const uint32_t MagicNumber = 0x24efa248 ^ kTundraHashMagic;
 
     uint32_t m_MagicNumber;
 
