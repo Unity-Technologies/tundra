@@ -542,7 +542,7 @@ leave:
             PrintServiceMessage(status, "*** %s %s (%.2f seconds - %d:%02d:%02d), %d items updated, %d evaluated", buildTitle, BuildResult::Names[build_result], total_time, h, m, s, g_Stats.m_ExecCount, finished_node_count);
         }
         if (build_result == BuildResult::kRequireFrontendRerun && strlen(frontend_rerun_reason) > 0)
-            PrintServiceMessage(status, "*** Additional run caused by: %s\n", frontend_rerun_reason);
+            PrintServiceMessage(status, "*** Additional run caused by: %s", frontend_rerun_reason);
     }
 
     SetStructuredLogFileName(nullptr);
