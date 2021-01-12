@@ -117,4 +117,5 @@ void BuildQueueDestroy(BuildQueue *queue);
 
 bool HasBuildStoppingFailures(const BuildQueue *queue);
 
-const char* BuildQueueGetFrontendRerunReason(BuildQueue* queue, MemAllocHeap* heap);
+static const int kRerunReasonBufferSize = kMaxPathLength + 128;
+void BuildQueueGetFrontendRerunReason(BuildQueue* queue, char* out_frontend_rerun_reason);

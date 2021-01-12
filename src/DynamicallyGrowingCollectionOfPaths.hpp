@@ -1,4 +1,4 @@
-#pragma once;
+#pragma once
 #include "Buffer.hpp"
 #include <stdint.h>
 struct MemAllocHeap;

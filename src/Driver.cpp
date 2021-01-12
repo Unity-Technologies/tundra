@@ -295,7 +295,7 @@ void DriverDestroy(Driver *self)
     HeapDestroy(&self->m_Heap);
 }
 
-BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count, const char** out_frontend_rerun_reason, const char** argv, int argc)
+BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count, char* out_frontend_rerun_reason, const char** argv, int argc)
 {
     const Frozen::Dag *dag = self->m_DagData;
 
@@ -371,7 +371,7 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count, const 
 
     if (build_result == BuildResult::kRequireFrontendRerun)
     {
-        *out_frontend_rerun_reason = BuildQueueGetFrontendRerunReason(&build_queue, &self->m_Heap);
+        BuildQueueGetFrontendRerunReason(&build_queue, out_frontend_rerun_reason);
     }
 
     *out_finished_node_count = build_queue.m_FinishedNodeCount;

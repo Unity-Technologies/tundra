@@ -196,10 +196,10 @@ BuildResult::Enum BuildQueueBuild(BuildQueue *queue, MemAllocLinear* scratch)
     return queue->m_FinalBuildResult;
 }
 
-const char* BuildQueueGetFrontendRerunReason(BuildQueue* queue, MemAllocHeap* heap)
+void BuildQueueGetFrontendRerunReason(BuildQueue* queue, char* out_frontend_rerun_reason)
 {
     if (queue->m_FinalBuildResult != BuildResult::kRequireFrontendRerun)
-        return nullptr;
+        return;
 
     for (int i = 0; i < queue->m_Config.m_DriverOptions->m_ThreadCount; ++i)
     {
@@ -207,20 +207,15 @@ const char* BuildQueueGetFrontendRerunReason(BuildQueue* queue, MemAllocHeap* he
 
         if(thread_state.m_GlobCausingFrontendRerun != nullptr)
         {
-            size_t msg_length = strlen(thread_state.m_GlobCausingFrontendRerun->m_Path.Get()) + strlen(" because contents of  changed") + 1;
-            char* buffer = static_cast<char*>(HeapAllocate(heap, msg_length));
-            snprintf(buffer, msg_length, " because contents of %s changed)", thread_state.m_GlobCausingFrontendRerun->m_Path.Get());
-            return buffer;
+            snprintf(out_frontend_rerun_reason, kRerunReasonBufferSize, "contents change of %s", thread_state.m_GlobCausingFrontendRerun->m_Path.Get());
+            return;
         }
 
         if(thread_state.m_FileCausingFrontendRerun != nullptr)
         {
-            size_t msg_length = strlen(thread_state.m_FileCausingFrontendRerun->Get()) + strlen(" because timestamp of changed") + 1;
-            char* buffer = static_cast<char*>(HeapAllocate(heap, msg_length));
-            snprintf(buffer, msg_length, " because timestamp of %s changed", thread_state.m_FileCausingFrontendRerun->Get());
-            return buffer;
+            snprintf(out_frontend_rerun_reason, kRerunReasonBufferSize, "timestamp change of %s", thread_state.m_FileCausingFrontendRerun->Get());
+            return;
         }
     }
 
-    return nullptr;
 }
