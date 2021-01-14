@@ -12,7 +12,7 @@ namespace NodeBuildResult
     {
         kDidNotRun = 0,
         kUpToDate,
-        kUpToDataButDependeesRequireFrontendRerun,
+        kUpToDateButDependeesRequireFrontendRerun,
         kRanSuccesfully,
         kRanFailed,
         kRanSuccessButDependeesRequireFrontendRerun

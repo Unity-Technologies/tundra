@@ -75,15 +75,12 @@ static void LogFirstTimeEnqueue(MemAllocLinear* scratch, RuntimeNode* enqueuedNo
     LogStructured(&msg);
 }
 
-static int EnqueueNodeListWithoutWakingAwaiters(BuildQueue* queue, MemAllocLinear* scratch, const FrozenArray<int32_t>& nodesToEnqueue, RuntimeNode* enqueingNode)
+static int EnqueueNodeListWithoutWakingAwaiters(BuildQueue* queue, MemAllocLinear* scratch, const FrozenArray<int32_t>& nodesToEnqueue, RuntimeNode* enqueueingNode)
 {
     int placed_on_workstack_count = 0;
-
-    //we enqueue dependency lists in reverse. because our semantics say that the most urgent dependencies are in the list first, it's important that they
-    //end up on the top of the workstack, so they'll be processed first.
     for(int32_t depDagIndex : nodesToEnqueue)
     {
-        placed_on_workstack_count += EnqueueNodeWithoutWakingAwaiters(queue, scratch, &queue->m_Config.m_RuntimeNodes[depDagIndex], enqueingNode);
+        placed_on_workstack_count += EnqueueNodeWithoutWakingAwaiters(queue, scratch, &queue->m_Config.m_RuntimeNodes[depDagIndex], enqueueingNode);
     }
     return placed_on_workstack_count;
 }
@@ -150,7 +147,7 @@ int EnqueueNodeWithoutWakingAwaiters(BuildQueue *queue, MemAllocLinear* scratch,
     } else {
         //ok, so in this case the queued node is not immediately actionable. so we don't put it on the workstack, but instead queue up all our tobuild dependencies,
         //so that our node becomes immediately actionable in the future. We don't blindly always do this, because in the case where this node is leaf input cacheable
-        //we might get a cache hit, and it won't be necissery at all to build any of the dependencies.
+        //we might get a cache hit, and it won't be necessary at all to build any of the dependencies.
         placed_on_workstack_count += EnqueueNodeListWithoutWakingAwaiters(queue, scratch, runtime_node->m_DagNode->m_ToBuildDependencies, runtime_node);
     }
 
@@ -379,7 +376,7 @@ static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, M
     {
         return AreNodeFileAndGlobSignaturesStillValid(node, thread_state)
             ? NodeBuildResult::kUpToDate
-            : NodeBuildResult::kUpToDataButDependeesRequireFrontendRerun;
+            : NodeBuildResult::kUpToDateButDependeesRequireFrontendRerun;
     }
 
     NodeBuildResult::Enum runActionResult = RunAction(queue, thread_state, node, queue_lock);
@@ -555,7 +552,7 @@ static void ProcessNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
                     SignalMainThreadToStartCleaningUp(queue);
                 break;
             case NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun:
-            case NodeBuildResult::kUpToDataButDependeesRequireFrontendRerun:
+            case NodeBuildResult::kUpToDateButDependeesRequireFrontendRerun:
                 if (queue->m_FinalBuildResult == BuildResult::kOk)
                 {
                     queue->m_FinalBuildResult = BuildResult::kRequireFrontendRerun;

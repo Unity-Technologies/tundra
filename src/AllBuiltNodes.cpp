@@ -155,7 +155,7 @@ bool SaveAllBuiltNodes(Driver *self)
             case NodeBuildResult::kUpToDate:
             case NodeBuildResult::kRanSuccesfully:
             case NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun:
-            case NodeBuildResult::kUpToDataButDependeesRequireFrontendRerun:
+            case NodeBuildResult::kUpToDateButDependeesRequireFrontendRerun:
                 return RuntimeNodeGetInputSignatureMightBeIncorrect(runtime_node)
                     ? Frozen::BuiltNodeResult::kRanSuccessfullyButInputSignatureMightBeIncorrect
                     : Frozen::BuiltNodeResult::kRanSuccessfullyWithGuaranteedCorrectInputSignature;
@@ -270,7 +270,7 @@ bool SaveAllBuiltNodes(Driver *self)
         switch (runtime_node->m_BuildResult)
         {
             case NodeBuildResult::kUpToDate:
-            case NodeBuildResult::kUpToDataButDependeesRequireFrontendRerun:
+            case NodeBuildResult::kUpToDateButDependeesRequireFrontendRerun:
                 break;
             case NodeBuildResult::kRanFailed:
             case NodeBuildResult::kRanSuccesfully:
@@ -306,7 +306,7 @@ bool SaveAllBuiltNodes(Driver *self)
         {
             case NodeBuildResult::kDidNotRun:
                 return false;
-            case NodeBuildResult::kUpToDataButDependeesRequireFrontendRerun:
+            case NodeBuildResult::kUpToDateButDependeesRequireFrontendRerun:
             case NodeBuildResult::kUpToDate:
             case NodeBuildResult::kRanSuccesfully:
             case NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun:
