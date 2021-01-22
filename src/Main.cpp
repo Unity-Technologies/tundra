@@ -7,7 +7,6 @@
 #include "Profiler.hpp"
 #include "DagData.hpp"
 #include "NodeResultPrinting.hpp"
-#include "DynamicOutputDirectories.hpp"
 #include "LeafInputSignature.hpp"
 #include "RemoveStaleOutputs.hpp"
 #include "AllBuiltNodes.hpp"
@@ -66,6 +65,7 @@ static const struct OptionTemplate
     {'p', "profile", OptionType::kString, offsetof(DriverOptions, m_ProfileOutput), "Output build profile"},
     {'C', "working-dir", OptionType::kString, offsetof(DriverOptions, m_WorkingDir), "Set working directory before building"},
     {'R', "dagfile", OptionType::kString, offsetof(DriverOptions, m_DAGFileName), "filename of where tundra should store the mmapped dag file"},
+    {'O', "dagfilejson", OptionType::kString, offsetof(DriverOptions, m_DagFileNameJson), "Filename of the json to bake (only used in explicit baking mode)"},
     {'I', "report-includes", OptionType::kString, offsetof(DriverOptions, m_IncludesOutput), "Output included files into a json file and exit"},
     {'h', "help", OptionType::kBool, offsetof(DriverOptions, m_ShowHelp), "Show help"},
 #if defined(TUNDRA_WIN32)
@@ -428,13 +428,13 @@ int main(int argc, char *argv[])
     if (driver.m_Options.m_ProfileOutput)
         ProfilerInit(driver.m_Options.m_ProfileOutput, driver.m_Options.m_ThreadCount + 1);
 
-    BuildResult::Enum build_result = BuildResult::kSetupError;
+
     int finished_node_count = 0;
+    BuildResult::Enum build_result = BuildResult::kOk;
+    char frontend_rerun_reason[kRerunReasonBufferSize] = {'\0'};
 
     if (!DriverInitData(&driver))
         goto leave;
-
-    InitializeDynamicOutputDirectories(driver.m_Options.m_ThreadCount);
 
 #if TUNDRA_WIN32
     buildTitle = _strdup(driver.m_DagData->m_BuildTitle.Get());
@@ -442,17 +442,17 @@ int main(int argc, char *argv[])
     buildTitle = strdup(driver.m_DagData->m_BuildTitle.Get());
 #endif
 
+
     if (driver.m_Options.m_ShowTargets)
     {
         DriverShowTargets(&driver);
         Log(kDebug, "Only showing targets - quitting");
-        build_result = BuildResult::kOk;
         goto leave;
     }
 
     if (driver.m_Options.m_IncludesOutput != nullptr)
     {
-        build_result = ReportIncludes(&driver) ? BuildResult::kOk : BuildResult::kSetupError;
+        build_result = ReportIncludes(&driver) ? BuildResult::kOk : BuildResult::kBuildError;
         Log(kDebug, "Only reporting includes - quitting");
         goto leave;
     }
@@ -465,7 +465,7 @@ int main(int argc, char *argv[])
 
     RemoveStaleOutputs(&driver);
 
-    build_result = DriverBuild(&driver, &finished_node_count, (const char**) argv, argc);
+    build_result = DriverBuild(&driver, &finished_node_count, frontend_rerun_reason, (const char**) argv, argc);
 
     if (!SaveAllBuiltNodes(&driver))
         Log(kError, "Couldn't save AllBuiltNodes");
@@ -477,8 +477,6 @@ int main(int argc, char *argv[])
         Log(kWarning, "Couldn't save SHA1 digest cache");
 
 leave:
-
-    DestroyDynamicOutputDirectories();
 
     DriverDestroy(&driver);
 
@@ -528,9 +526,10 @@ leave:
     bool haveTitle = strlen(buildTitle) > 0;
     if (haveTitle && (build_result != 0 || !options.m_SilenceIfPossible))
     {
+        MessageStatusLevel::Enum status = (build_result == BuildResult::kOk || build_result == BuildResult::kRequireFrontendRerun) ? MessageStatusLevel::Success : MessageStatusLevel::Failure;
         if (total_time < 60.0)
         {
-            PrintServiceMessage(build_result == 0 ? MessageStatusLevel::Success : MessageStatusLevel::Failure, "*** %s %s (%.2f seconds), %d items updated, %d evaluated", buildTitle, BuildResult::Names[build_result], total_time, g_Stats.m_ExecCount, finished_node_count);
+            PrintServiceMessage(status, "*** %s %s (%.2f seconds), %d items updated, %d evaluated", buildTitle, BuildResult::Names[build_result], total_time, g_Stats.m_ExecCount, finished_node_count);
         }
         else
         {
@@ -540,8 +539,10 @@ leave:
             int m = t / 60;
             t -= m * 60;
             int s = t;
-            PrintServiceMessage(build_result == 0 ? MessageStatusLevel::Success : MessageStatusLevel::Failure, "*** %s %s (%.2f seconds - %d:%02d:%02d), %d items updated, %d evaluated", buildTitle, BuildResult::Names[build_result], total_time, h, m, s, g_Stats.m_ExecCount, finished_node_count);
+            PrintServiceMessage(status, "*** %s %s (%.2f seconds - %d:%02d:%02d), %d items updated, %d evaluated", buildTitle, BuildResult::Names[build_result], total_time, h, m, s, g_Stats.m_ExecCount, finished_node_count);
         }
+        if (build_result == BuildResult::kRequireFrontendRerun && strlen(frontend_rerun_reason) > 0)
+            PrintServiceMessage(status, "*** Additional run caused by: %s", frontend_rerun_reason);
     }
 
     SetStructuredLogFileName(nullptr);

@@ -12,6 +12,7 @@
 #include "FileSign.hpp"
 #include "BuildQueue.hpp"
 #include "LeafInputSignature.hpp"
+#include "FileInfoHelper.hpp"
 #include "Actions.hpp"
 
 #include <stdlib.h>
@@ -174,9 +175,11 @@ static uint32_t GetNodeFlag(const JsonObjectValue *node, const char *name, uint3
     return GetNodeFlagBool(node, name, defaultValue) ? value : 0;
 }
 
-static void EmitFileSignatures(const JsonObjectValue *json, BinarySegment *main_seg, BinarySegment *aux_seg, BinarySegment *str_seg)
+typedef void(*EmitFunc)(BinarySegment* aux_seg, const FileInfo& fileInfo);
+
+static void EmitStatOrFileSignatures(const JsonObjectValue *json, BinarySegment *main_seg, BinarySegment *aux_seg, BinarySegment *str_seg, const char* jsonKey, EmitFunc emitFunc)
 {
-    if (const JsonArrayValue *file_sigs = FindArrayValue(json, "FileSignatures"))
+    if (const JsonArrayValue *file_sigs = FindArrayValue(json, jsonKey))
     {
         size_t count = file_sigs->m_Count;
         BinarySegmentWriteInt32(main_seg, (int)count);
@@ -189,14 +192,13 @@ static void EmitFileSignatures(const JsonObjectValue *json, BinarySegment *main_
 
                 if (!path)
                 {
-                    Croak("bad FileSignatures data: could not get 'File' member for object at index %zu\n", i);
+                    Croak("bad %s data: could not get 'File' member for object at index %zu\n", jsonKey, i);
                 }
 
-                int64_t timestamp = GetFileInfo(path).m_Timestamp;
+                FileInfo fileInfo = GetFileInfo(path);
+
                 WriteStringPtr(aux_seg, str_seg, path);
-                char padding[4] = {0, 0, 0, 0};
-                BinarySegmentWrite(aux_seg, padding, 4);
-                BinarySegmentWriteUint64(aux_seg, uint64_t(timestamp));
+                emitFunc(aux_seg,fileInfo);
             }
             else
             {
@@ -210,6 +212,27 @@ static void EmitFileSignatures(const JsonObjectValue *json, BinarySegment *main_
         BinarySegmentWriteNullPointer(main_seg);
     }
 };
+
+
+static void EmitFileSignatures(const JsonObjectValue *json, BinarySegment *main_seg, BinarySegment *aux_seg, BinarySegment *str_seg)
+{
+    EmitStatOrFileSignatures(json, main_seg, aux_seg, str_seg, "FileSignatures", [](BinarySegment *aux_seg, const FileInfo& fileInfo)
+    {
+        char padding[4] = {0, 0, 0, 0};
+        BinarySegmentWrite(aux_seg, padding, 4);
+        int64_t timestamp = fileInfo.m_Timestamp;
+        BinarySegmentWriteUint64(aux_seg, uint64_t(timestamp));
+    });
+};
+
+static void EmitStatSignatures(const JsonObjectValue *json, BinarySegment *main_seg, BinarySegment *aux_seg, BinarySegment *str_seg)
+{
+    EmitStatOrFileSignatures(json, main_seg, aux_seg, str_seg, "StatSignatures", [](BinarySegment *aux_seg, const FileInfo& fileInfo)
+    {
+        BinarySegmentWriteUint32(aux_seg, GetStatSignatureStatusFor(fileInfo));
+    });
+};
+
 
 static void EmitGlobSignatures(const JsonObjectValue *json, BinarySegment *main_seg, BinarySegment *aux_seg, BinarySegment *str_seg, MemAllocHeap *heap, MemAllocLinear *scratch)
 {
@@ -281,6 +304,7 @@ static bool WriteNodes(
         const char* type = FindStringValue(node, "ActionType");
         const char *action = FindStringValue(node, "Action");
         const char *annotation = FindStringValue(node, "Annotation");
+        const char *profilerOutput = FindStringValue(node, "ProfilerOutput");
         const JsonArrayValue *toBuildDependencies = FindArrayValue(node, "ToBuildDependencies");
         if (toBuildDependencies == nullptr)
             toBuildDependencies = FindArrayValue(node, "Deps");
@@ -328,6 +352,8 @@ static bool WriteNodes(
         }
 
         WriteStringPtr(node_data_seg, str_seg, annotation);
+
+        WriteStringPtr(node_data_seg, str_seg, profilerOutput);
 
         auto writeDependencyIndexList = [=](const JsonArrayValue* deps)->void{
             if (deps)
@@ -437,6 +463,7 @@ static bool WriteNodes(
         }
 
         EmitFileSignatures(node, node_data_seg, array2_seg, str_seg);
+        EmitStatSignatures(node, node_data_seg, array2_seg, str_seg);
         EmitGlobSignatures(node, node_data_seg, array2_seg, str_seg, heap, scratch);
 
         WriteFileArray(node_data_seg, array2_seg, str_seg, cachingInputIgnoreList);
@@ -872,6 +899,7 @@ static bool CompileDag(const JsonObjectValue *root, BinaryWriter *writer, MemAll
         return false;
 
     EmitFileSignatures(root, main_seg, aux_seg, str_seg);
+    EmitStatSignatures(root, main_seg, aux_seg, str_seg);
     EmitGlobSignatures(root, main_seg, aux_seg, str_seg, heap, scratch);
 
     WriteFileArray(main_seg, aux_seg, str_seg, directoriesCausingImplicitDependencies);

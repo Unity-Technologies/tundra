@@ -27,6 +27,7 @@
 #include "Driver.hpp"
 #include "LeafInputSignature.hpp"
 #include "CacheClient.hpp"
+#include "FileInfoHelper.hpp"
 #include <stdarg.h>
 #include <algorithm>
 #include <stdio.h>
@@ -74,45 +75,21 @@ static void LogFirstTimeEnqueue(MemAllocLinear* scratch, RuntimeNode* enqueuedNo
     LogStructured(&msg);
 }
 
-static int EnqueueNodeListReversedWithoutWakingAwaitersOnlyWhenNotEnqueuedBefore(BuildQueue* queue, MemAllocLinear* scratch, const FrozenArray<int32_t>& nodesToEnqueue, RuntimeNode* enqueingNode)
+static int EnqueueNodeListWithoutWakingAwaiters(BuildQueue* queue, MemAllocLinear* scratch, const FrozenArray<int32_t>& nodesToEnqueue, RuntimeNode* enqueueingNode)
 {
-    int enqueue_count = 0;
-
-    //we enqueue dependency lists in reverse. because our semantics say that the most urgent dependencies are in the list first, it's important that they
-    //end up on the top of the workstack, so they'll be processed first.
-    for(int i=nodesToEnqueue.GetCount(); i-- > 0;)
+    int placed_on_workstack_count = 0;
+    for(int32_t depDagIndex : nodesToEnqueue)
     {
-        int32_t depDagIndex = nodesToEnqueue[i];
-        enqueue_count += EnqueueNodeWithoutWakingAwaiters(queue, scratch, &queue->m_Config.m_RuntimeNodes[depDagIndex], enqueingNode, true);
+        placed_on_workstack_count += EnqueueNodeWithoutWakingAwaiters(queue, scratch, &queue->m_Config.m_RuntimeNodes[depDagIndex], enqueueingNode);
     }
-    return enqueue_count;
+    return placed_on_workstack_count;
 }
 
-int EnqueueNodeWithoutWakingAwaiters(BuildQueue *queue, MemAllocLinear* scratch, RuntimeNode *runtime_node, RuntimeNode* queueing_node, bool onlyEnqueueIfNotEnqueuedBefore)
+static bool IsNodeCacheableByLeafInputsAndCachingEnabled(BuildQueue* queue, RuntimeNode* node)
 {
-    // Did someone else get to the node first?
-    if (RuntimeNodeIsActive(runtime_node) || runtime_node->m_Finished)
-        return 0;
-
-    if (onlyEnqueueIfNotEnqueuedBefore && RuntimeNodeHasEverBeenQueued(runtime_node))
-        return 0;
-
-    int runtime_node_index = int(runtime_node - queue->m_Config.m_RuntimeNodes);
-
-    BufferAppendOne(&queue->m_WorkStack, queue->m_Config.m_Heap, runtime_node_index);
-
-    if (!RuntimeNodeHasEverBeenQueued(runtime_node))
-    {
-        LogFirstTimeEnqueue(scratch, runtime_node, queueing_node);
-        queue->m_AmountOfNodesEverQueued++;
-    }
-
-    int enqueue_count = 1;
-    RuntimeNodeFlagQueued(runtime_node);
-
-    enqueue_count += EnqueueNodeListReversedWithoutWakingAwaitersOnlyWhenNotEnqueuedBefore(queue, scratch, runtime_node->m_DagNode->m_ToUseDependencies, runtime_node);
-
-    return enqueue_count;
+    if (!queue->m_Config.m_AttemptCacheReads && !queue->m_Config.m_AttemptCacheWrites)
+        return false;
+    return 0 != (node->m_DagNode->m_FlagsAndActionType & Frozen::DagNode::kFlagCacheableByLeafInputs);
 }
 
 static bool AllDependenciesAreFinished(BuildQueue *queue, RuntimeNode *runtime_node)
@@ -139,9 +116,67 @@ static bool AllDependenciesAreSuccesful(BuildQueue *queue, RuntimeNode *runtime_
     return true;
 }
 
+static bool AddNodeToWorkStackIfNotAlreadyPresent(BuildQueue* queue, RuntimeNode* runtime_node)
+{
+    int runtime_node_index = int(runtime_node - queue->m_Config.m_RuntimeNodes);
+    return BufferAppendOneIfNotPresent(&queue->m_WorkStack, queue->m_Config.m_Heap, runtime_node_index);
+}
+
+int EnqueueNodeWithoutWakingAwaiters(BuildQueue *queue, MemAllocLinear* scratch, RuntimeNode *runtime_node, RuntimeNode* queueing_node)
+{
+    if (RuntimeNodeHasEverBeenQueued(runtime_node))
+        return 0;
+
+    LogFirstTimeEnqueue(scratch, runtime_node, queueing_node);
+    queue->m_AmountOfNodesEverQueued++;
+    RuntimeNodeFlagQueued(runtime_node);
+
+    //enqueueing a node means that we know we need it to complete our build. Some nodes
+    //we know can be processed immediately:
+    //1) those whose dependencies have all been completed,
+    //2) those who are marked as leaf input cacheable && leaf input caching is turned on.
+    //
+    //we will only put nodes from these two categories on the workstack. Any other nodes
+    //we will only mark them as queued, but we don't actually put them on the workstack, since we already
+    //know they cannot yet immediately be acted upon. They will be put on the workstack when their dependencies finish.
+    int placed_on_workstack_count = 0;
+    if (AllDependenciesAreFinished(queue,runtime_node) || IsNodeCacheableByLeafInputsAndCachingEnabled(queue,runtime_node))
+    {
+        if (AddNodeToWorkStackIfNotAlreadyPresent(queue, runtime_node))
+            placed_on_workstack_count++;
+    } else {
+        //ok, so in this case the queued node is not immediately actionable. so we don't put it on the workstack, but instead queue up all our tobuild dependencies,
+        //so that our node becomes immediately actionable in the future. We don't blindly always do this, because in the case where this node is leaf input cacheable
+        //we might get a cache hit, and it won't be necessary at all to build any of the dependencies.
+        placed_on_workstack_count += EnqueueNodeListWithoutWakingAwaiters(queue, scratch, runtime_node->m_DagNode->m_ToBuildDependencies, runtime_node);
+    }
+
+    //leaf input cache hit or not: we always need the toUseDependencies to be produced.
+    placed_on_workstack_count += EnqueueNodeListWithoutWakingAwaiters(queue, scratch, runtime_node->m_DagNode->m_ToUseDependencies, runtime_node);
+
+    return placed_on_workstack_count;
+}
+
+
+//many operations add nodes to the working stack.  They just append the nodes at the end, not caring about sorting.
+//after all adds have been done, they're supposed to call SortWorkingStack() once at the end which will make sure to sort
+//the nodes based on how many points each nodes has. Nodes with more points should be preferred to start sooner than nodes with
+//less points if we have a choice to make. Today the amount of points are baked into the dag data, and calculated by seeing
+//how many other nodes end up directly or indirectly depending on this node. Maybe in the future we'll expose a bee setting where
+//you can manually specify points per node, but right now this seems to lead to optimal scheduling for most buildgraphs, so good enough for now.
+void SortWorkingStack(BuildQueue* queue)
+{
+    const auto& nodePoints = queue->m_Config.m_DagDerived->m_NodePoints;
+    //we want to have the nodes with the highest amount of points at the end, since that's where they'll be popped from
+    std::sort(queue->m_WorkStack.begin(), queue->m_WorkStack.end(), [&](int nodeIndexA, int nodeIndexB)
+    {
+        return nodePoints[nodeIndexA] < nodePoints[nodeIndexB];
+    });
+}
+
 static void EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(BuildQueue *queue, ThreadState* thread_state, RuntimeNode *node)
 {
-    int enqueue_count = 0;
+    int placed_on_workstack_count = 0;
 
     const FrozenArray<uint32_t>& backLinks = queue->m_Config.m_DagDerived->m_NodeBacklinks[node->m_DagNodeIndex];
 
@@ -157,14 +192,18 @@ static void EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(BuildQueue *queue, T
             if (!AllDependenciesAreFinished(queue, waiter))
                 continue;
 
-            enqueue_count += EnqueueNodeWithoutWakingAwaiters(queue, &thread_state->m_ScratchAlloc, waiter, nullptr, false);
+            if (AddNodeToWorkStackIfNotAlreadyPresent(queue,waiter))
+                placed_on_workstack_count++;
         }
     }
 
+    if (placed_on_workstack_count > 0)
+        SortWorkingStack(queue);
+
     //if we're enqueing only one thing, this thread will immediately pick that up in the next loop iteration.
     //if we're enqueing more than one node, let's wake up enough threads so that they can be immediately picked up
-    if (enqueue_count > 1)
-        WakeWaiters(queue, enqueue_count-1);
+    if (placed_on_workstack_count > 1)
+        WakeWaiters(queue, placed_on_workstack_count-1);
 }
 
 static void SignalMainThreadToStartCleaningUp(BuildQueue *queue)
@@ -192,13 +231,6 @@ static void FinishNode(BuildQueue* queue, ThreadState* thread_state, RuntimeNode
         SignalMainThreadToStartCleaningUp(queue);
 
     EnqueueDependeesWhoMightNowHaveBecomeReadyToRun(queue, thread_state, node);
-}
-
-static bool IsNodeCacheableByLeafInputsAndCachingEnabled(BuildQueue* queue, RuntimeNode* node)
-{
-    if (!queue->m_Config.m_AttemptCacheReads && !queue->m_Config.m_AttemptCacheWrites)
-        return false;
-    return 0 != (node->m_DagNode->m_FlagsAndActionType & Frozen::DagNode::kFlagCacheableByLeafInputs);
 }
 
 static void AttemptCacheWrite(BuildQueue* queue, ThreadState* thread_state, RuntimeNode* node)
@@ -255,6 +287,61 @@ static HashDigest HashTimestampsOfNonGeneratedInputFiles(BuildQueue* queue, Runt
     return result;
 };
 
+static bool AreNodeFileAndGlobSignaturesStillValid(RuntimeNode* node, ThreadState* thread_state)
+{
+    auto VerifyNodeGlobSignatures = [=]() -> bool {
+        for (const Frozen::DagGlobSignature &sig : node->m_DagNode->m_GlobSignatures)
+        {
+            HashDigest digest = CalculateGlobSignatureFor(sig.m_Path, sig.m_Filter, sig.m_Recurse, thread_state->m_Queue->m_Config.m_Heap, &thread_state->m_ScratchAlloc);
+
+            // Compare digest with the one stored in the signature block
+            if (0 != memcmp(&digest, &sig.m_Digest, sizeof digest))
+            {
+                thread_state->m_GlobCausingFrontendRerun = &sig;
+                return false;
+            }
+        }
+        return true;
+    };
+
+    auto VerifyNodeStatSignatures = [=]() -> bool {
+        // Check timestamps of frontend files used to produce the DAG
+        for (const Frozen::DagStatSignature &sig : node->m_DagNode->m_StatSignatures)
+        {
+            const char *path = sig.m_Path;
+            FileInfo info = GetFileInfo(path);
+
+            Frozen::DagStatSignature::Enum value = GetStatSignatureStatusFor(info);
+            if (value != sig.m_StatResult)
+            {
+                thread_state->m_FileCausingFrontendRerun = &sig.m_Path;
+                return false;
+            }
+        }
+        return true;
+    };
+
+    auto VerifyNodeFileSignatures = [=]() -> bool {
+        // Check timestamps of frontend files used to produce the DAG
+        for (const Frozen::DagFileSignature &sig : node->m_DagNode->m_FileSignatures)
+        {
+            const char *path = sig.m_Path;
+
+            uint64_t timestamp = sig.m_Timestamp;
+            FileInfo info = GetFileInfo(path);
+
+            if (info.m_Timestamp != timestamp)
+            {
+                thread_state->m_FileCausingFrontendRerun = &sig.m_Path;
+                return false;
+            }
+        }
+        return true;
+    };
+
+    return VerifyNodeGlobSignatures() && VerifyNodeFileSignatures() && VerifyNodeStatSignatures();
+}
+
 static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, Mutex *queue_lock, ThreadState* thread_state, StatCache* stat_cache, const Frozen::DagDerived* dagDerived)
 {
     CheckDoesNotHaveLock(&queue->m_Lock);
@@ -286,9 +373,16 @@ static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, M
 
     bool haveToRunAction = CheckInputSignatureToSeeNodeNeedsExecuting(queue, thread_state, node);
     if (!haveToRunAction)
-        return NodeBuildResult::kUpToDate;
+    {
+        return AreNodeFileAndGlobSignaturesStillValid(node, thread_state)
+            ? NodeBuildResult::kUpToDate
+            : NodeBuildResult::kUpToDateButDependeesRequireFrontendRerun;
+    }
 
     NodeBuildResult::Enum runActionResult = RunAction(queue, thread_state, node, queue_lock);
+
+    if (runActionResult == NodeBuildResult::kRanSuccesfully && !AreNodeFileAndGlobSignaturesStillValid(node,thread_state))
+        runActionResult = NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun;
 
     // If we see any file not generated by the graph dated in the future we will always treat input signature as incorrect.
     // Meaning for every build we will rebuild this node until filesystem mtime catches up with the file mtime date.
@@ -379,10 +473,34 @@ static void EnqueueToBuildDependencies(BuildQueue *queue, ThreadState *thread_st
     CheckHasLock(&queue->m_Lock);
 
     auto& dependencies = node->m_DagNode->m_ToBuildDependencies;
-    int enqueue_count = EnqueueNodeListReversedWithoutWakingAwaitersOnlyWhenNotEnqueuedBefore(queue,&thread_state->m_ScratchAlloc, dependencies, node);
+    int placed_on_workstack_count = EnqueueNodeListWithoutWakingAwaiters(queue,&thread_state->m_ScratchAlloc, dependencies, node);
 
-    if (enqueue_count > 1)
-        WakeWaiters(queue, enqueue_count-1);
+    if (placed_on_workstack_count > 0)
+        SortWorkingStack(queue);
+
+    if (placed_on_workstack_count > 1)
+        WakeWaiters(queue, placed_on_workstack_count-1);
+}
+
+static void LogOutOfDateSignaturePath(RuntimeNode* node, const char* signaturePath, MemAllocLinear* scratch)
+{
+    MemAllocLinearScope allocScope(scratch);
+
+    JsonWriter msg;
+    JsonWriteInit(&msg, scratch);
+    JsonWriteStartObject(&msg);
+
+    JsonWriteKeyName(&msg, "msg");
+    JsonWriteValueString(&msg, "outofdatesignature");
+
+    JsonWriteKeyName(&msg, "annotation");
+    JsonWriteValueString(&msg, node->m_DagNode->m_Annotation);
+
+    JsonWriteKeyName(&msg, "path");
+    JsonWriteValueString(&msg, signaturePath);
+
+    JsonWriteEndObject(&msg);
+    LogStructured(&msg);
 }
 
 static void ProcessNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNode *node, Mutex *queue_lock)
@@ -434,8 +552,15 @@ static void ProcessNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
                     SignalMainThreadToStartCleaningUp(queue);
                 break;
             case NodeBuildResult::kRanSuccessButDependeesRequireFrontendRerun:
+            case NodeBuildResult::kUpToDateButDependeesRequireFrontendRerun:
                 if (queue->m_FinalBuildResult == BuildResult::kOk)
+                {
                     queue->m_FinalBuildResult = BuildResult::kRequireFrontendRerun;
+                    if (thread_state->m_GlobCausingFrontendRerun)
+                        LogOutOfDateSignaturePath(node, thread_state->m_GlobCausingFrontendRerun->m_Path.Get(), &thread_state->m_ScratchAlloc);
+                    if (thread_state->m_FileCausingFrontendRerun)
+                        LogOutOfDateSignaturePath(node, thread_state->m_FileCausingFrontendRerun->Get(), &thread_state->m_ScratchAlloc);
+                }
                 break;
             default:
                 break;

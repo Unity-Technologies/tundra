@@ -537,6 +537,27 @@ void PrintNodeResult(
         JsonWriteKeyName(&msg, "exitcode");
         JsonWriteValueInteger(&msg, result->m_ReturnCode);
 
+        if (result->m_ReturnCode != 0)
+        {
+            JsonWriteKeyName(&msg, "cmdline");
+            JsonWriteValueString(&msg, node_data->m_Action.Get());
+
+            if (node_data->m_FrontendResponseFiles.GetCount() > 0)
+            {
+                JsonWriteKeyName(&msg, "rsps");
+                JsonWriteStartArray(&msg);
+                for(const auto& rsp: node_data->m_FrontendResponseFiles)
+                    JsonWriteValueString(&msg, rsp.m_Filename.Get());
+                JsonWriteEndArray(&msg);
+            }
+        }
+
+        if (data.node_data->m_ProfilerOutput.Get())
+        {
+            JsonWriteKeyName(&msg, "profiler_output");
+            JsonWriteValueString(&msg, data.node_data->m_ProfilerOutput.Get());
+        }
+
         if (data.node_data->m_OutputFiles.GetCount() > 0)
         {
             JsonWriteKeyName(&msg, "outputfile");

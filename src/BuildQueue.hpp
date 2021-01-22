@@ -53,7 +53,6 @@ struct BuildQueueConfig
     int m_SharedResourcesCount;
     bool m_AttemptCacheReads;
     bool m_AttemptCacheWrites;
-
 };
 
 struct BuildQueue;
@@ -65,6 +64,11 @@ struct ThreadState
     int m_ThreadIndex;
     int m_ProfilerThreadId;
     BuildQueue *m_Queue;
+
+    // For tracking which invalidated glob/file signature is causing a frontend rerun to be required
+    // Only storing one of each type is sufficient for figuring out what message to give the user
+    const Frozen::DagGlobSignature *m_GlobCausingFrontendRerun;
+    const FrozenString *m_FileCausingFrontendRerun;
 };
 
 namespace BuildResult
@@ -73,8 +77,8 @@ enum Enum
 {
     kOk = 0,                   // All nodes built successfully
     kInterrupted = 1,          // User interrupted the build (e.g CTRL+C)
-    kBuildError = 2,           // At least one node failed to build
-    kSetupError = 3,           // We couldn't set up the build
+    kCroak = 2,                // An internal really bad error happened
+    kBuildError = 3,           // We couldn't set up the build
     kRequireFrontendRerun = 4, //Frontend needs to run again
     kCount
 };
@@ -112,3 +116,6 @@ BuildResult::Enum BuildQueueBuild(BuildQueue *queue, MemAllocLinear* scratch);
 void BuildQueueDestroy(BuildQueue *queue);
 
 bool HasBuildStoppingFailures(const BuildQueue *queue);
+
+static const int kRerunReasonBufferSize = kMaxPathLength + 128;
+void BuildQueueGetFrontendRerunReason(BuildQueue* queue, char* out_frontend_rerun_reason);

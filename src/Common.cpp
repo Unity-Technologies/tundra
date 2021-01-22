@@ -100,7 +100,7 @@ void NORETURN Croak(const char *fmt, ...)
     if (DebuggerAttached())
         FlushAndAbort();
     else
-        exit(BuildResult::kBuildError);
+        exit(BuildResult::kCroak);
 }
 
 void NORETURN CroakErrno(const char *fmt, ...)
@@ -115,8 +115,10 @@ void NORETURN CroakErrno(const char *fmt, ...)
     if (DebuggerAttached())
         FlushAndAbort();
     else
-        exit(BuildResult::kBuildError);
+        exit(BuildResult::kCroak);
 }
+
+
 
 void NORETURN CroakAbort(const char *fmt, ...)
 {

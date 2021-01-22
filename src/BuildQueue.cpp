@@ -7,6 +7,7 @@
 #include "RuntimeNode.hpp"
 #include "BuildLoop.hpp"
 #include "Driver.hpp"
+#include "NodeResultPrinting.hpp"
 #include <stdarg.h>
 #include <algorithm>
 
@@ -31,6 +32,8 @@ static void ThreadStateInit(ThreadState *self, BuildQueue *queue, size_t scratch
     self->m_ThreadIndex = index;
     self->m_Queue = queue;
     self->m_ProfilerThreadId = profiler_thread_id;
+    self->m_GlobCausingFrontendRerun = nullptr;
+    self->m_FileCausingFrontendRerun = nullptr;
 }
 
 static void ThreadStateDestroy(ThreadState *self)
@@ -165,8 +168,9 @@ BuildResult::Enum BuildQueueBuild(BuildQueue *queue, MemAllocLinear* scratch)
     for (auto requestedNode:  queue->m_Config.m_RequestedNodes)
     {
         RuntimeNode *runtime_node = runtime_nodes + requestedNode;
-        EnqueueNodeWithoutWakingAwaiters(queue, queue->m_Config.m_LinearAllocator, runtime_node, nullptr, false);
+        EnqueueNodeWithoutWakingAwaiters(queue, queue->m_Config.m_LinearAllocator, runtime_node, nullptr);
     }
+    SortWorkingStack(queue);
 
     CondBroadcast(&queue->m_WorkAvailable);
 
@@ -188,6 +192,30 @@ BuildResult::Enum BuildQueueBuild(BuildQueue *queue, MemAllocLinear* scratch)
 
     if (SignalGetReason())
         return BuildResult::kInterrupted;
+
     return queue->m_FinalBuildResult;
 }
 
+void BuildQueueGetFrontendRerunReason(BuildQueue* queue, char* out_frontend_rerun_reason)
+{
+    if (queue->m_FinalBuildResult != BuildResult::kRequireFrontendRerun)
+        return;
+
+    for (int i = 0; i < queue->m_Config.m_DriverOptions->m_ThreadCount; ++i)
+    {
+        ThreadState& thread_state = queue->m_ThreadState[i];
+
+        if(thread_state.m_GlobCausingFrontendRerun != nullptr)
+        {
+            snprintf(out_frontend_rerun_reason, kRerunReasonBufferSize, "contents change of %s", thread_state.m_GlobCausingFrontendRerun->m_Path.Get());
+            return;
+        }
+
+        if(thread_state.m_FileCausingFrontendRerun != nullptr)
+        {
+            snprintf(out_frontend_rerun_reason, kRerunReasonBufferSize, "timestamp change of %s", thread_state.m_FileCausingFrontendRerun->Get());
+            return;
+        }
+    }
+
+}

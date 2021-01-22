@@ -20,7 +20,6 @@
 #include "Profiler.hpp"
 #include "NodeResultPrinting.hpp"
 #include "FileSign.hpp"
-#include "DynamicOutputDirectories.hpp"
 #include "PathUtil.hpp"
 #include "CacheClient.hpp"
 #include "LeafInputSignature.hpp"
@@ -71,6 +70,7 @@ void DriverOptionsInit(DriverOptions *self)
     self->m_ProfileOutput = nullptr;
     self->m_IncludesOutput = nullptr;
     self->m_VisualMaxNodes = 1000;
+    self->m_DagFileNameJson = nullptr;
 #if defined(TUNDRA_WIN32)
     self->m_RunUnprotected = true;
 #endif
@@ -276,6 +276,11 @@ void DriverDestroy(Driver *self)
             DestroyLeafInputSignatureData(&self->m_Heap, node.m_CurrentLeafInputSignature);
         if (HashSetIsInitialized(&node.m_ImplicitInputs))
             HashSetDestroy(&node.m_ImplicitInputs);
+        if (node.m_DynamicallyDiscoveredOutputFiles != nullptr)
+        {
+            node.m_DynamicallyDiscoveredOutputFiles->Destroy();
+            HeapFree(&self->m_Heap, node.m_DynamicallyDiscoveredOutputFiles);
+        }
     }
 
     BufferDestroy(&self->m_RuntimeNodes, &self->m_Heap);
@@ -290,7 +295,7 @@ void DriverDestroy(Driver *self)
     HeapDestroy(&self->m_Heap);
 }
 
-BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count, const char** argv, int argc)
+BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count, char* out_frontend_rerun_reason, const char** argv, int argc)
 {
     const Frozen::Dag *dag = self->m_DagData;
 
@@ -364,8 +369,12 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count, const 
         MutexDestroy(&debug_signing_mutex);
     }
 
-    *out_finished_node_count = build_queue.m_FinishedNodeCount;
+    if (build_result == BuildResult::kRequireFrontendRerun)
+    {
+        BuildQueueGetFrontendRerunReason(&build_queue, out_frontend_rerun_reason);
+    }
 
+    *out_finished_node_count = build_queue.m_FinishedNodeCount;
 leave:
     // Shut down build queue
     BuildQueueDestroy(&build_queue);
