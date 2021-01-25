@@ -75,6 +75,28 @@ static void LogFirstTimeEnqueue(MemAllocLinear* scratch, RuntimeNode* enqueuedNo
     LogStructured(&msg);
 }
 
+static void LogRunNodeAction(MemAllocLinear* scratch, RuntimeNode* node)
+{
+    MemAllocLinearScope allocScope(scratch);
+
+    JsonWriter msg;
+    JsonWriteInit(&msg, scratch);
+    JsonWriteStartObject(&msg);
+
+    JsonWriteKeyName(&msg, "msg");
+    JsonWriteValueString(&msg, "runNodeAction");
+
+    JsonWriteKeyName(&msg, "annotation");
+    JsonWriteValueString(&msg, node->m_DagNode->m_Annotation);
+
+    JsonWriteKeyName(&msg, "index");
+    JsonWriteValueInteger(&msg, node->m_DagNode->m_OriginalIndex);
+
+    JsonWriteEndObject(&msg);
+    LogStructured(&msg);
+}
+
+
 static int EnqueueNodeListWithoutWakingAwaiters(BuildQueue* queue, MemAllocLinear* scratch, const FrozenArray<int32_t>& nodesToEnqueue, RuntimeNode* enqueueingNode)
 {
     int placed_on_workstack_count = 0;
@@ -378,6 +400,8 @@ static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, M
             ? NodeBuildResult::kUpToDate
             : NodeBuildResult::kUpToDateButDependeesRequireFrontendRerun;
     }
+
+    LogRunNodeAction(&thread_state->m_ScratchAlloc, node);
 
     NodeBuildResult::Enum runActionResult = RunAction(queue, thread_state, node, queue_lock);
 
