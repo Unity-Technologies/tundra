@@ -80,12 +80,13 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
             size_t bufferSize = src_stat.st_size + 2; 
             char* link_target = static_cast<char*>(LinearAllocate(&scratch, bufferSize, 1));
             int link_size = readlink(src_file, link_target, bufferSize);
-            if (link_size == bufferSize)
+            if (link_size >= bufferSize)
             {
                 result.m_ReturnCode = -1;
                 snprintf(tmpBuffer, sizeof(tmpBuffer), "The source symlink %s could not be read with a consistent size.", src_file);
                 break;
             }
+            link_target[bufferSize] = 0;
 
             if (dst_file_info.Exists())
                 unlink(dst_file);
