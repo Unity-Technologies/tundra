@@ -166,7 +166,7 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
             if (src_stat_after_opening_dst.st_size != src_stat.st_size)
             {
                 result.m_ReturnCode = -1;
-                snprintf(tmpBuffer, sizeof(tmpBuffer), "Source file %s (fd %d) was originally size %llu, but after opening the destination file %s (fd %d), it now reports a size of %llu.", src_file, in_file, src_stat.st_size, dst_file, out_file, src_stat_before_opening_dst.st_size);
+                snprintf(tmpBuffer, sizeof(tmpBuffer), "Source file %s (fd %d) was originally size %llu, but after opening the destination file %s (fd %d), it now reports a size of %llu.", src_file, in_file, src_stat.st_size, dst_file, out_file, src_stat_after_opening_dst.st_size);
                 break;
             }
 
