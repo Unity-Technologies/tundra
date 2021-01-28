@@ -77,7 +77,7 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
             // It's a symlink
 
             // Add 2 bytes, 1 for the null character and one so we can tell that the readlink return value did not get truncated
-            size_t bufferSize = src_stat.st_size + 2; 
+            size_t bufferSize = src_stat.st_size + 1; 
             char* link_target = static_cast<char*>(LinearAllocate(&scratch, bufferSize, 1));
             int link_size = readlink(src_file, link_target, bufferSize);
             if (link_size >= bufferSize)
@@ -86,7 +86,9 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
                 snprintf(tmpBuffer, sizeof(tmpBuffer), "The source symlink %s could not be read with a consistent size.", src_file);
                 break;
             }
-            link_target[bufferSize] = 0;
+            link_target[link_size] = 0;
+
+            Log(kDebug, "Source symlink %s read with value \"%s\"", src_file, link_target);
 
             if (dst_file_info.Exists())
                 unlink(dst_file);
@@ -95,6 +97,23 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
             {
                 result.m_ReturnCode = -1;
                 snprintf(tmpBuffer, sizeof(tmpBuffer), "The target symlink %s could not be created.", dst_file);
+                break;
+            }
+
+            // Verify the link was copied correctly
+            char* final_target = static_cast<char*>(LinearAllocate(&scratch, bufferSize, 1));
+            int final_size = readlink(dst_file, final_target, bufferSize);
+            if (final_size != link_size)
+            {
+                result.m_ReturnCode = -1;
+                snprintf(tmpBuffer, sizeof(tmpBuffer), "The copied symlink %s did not have the same size as the source symlink %s.", dst_file, src_file);
+                break;
+            }
+            final_target[final_size] = 0;
+            if (memcmp(final_target, link_target, link_size) != 0)
+            {
+                result.m_ReturnCode = -1;
+                snprintf(tmpBuffer, sizeof(tmpBuffer), "The copied symlink %s had contents \"%s\", but the source symlink %s had different contents \"%s\".", dst_file, final_target, src_file, link_target);
                 break;
             }
 
@@ -112,12 +131,42 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
                 break;
             }
 
+            struct stat src_stat_before_opening_dst;
+            if (fstat(in_file, &src_stat_before_opening_dst) != 0)
+            {
+                result.m_ReturnCode = -1;
+                snprintf(tmpBuffer, sizeof(tmpBuffer), "Failed to stat source file %s (fd %d) after opening it: %s", src_file, in_file, strerror(errno));
+                break;
+            }
+
+            if (src_stat_before_opening_dst.st_size != src_stat.st_size)
+            {
+                result.m_ReturnCode = -1;
+                snprintf(tmpBuffer, sizeof(tmpBuffer), "Source file %s (fd %d) was originally size %llu, but after opening it, reports a size of %llu.", src_file, in_file, src_stat.st_size, src_stat_before_opening_dst.st_size);
+                break;
+            }
+
             // Ensure that the target file is opened with a writable mode, even if the input file was readonly
             out_file = open(dst_file, O_WRONLY | O_CREAT | O_TRUNC, src_stat.st_mode | S_IWUSR);
             if (out_file == -1)
             {
                 result.m_ReturnCode = -1;
                 snprintf(tmpBuffer, sizeof(tmpBuffer), "The destination file %s could not be opened for writing: %s", dst_file, strerror(errno));
+                break;
+            }
+
+            struct stat src_stat_after_opening_dst;
+            if (fstat(in_file, &src_stat_after_opening_dst) != 0)
+            {
+                result.m_ReturnCode = -1;
+                snprintf(tmpBuffer, sizeof(tmpBuffer), "Failed to stat source file %s (fd %d) after opening destination file: %s", src_file, in_file, strerror(errno));
+                break;
+            }
+
+            if (src_stat_after_opening_dst.st_size != src_stat.st_size)
+            {
+                result.m_ReturnCode = -1;
+                snprintf(tmpBuffer, sizeof(tmpBuffer), "Source file %s (fd %d) was originally size %llu, but after opening the destination file %s (fd %d), it now reports a size of %llu.", src_file, in_file, src_stat.st_size, dst_file, out_file, src_stat_before_opening_dst.st_size);
                 break;
             }
 
