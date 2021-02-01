@@ -7,10 +7,10 @@ namespace ValidationResult
 {
     enum Enum
     {
-        Pass,
-        SwallowStdout,
-        UnexpectedConsoleOutputFail,
-        UnwrittenOutputFileFail
+        Pass = 0,
+        SwallowStdout = 1,
+        UnexpectedConsoleOutputFail = 2,
+        UnwrittenOutputFileFail = 3
     };
 }
 
