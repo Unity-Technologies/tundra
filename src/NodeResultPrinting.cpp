@@ -315,6 +315,40 @@ void PrintMessage(MessageStatusLevel::Enum status_level, int duration, ExecResul
     }
 }
 
+static void ValidationErrorFor(const NodeResultPrintData* data, Buffer<const char*>& validationOutput, MemAllocHeap* heap)
+{
+    auto AddLine = [&](const char* line)
+    {
+        BufferAppendOne(&validationOutput, heap, line);
+    };
+
+    if (ValidationResult::UnexpectedConsoleOutputFail == data->validation_result)
+    {
+        AddLine("Failed because this command wrote something to the output that wasn't expected. We were expecting any of the following strings:");
+
+        int count = data->node_data->m_AllowedOutputSubstrings.GetCount();
+
+        for (int i = 0; i != count; i++)
+            AddLine((const char *)data->node_data->m_AllowedOutputSubstrings[i]);
+        if (count == 0)
+            AddLine("<< no allowed strings >>");
+        AddLine("but got:");
+        AddLine(data->output_buffer);
+        return;
+    }
+
+    if (ValidationResult::UnwrittenOutputFileFail == data->validation_result)
+    {
+        AddLine("Failed because this command failed to write the following output files:");
+        for (int i = 0; i < data->node_data->m_OutputFiles.GetCount(); i++)
+            if (data->untouched_outputs[i])
+                AddLine((const char *)data->node_data->m_OutputFiles[i].m_Filename);
+        return;
+    }
+    Croak("Unexpected validation result: %d, for node %s", data->validation_result, data->node_data->m_Annotation.Get());
+}
+
+
 static void PrintNodeResult(const NodeResultPrintData *data, BuildQueue *queue)
 {
     PrintMessage(data->status_level, data->processed_node_count, queue->m_AmountOfNodesEverQueued, data->duration, data->node_data->m_Annotation.Get());
@@ -362,21 +396,17 @@ static void PrintNodeResult(const NodeResultPrintData *data, BuildQueue *queue)
         }
         if (data->return_code == 0)
         {
-            if (data->validation_result == ValidationResult::UnexpectedConsoleOutputFail)
+            if (data->validation_result == ValidationResult::UnexpectedConsoleOutputFail || data->validation_result == ValidationResult::UnwrittenOutputFileFail)
             {
-                PrintDiagnosticPrefix("Failed because this command wrote something to the output that wasn't expected. We were expecting any of the following strings:", RED);
-                int count = data->node_data->m_AllowedOutputSubstrings.GetCount();
-                for (int i = 0; i != count; i++)
-                    printf("%s\n", (const char *)data->node_data->m_AllowedOutputSubstrings[i]);
-                if (count == 0)
-                    printf("<< no allowed strings >>\n");
-            }
-            else if (data->validation_result == ValidationResult::UnwrittenOutputFileFail)
-            {
-                PrintDiagnosticPrefix("Failed because this command failed to write the following output files:", RED);
-                for (int i = 0; i < data->node_data->m_OutputFiles.GetCount(); i++)
-                    if (data->untouched_outputs[i])
-                        printf("%s\n", (const char *)data->node_data->m_OutputFiles[i].m_Filename);
+                Buffer<const char*> validationOutput;
+                BufferInit(&validationOutput);
+                ValidationErrorFor(data, validationOutput, queue->m_Config.m_Heap);
+
+                PrintDiagnosticPrefix(validationOutput[0], RED);
+                for (int i = 1; i != validationOutput.GetCount(); i++)
+                    printf("%s\n", validationOutput[i]);
+
+                BufferDestroy(&validationOutput, queue->m_Config.m_Heap);
             }
         }
         if (data->return_code != 0)
@@ -535,9 +565,9 @@ void PrintNodeResult(
         JsonWriteValueInteger(&msg, node_data->m_OriginalIndex);
 
         JsonWriteKeyName(&msg, "exitcode");
-        JsonWriteValueInteger(&msg, result->m_ReturnCode);
+        JsonWriteValueInteger(&msg, failed ? 1 : result->m_ReturnCode);
 
-        if (result->m_ReturnCode != 0)
+        if (failed)
         {
             JsonWriteKeyName(&msg, "cmdline");
             JsonWriteValueString(&msg, node_data->m_Action.Get());
@@ -570,10 +600,29 @@ void PrintNodeResult(
             JsonWriteValueString(&msg, data.node_data->m_OutputDirectories[0].m_Filename);
         }
 
-        if (data.output_buffer)
+        if (failed && data.return_code == 0)
         {
             JsonWriteKeyName(&msg, "stdout");
-            JsonWriteValueString(&msg, data.output_buffer);
+            JsonWriteChar(&msg, '"');
+
+            Buffer<const char*> validationOutput;
+            BufferInit(&validationOutput);
+            ValidationErrorFor(&data, validationOutput, queue->m_Config.m_Heap);
+
+            for (int i = 0; i != validationOutput.GetCount(); i++)
+            {
+                JsonWriteRawString(&msg, validationOutput[i]);
+                JsonWriteRawString(&msg, "\n");
+            }
+
+            BufferDestroy(&validationOutput, queue->m_Config.m_Heap);
+            JsonWriteChar(&msg, '"');
+        } else {
+            if (data.output_buffer)
+            {
+                JsonWriteKeyName(&msg, "stdout");
+                JsonWriteValueString(&msg, data.output_buffer);
+            }
         }
 
         JsonWriteEndObject(&msg);

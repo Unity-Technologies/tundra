@@ -26,6 +26,8 @@ void JsonWriteEndArray(JsonWriter *writer);
 
 void JsonWriteKeyName(JsonWriter *writer, const char *keyName);
 
+void JsonWriteChar(JsonWriter *writer, char ch);
+void JsonWriteRawString(JsonWriter *writer, const char* value, size_t maxLen = (size_t)-1);
 void JsonWriteValueString(JsonWriter *writer, const char *value, size_t maxLen = (size_t)-1);
 void JsonWriteValueInteger(JsonWriter *writer, int64_t value);
 
