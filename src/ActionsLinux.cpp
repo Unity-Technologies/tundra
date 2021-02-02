@@ -78,17 +78,26 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
             break;
         }
 
-        FileInfo dst_file_info = StatCacheStat(stat_cache, dst_file);
-        if (dst_file_info.Exists())
+        struct stat dst_stat;
+        if (lstat(dst_file, &dst_stat) != 0)
         {
-            if (dst_file_info.IsDirectory())
+            if (errno != ENOENT)
+            {
+                result.m_ReturnCode = -1;
+                snprintf(tmpBuffer, sizeof(tmpBuffer), "The properties of the destination file %s could not be retrieved: %s", src_file, strerror(errno));
+                break;
+            }
+        }
+        else
+        {
+            if (S_ISDIR(dst_stat.st_mode))
             {
                 result.m_ReturnCode = -1;
                 snprintf(tmpBuffer, sizeof(tmpBuffer), "The target path %s already exists as a directory.", dst_file);
                 break;
             }
 
-            if (dst_file_info.IsReadOnly())
+            if ((dst_stat.st_mode & S_IWRITE) == 0)
             {
                 result.m_ReturnCode = -1;
                 snprintf(tmpBuffer, sizeof(tmpBuffer), "The target path %s already exists and is read-only.", dst_file);
@@ -197,7 +206,7 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
             {
                 // Verify that the copied file is the same size as the source.
                 // It's OK to use the statcache for this now because we've finished modifying the file
-                dst_file_info = StatCacheStat(stat_cache, dst_file);
+                FileInfo dst_file_info = StatCacheStat(stat_cache, dst_file);
                 if (dst_file_info.m_Size != src_stat.st_size)
                 {
                     result.m_ReturnCode = -1;
