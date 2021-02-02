@@ -128,6 +128,13 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
 
             // Verify the link was copied correctly
             char* final_target = ReadSymbolicLink(dst_file, &scratch, nullptr);
+            if (final_target == nullptr)
+            {
+                result.m_ReturnCode = -1;
+                snprintf(tmpBuffer, sizeof(tmpBuffer), "The destination symlink %s could not be read.", dst_file);
+                break;
+            }
+
             if (strcmp(link_target, final_target) != 0)
             {
                 result.m_ReturnCode = -1;
