@@ -131,42 +131,12 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
                 break;
             }
 
-            struct stat src_stat_before_opening_dst;
-            if (fstat(in_file, &src_stat_before_opening_dst) != 0)
-            {
-                result.m_ReturnCode = -1;
-                snprintf(tmpBuffer, sizeof(tmpBuffer), "Failed to stat source file %s (fd %d) after opening it: %s", src_file, in_file, strerror(errno));
-                break;
-            }
-
-            if (src_stat_before_opening_dst.st_size != src_stat.st_size)
-            {
-                result.m_ReturnCode = -1;
-                snprintf(tmpBuffer, sizeof(tmpBuffer), "Source file %s (fd %d) was originally size %llu, but after opening it, reports a size of %llu.", src_file, in_file, src_stat.st_size, src_stat_before_opening_dst.st_size);
-                break;
-            }
-
             // Ensure that the target file is opened with a writable mode, even if the input file was readonly
             out_file = open(dst_file, O_WRONLY | O_CREAT | O_TRUNC, src_stat.st_mode | S_IWUSR);
             if (out_file == -1)
             {
                 result.m_ReturnCode = -1;
                 snprintf(tmpBuffer, sizeof(tmpBuffer), "The destination file %s could not be opened for writing: %s", dst_file, strerror(errno));
-                break;
-            }
-
-            struct stat src_stat_after_opening_dst;
-            if (fstat(in_file, &src_stat_after_opening_dst) != 0)
-            {
-                result.m_ReturnCode = -1;
-                snprintf(tmpBuffer, sizeof(tmpBuffer), "Failed to stat source file %s (fd %d) after opening destination file: %s", src_file, in_file, strerror(errno));
-                break;
-            }
-
-            if (src_stat_after_opening_dst.st_size != src_stat.st_size)
-            {
-                result.m_ReturnCode = -1;
-                snprintf(tmpBuffer, sizeof(tmpBuffer), "Source file %s (fd %d) was originally size %llu, but after opening the destination file %s (fd %d), it now reports a size of %llu.", src_file, in_file, src_stat.st_size, dst_file, out_file, src_stat_after_opening_dst.st_size);
                 break;
             }
 
