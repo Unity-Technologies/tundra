@@ -103,6 +103,9 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
                 snprintf(tmpBuffer, sizeof(tmpBuffer), "The target path %s already exists and is read-only.", dst_file);
                 break;
             }
+
+            // Always remove the target file first if it existed, to avoid any weirdnesses when opening it for writing
+            unlink(dst_file);
         }
 
         if ((src_stat.st_mode & S_IFMT) == S_IFLNK)
@@ -115,11 +118,6 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
                 snprintf(tmpBuffer, sizeof(tmpBuffer), "The source symlink %s could not be read.", src_file);
                 break;
             }
-
-            Log(kDebug, "Source symlink %s read with value \"%s\"", src_file, link_target);
-
-            if (dst_file_info.Exists())
-                unlink(dst_file);
 
             if (symlink(link_target, dst_file) != 0)
             {
