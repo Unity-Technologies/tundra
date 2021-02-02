@@ -17,6 +17,30 @@
 #include <sys/ioctl.h>
 #endif
 
+char* ReadSymbolicLink(const char* path, MemAllocLinear* allocator, struct stat* stat_info)
+{
+    struct stat s;
+    if (stat_info == nullptr)
+    {
+        stat_info = &s;
+        if (lstat(path, &s) != 0)
+        {
+            Log(kError, "Failed to stat %s", path);
+            return nullptr;
+        }
+    }
+
+    const size_t bufferSize = stat_info->st_size + 1;
+    char* link_target = static_cast<char*>(LinearAllocate(allocator, bufferSize, 1));
+
+    int link_size = readlink(path, link_target, bufferSize);
+    if (link_size >= bufferSize)
+        return nullptr;
+
+    link_target[link_size] = 0;
+    return link_target;
+}
+
 ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash* target_files, size_t files_count, StatCache* stat_cache, MemAllocHeap* heap)
 {
     ExecResult result;
@@ -75,18 +99,13 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
         if ((src_stat.st_mode & S_IFMT) == S_IFLNK)
         {
             // It's a symlink
-
-            // Add 2 bytes, 1 for the null character and one so we can tell that the readlink return value did not get truncated
-            size_t bufferSize = src_stat.st_size + 1; 
-            char* link_target = static_cast<char*>(LinearAllocate(&scratch, bufferSize, 1));
-            int link_size = readlink(src_file, link_target, bufferSize);
-            if (link_size >= bufferSize)
+            char* link_target = ReadSymbolicLink(src_file, &scratch, &src_stat);
+            if (link_target == nullptr)
             {
                 result.m_ReturnCode = -1;
-                snprintf(tmpBuffer, sizeof(tmpBuffer), "The source symlink %s could not be read with a consistent size.", src_file);
+                snprintf(tmpBuffer, sizeof(tmpBuffer), "The source symlink %s could not be read.", src_file);
                 break;
             }
-            link_target[link_size] = 0;
 
             Log(kDebug, "Source symlink %s read with value \"%s\"", src_file, link_target);
 
@@ -101,16 +120,8 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
             }
 
             // Verify the link was copied correctly
-            char* final_target = static_cast<char*>(LinearAllocate(&scratch, bufferSize, 1));
-            int final_size = readlink(dst_file, final_target, bufferSize);
-            if (final_size != link_size)
-            {
-                result.m_ReturnCode = -1;
-                snprintf(tmpBuffer, sizeof(tmpBuffer), "The copied symlink %s did not have the same size as the source symlink %s.", dst_file, src_file);
-                break;
-            }
-            final_target[final_size] = 0;
-            if (memcmp(final_target, link_target, link_size) != 0)
+            char* final_target = ReadSymbolicLink(dst_file, &scratch, nullptr);
+            if (strcmp(link_target, final_target) != 0)
             {
                 result.m_ReturnCode = -1;
                 snprintf(tmpBuffer, sizeof(tmpBuffer), "The copied symlink %s had contents \"%s\", but the source symlink %s had different contents \"%s\".", dst_file, final_target, src_file, link_target);
