@@ -132,7 +132,7 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
             }
 
             // Ensure that the target file is opened with a writable mode, even if the input file was readonly
-            out_file = open(dst_file, O_WRONLY | O_CREAT | O_TRUNC, src_stat.st_mode | S_IWUSR);
+            out_file = open(dst_file, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW, (src_stat.st_mode & 0x0fff) | S_IWUSR);
             if (out_file == -1)
             {
                 result.m_ReturnCode = -1;
