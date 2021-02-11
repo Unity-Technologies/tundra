@@ -64,6 +64,7 @@ struct ThreadState
     int m_ThreadIndex;
     int m_ProfilerThreadId;
     BuildQueue *m_Queue;
+    Buffer<uint64_t> m_TimestampStorage;
 
     // For tracking which invalidated glob/file signature is causing a frontend rerun to be required
     // Only storing one of each type is sufficient for figuring out what message to give the user

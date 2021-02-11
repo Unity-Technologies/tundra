@@ -34,11 +34,13 @@ static void ThreadStateInit(ThreadState *self, BuildQueue *queue, size_t scratch
     self->m_ProfilerThreadId = profiler_thread_id;
     self->m_GlobCausingFrontendRerun = nullptr;
     self->m_FileCausingFrontendRerun = nullptr;
+    BufferInitWithCapacity(&self->m_TimestampStorage, &self->m_LocalHeap, 100);
 }
 
 static void ThreadStateDestroy(ThreadState *self)
 {
     LinearAllocDestroy(&self->m_ScratchAlloc, true);
+    BufferDestroy(&self->m_TimestampStorage, &self->m_LocalHeap);
     HeapDestroy(&self->m_LocalHeap);
 }
 

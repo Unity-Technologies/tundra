@@ -96,6 +96,83 @@ static void LogRunNodeAction(MemAllocLinear* scratch, RuntimeNode* node)
     LogStructured(&msg);
 }
 
+static void LogFileSystemWaitUntilFileModificationDateIsInThePast(MemAllocLinear* scratch, const char* inputFile, RuntimeNode* node)
+{
+    MemAllocLinearScope allocScope(scratch);
+
+    JsonWriter msg;
+    JsonWriteInit(&msg, scratch);
+    JsonWriteStartObject(&msg);
+
+    JsonWriteKeyName(&msg, "msg");
+    JsonWriteValueString(&msg, "fileSystemWaitUntilFileModificationDateIsInThePast");
+
+    JsonWriteKeyName(&msg, "annotation");
+    JsonWriteValueString(&msg, node->m_DagNode->m_Annotation);
+
+    JsonWriteKeyName(&msg, "index");
+    JsonWriteValueInteger(&msg, node->m_DagNode->m_OriginalIndex);
+
+    JsonWriteKeyName(&msg, "inputfile");
+    JsonWriteValueString(&msg, inputFile);
+
+    JsonWriteEndObject(&msg);
+    LogStructured(&msg);
+}
+
+static void LogNonGeneratedInputFileTimestampIsInTheFuture(MemAllocLinear* scratch, const char* inputFile, RuntimeNode* node)
+{
+    MemAllocLinearScope allocScope(scratch);
+
+    JsonWriter msg;
+    JsonWriteInit(&msg, scratch);
+    JsonWriteStartObject(&msg);
+
+    JsonWriteKeyName(&msg, "msg");
+    JsonWriteValueString(&msg, "nonGeneratedInputFileTimestampIsInTheFuture");
+
+    JsonWriteKeyName(&msg, "annotation");
+    JsonWriteValueString(&msg, node->m_DagNode->m_Annotation);
+
+    JsonWriteKeyName(&msg, "index");
+    JsonWriteValueInteger(&msg, node->m_DagNode->m_OriginalIndex);
+
+    JsonWriteKeyName(&msg, "inputfile");
+    JsonWriteValueString(&msg, inputFile);
+
+    JsonWriteEndObject(&msg);
+    LogStructured(&msg);
+}
+
+static void LogModificationDateChangedDuringBuild(MemAllocLinear* scratch, const char* inputFile, RuntimeNode* node, uint64_t oldTimestamp, uint64_t newTimestamp)
+{
+    MemAllocLinearScope allocScope(scratch);
+
+    JsonWriter msg;
+    JsonWriteInit(&msg, scratch);
+    JsonWriteStartObject(&msg);
+
+    JsonWriteKeyName(&msg, "msg");
+    JsonWriteValueString(&msg, "modificationDateChangedDuringBuild");
+
+    JsonWriteKeyName(&msg, "annotation");
+    JsonWriteValueString(&msg, node->m_DagNode->m_Annotation);
+
+    JsonWriteKeyName(&msg, "index");
+    JsonWriteValueInteger(&msg, node->m_DagNode->m_OriginalIndex);
+
+    JsonWriteKeyName(&msg, "inputfile");
+    JsonWriteValueString(&msg, inputFile);
+
+    JsonWriteKeyName(&msg, "oldTimestamp");
+    JsonWriteValueInteger(&msg, oldTimestamp);
+
+    JsonWriteKeyName(&msg, "newTimestamp");
+    JsonWriteValueInteger(&msg, newTimestamp);
+
+    JsonWriteEndObject(&msg);
+    LogStructured(&msg);
+}
 
 static int EnqueueNodeListWithoutWakingAwaiters(BuildQueue* queue, MemAllocLinear* scratch, const FrozenArray<int32_t>& nodesToEnqueue, RuntimeNode* enqueueingNode)
 {
@@ -286,27 +363,48 @@ static void AttemptCacheWrite(BuildQueue* queue, ThreadState* thread_state, Runt
     MutexUnlock(&queue->m_Lock);
 }
 
-static HashDigest HashTimestampsOfNonGeneratedInputFiles(BuildQueue* queue, RuntimeNode* node, bool forceReadTimestampFromDisk, uint64_t* latestTimestampSeenForNonGeneratedInputFile = nullptr)
+static void StoreTimestampsOfNonGeneratedInputFiles(Buffer<uint64_t>& timeStampStorage, MemAllocHeap* timestampStorageHeap, BuildQueue* queue, RuntimeNode* node, uint64_t* latestTimestampSeenForNonGeneratedInputFile = nullptr, const char** nonGeneratedInputFileWithTimestamp = nullptr)
 {
-    HashState hashState;
-    HashInit(&hashState);
-
-    for (auto i : queue->m_Config.m_DagDerived->m_NodeNonGeneratedInputIndicies[node->m_DagNodeIndex])
+    auto& nonGeneratedInputIndices = queue->m_Config.m_DagDerived->m_NodeNonGeneratedInputIndicies[node->m_DagNodeIndex];
+    BufferClear(&timeStampStorage);
+    BufferAlloc(&timeStampStorage, timestampStorageHeap, nonGeneratedInputIndices.GetCount());
+    
+    for (int i = 0; i < nonGeneratedInputIndices.GetCount(); i++)
     {
-        auto &non_generated_input_file = node->m_DagNode->m_InputFiles[i];
-        if (forceReadTimestampFromDisk)
-            StatCacheMarkDirty(queue->m_Config.m_StatCache, non_generated_input_file.m_Filename, non_generated_input_file.m_FilenameHash);
+        int inputIndex = nonGeneratedInputIndices[i];
+        auto &non_generated_input_file = node->m_DagNode->m_InputFiles[inputIndex];
 
         uint64_t timeStamp = StatCacheStat(queue->m_Config.m_StatCache, non_generated_input_file.m_Filename, non_generated_input_file.m_FilenameHash).m_Timestamp;
+        timeStampStorage[i] = timeStamp;
         if (latestTimestampSeenForNonGeneratedInputFile && timeStamp > *latestTimestampSeenForNonGeneratedInputFile)
+        {
+            *nonGeneratedInputFileWithTimestamp = non_generated_input_file.m_Filename.Get();
             *latestTimestampSeenForNonGeneratedInputFile = timeStamp;
+        }
+    }
+};
 
-        HashAddInteger(&hashState, timeStamp);
+static bool ValidateTimestampsOfNonGeneratedInputFiles(const Buffer<uint64_t>& timeStampStorage, BuildQueue* queue, RuntimeNode* node, const char** out_fileWhoseModificationDateChangedDuringBuild, uint64_t* out_oldTimestamp, uint64_t* out_newTimestamp)
+{
+    auto& nonGeneratedInputIndices = queue->m_Config.m_DagDerived->m_NodeNonGeneratedInputIndicies[node->m_DagNodeIndex];
+    for (int i = 0; i < nonGeneratedInputIndices.GetCount(); i++)
+    {
+        int inputIndex = nonGeneratedInputIndices[i];
+        auto &non_generated_input_file = node->m_DagNode->m_InputFiles[inputIndex];
+        StatCacheMarkDirty(queue->m_Config.m_StatCache, non_generated_input_file.m_Filename, non_generated_input_file.m_FilenameHash);
+
+        uint64_t timestamp = StatCacheStat(queue->m_Config.m_StatCache, non_generated_input_file.m_Filename, non_generated_input_file.m_FilenameHash).m_Timestamp;
+        uint64_t oldTimestamp = timeStampStorage[i];
+        if (oldTimestamp != timestamp)
+        {
+            *out_fileWhoseModificationDateChangedDuringBuild = non_generated_input_file.m_Filename.Get();
+            *out_newTimestamp = timestamp;
+            *out_oldTimestamp = oldTimestamp;
+            return false;
+        }
     }
 
-    HashDigest result;
-    HashFinalize(&hashState, &result);
-    return result;
+    return true;
 };
 
 static bool AreNodeFileAndGlobSignaturesStillValid(RuntimeNode* node, ThreadState* thread_state)
@@ -370,7 +468,8 @@ static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, M
 
     // Compute timestamps and record the latest file modification date we find for any input file not generated by the graph.
     uint64_t latestTimestampSeenForNonGeneratedInputFile = 0;
-    auto timestampsHashOfNonGeneratedInputFiles = HashTimestampsOfNonGeneratedInputFiles(queue, node, false, &latestTimestampSeenForNonGeneratedInputFile);
+    const char* nonGeneratedInputFileWithTimestamp = nullptr;
+    StoreTimestampsOfNonGeneratedInputFiles(thread_state->m_TimestampStorage, &thread_state->m_LocalHeap, queue, node, &latestTimestampSeenForNonGeneratedInputFile, &nonGeneratedInputFileWithTimestamp);
 
     // Check latest file timestamp against filesystem "now"
     bool thereIsAtLeastOneInputFileDatedInTheFuture = false;
@@ -383,12 +482,22 @@ static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, M
             // If the latest modification time of any non generated input file matches now, then we wait for the next file system mtime tick.
             // The reason we do this is so we can safely detect changes done by the user either during graph execution or in between
             // two tundra executions happening within the same file system mtime frame.
+            MutexLock(&queue->m_Lock);
+            PrintMessage(MessageStatusLevel::Info, "Waiting until the timestamp of `%s` is in the past.", nonGeneratedInputFileWithTimestamp);
+            LogFileSystemWaitUntilFileModificationDateIsInThePast(&thread_state->m_ScratchAlloc, nonGeneratedInputFileWithTimestamp, node);
+            MutexUnlock(&queue->m_Lock);
+
             FileSystemWaitUntilFileModificationDateIsInThePast(latestTimestampSeenForNonGeneratedInputFile);
         }
         else if (latestTimestampSeenForNonGeneratedInputFile > fileSystemTimeNow)
         {
             // If any file not generated by the graph is dated in the future we can't wait. Or we don't want to wait, since that could potentially
             // lock up tundra for a very long time. Instead we record this specific state and flag input signature as "might be incorrect".
+            MutexLock(&queue->m_Lock);
+            PrintMessage(MessageStatusLevel::Info, "Cannot trust contents of `%s` because its timestamp is in the future.", nonGeneratedInputFileWithTimestamp);
+            LogNonGeneratedInputFileTimestampIsInTheFuture(&thread_state->m_ScratchAlloc, nonGeneratedInputFileWithTimestamp, node);
+            MutexUnlock(&queue->m_Lock);
+
             thereIsAtLeastOneInputFileDatedInTheFuture = true;
         }
     }
@@ -417,9 +526,15 @@ static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, M
     }
 
     // If signatures don't match, someone touched files on disk while we were checking input signature or action was executing.
-    if (HashTimestampsOfNonGeneratedInputFiles(queue, node, true) != timestampsHashOfNonGeneratedInputFiles)
+    const char* fileWhoseModificationDateChangedDuringBuild = nullptr;
+    uint64_t oldTimestamp, newTimestamp;
+    if (!ValidateTimestampsOfNonGeneratedInputFiles(thread_state->m_TimestampStorage, queue, node, &fileWhoseModificationDateChangedDuringBuild, &oldTimestamp, &newTimestamp))
     {
-        Log(kWarning, "concurrent modification of inputs detected while executing `%s`.", node->m_DagNode->m_Annotation.Get());
+        MutexLock(&queue->m_Lock);
+        PrintMessage(MessageStatusLevel::Info, "Modification date of `%s` changed while running `%s`. Old timestamp: %llu, new timestamp: %llu", fileWhoseModificationDateChangedDuringBuild, node->m_DagNode->m_Annotation.Get(), oldTimestamp, newTimestamp);
+        LogModificationDateChangedDuringBuild(&thread_state->m_ScratchAlloc, nonGeneratedInputFileWithTimestamp, node, oldTimestamp, newTimestamp);
+        MutexUnlock(&queue->m_Lock);
+
         RuntimeNodeSetInputSignatureMightBeIncorrect(node);
         return runActionResult;
     }
