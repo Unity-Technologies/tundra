@@ -476,7 +476,6 @@ static bool WriteNodes(
         flags |= GetNodeFlag(node, "PreciousOutputs", Frozen::DagNode::kFlagPreciousOutputs);
         flags |= GetNodeFlag(node, "AllowUnexpectedOutput", Frozen::DagNode::kFlagAllowUnexpectedOutput, false);
         flags |= GetNodeFlag(node, "AllowUnwrittenOutputFiles", Frozen::DagNode::kFlagAllowUnwrittenOutputFiles, false);
-        flags |= GetNodeFlag(node, "BanContentDigestForInputs", Frozen::DagNode::kFlagBanContentDigestForInputs, false);
 
         const char* cachingMode = FindStringValue(node, "CachingMode");
         if (cachingMode != nullptr)
@@ -915,36 +914,6 @@ static bool CompileDag(const JsonObjectValue *root, BinaryWriter *writer, MemAll
         {
             BinarySegmentWritePointer(aux_seg, scanner_ptrs[i]);
         }
-    }
-
-    // Emit hashes of file extensions to sign using SHA-1 content digest instead of the normal timestamp signing.
-    if (const JsonArrayValue *sha_exts = FindArrayValue(root, "ContentDigestExtensions"))
-    {
-        BinarySegmentWriteInt32(main_seg, (int)sha_exts->m_Count);
-        BinarySegmentWritePointer(main_seg, BinarySegmentPosition(aux_seg));
-
-        for (size_t i = 0, count = sha_exts->m_Count; i < count; ++i)
-        {
-            const JsonValue *v = sha_exts->m_Values[i];
-            if (const JsonStringValue *sv = v->AsString())
-            {
-                const char *str = sv->m_String;
-                if (str[0] != '.')
-                {
-                    fprintf(stderr, "ContentDigestExtensions: Expected extension to start with dot: %s\b", str);
-                    return false;
-                }
-
-                BinarySegmentWriteUint32(aux_seg, Djb2Hash(str));
-            }
-            else
-                return false;
-        }
-    }
-    else
-    {
-        BinarySegmentWriteInt32(main_seg, 0);
-        BinarySegmentWriteNullPointer(main_seg);
     }
 
     BinarySegmentWriteInt32(main_seg, (int)FindIntValue(root, "DaysToKeepUnreferencedNodesAround", -1));

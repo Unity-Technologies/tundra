@@ -222,12 +222,6 @@ static void DumpDag(const Frozen::Dag *data)
     printf("m_DigestCacheFileNameTmp : %s\n", data->m_DigestCacheFileNameTmp.Get());
     printf("m_BuildTitle : %s\n", data->m_BuildTitle.Get());
 
-    printf("\nSHA-1 signatures enabled for extension hashes:\n");
-    for (const uint32_t ext : data->m_ShaExtensionHashes)
-    {
-        printf("hash            : 0x%08x\n", ext);
-    }
-
     printf("Magic number at end: 0x%08x\n", data->m_MagicNumberEnd);
 }
 

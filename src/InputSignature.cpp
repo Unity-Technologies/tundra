@@ -32,59 +32,28 @@ static void CheckAndReportChangedInputFile(
     uint64_t lastTimestamp,
     const char *dependencyType,
     DigestCache *digest_cache,
-    StatCache *stat_cache,
-    const uint32_t sha_extension_hashes[],
-    uint32_t sha_extension_hash_count,
-    bool force_use_timestamp)
+    StatCache *stat_cache)
 {
-    if (!force_use_timestamp && ShouldUseSHA1SignatureFor(filename, sha_extension_hashes, sha_extension_hash_count))
+    // The file signature was computed from SHA1 digest, so look in the digest cache to see if we computed a new
+    // hash for it that doesn't match the frozen data
+    if (DigestCacheHasChanged(digest_cache, filename, filenameHash))
     {
-        // The file signature was computed from SHA1 digest, so look in the digest cache to see if we computed a new
-        // hash for it that doesn't match the frozen data
-        if (DigestCacheHasChanged(digest_cache, filename, filenameHash))
-        {
-            JsonWriteStartObject(msg);
+        JsonWriteStartObject(msg);
 
-            JsonWriteKeyName(msg, "key");
-            JsonWriteValueString(msg, "InputFileDigest");
+        JsonWriteKeyName(msg, "key");
+        JsonWriteValueString(msg, "InputFileDigest");
 
-            JsonWriteKeyName(msg, "path");
-            JsonWriteValueString(msg, filename);
+        JsonWriteKeyName(msg, "path");
+        JsonWriteValueString(msg, filename);
 
-            JsonWriteKeyName(msg, "dependency");
-            JsonWriteValueString(msg, dependencyType);
+        JsonWriteKeyName(msg, "dependency");
+        JsonWriteValueString(msg, dependencyType);
 
-            JsonWriteEndObject(msg);
-        }
-    }
-    else
-    {
-        // The file signature was computed from timestamp alone, so we only need to examine the stat cache
-        FileInfo fileInfo = StatCacheStat(stat_cache, filename, filenameHash);
-
-        uint64_t timestamp = 0;
-        if (fileInfo.Exists())
-            timestamp = fileInfo.m_Timestamp;
-
-        if (timestamp != lastTimestamp)
-        {
-            JsonWriteStartObject(msg);
-
-            JsonWriteKeyName(msg, "key");
-            JsonWriteValueString(msg, "InputFileTimestamp");
-
-            JsonWriteKeyName(msg, "path");
-            JsonWriteValueString(msg, filename);
-
-            JsonWriteKeyName(msg, "dependency");
-            JsonWriteValueString(msg, dependencyType);
-
-            JsonWriteEndObject(msg);
-        }
+        JsonWriteEndObject(msg);
     }
 }
 
-static void ReportChangedInputFiles(JsonWriter *msg, const FrozenArray<Frozen::NodeInputFileData> &files, const char *dependencyType, DigestCache *digest_cache, StatCache *stat_cache, const uint32_t sha_extension_hashes[], uint32_t sha_extension_hash_count, bool force_use_timestamp)
+static void ReportChangedInputFiles(JsonWriter *msg, const FrozenArray<Frozen::NodeInputFileData> &files, const char *dependencyType, DigestCache *digest_cache, StatCache *stat_cache)
 {
     for (const Frozen::NodeInputFileData &input : files)
     {
@@ -94,10 +63,7 @@ static void ReportChangedInputFiles(JsonWriter *msg, const FrozenArray<Frozen::N
                                        input.m_Timestamp,
                                        dependencyType,
                                        digest_cache,
-                                       stat_cache,
-                                       sha_extension_hashes,
-                                       sha_extension_hash_count,
-                                       force_use_timestamp);
+                                       stat_cache);
     }
 }
 
@@ -123,8 +89,6 @@ static void ReportInputSignatureChanges(
     StatCache *stat_cache,
     DigestCache *digest_cache,
     ScanCache *scan_cache,
-    const uint32_t sha_extension_hashes[],
-    int sha_extension_hash_count,
     ThreadState *thread_state)
 {
     if ((dagnode->m_Action == nullptr && previously_built_node->m_Action != nullptr)
@@ -149,7 +113,7 @@ static void ReportInputSignatureChanges(
         const char *oldFilename = previously_built_node->m_InputFiles[i].m_Filename;
         explicitInputFilesListChanged |= (strcmp(filename, oldFilename) != 0);
     }
-    bool force_use_timestamp = node->m_Flags & Frozen::DagNode::kFlagBanContentDigestForInputs;
+
     if (explicitInputFilesListChanged)
     {
         JsonWriteStartObject(msg);
@@ -195,17 +159,14 @@ static void ReportInputSignatureChanges(
                                            oldInput.m_Timestamp,
                                            "explicit",
                                            digest_cache,
-                                           stat_cache,
-                                           sha_extension_hashes,
-                                           sha_extension_hash_count,
-                                           force_use_timestamp);
+                                           stat_cache);
         }
 
         // Don't do any further checking for changes, there's little point scanning implicit dependencies
         return;
     }
 
-    ReportChangedInputFiles(msg, previously_built_node->m_InputFiles, "explicit", digest_cache, stat_cache, sha_extension_hashes, sha_extension_hash_count, force_use_timestamp);
+    ReportChangedInputFiles(msg, previously_built_node->m_InputFiles, "explicit", digest_cache, stat_cache);
 
     if (dagnode->m_ScannerIndex != -1)
     {
@@ -289,7 +250,7 @@ static void ReportInputSignatureChanges(
         if (implicitFilesListChanged)
             return;
 
-        ReportChangedInputFiles(msg, previously_built_node->m_ImplicitInputFiles, "implicit", digest_cache, stat_cache, sha_extension_hashes, sha_extension_hash_count, force_use_timestamp);
+        ReportChangedInputFiles(msg, previously_built_node->m_ImplicitInputFiles, "implicit", digest_cache, stat_cache);
 
     }
 }
@@ -330,8 +291,6 @@ static bool CalculateInputSignature(BuildQueue* queue, ThreadState* thread_state
     if (scanner)
         HashSetInit(&node->m_ImplicitInputs, queue->m_Config.m_Heap);
 
-    bool force_use_timestamp = dagnode->m_FlagsAndActionType & Frozen::DagNode::kFlagBanContentDigestForInputs;
-
     // Roll back scratch allocator after all file scans
     MemAllocLinearScope alloc_scope(&thread_state->m_ScratchAlloc);
 
@@ -339,15 +298,12 @@ static bool CalculateInputSignature(BuildQueue* queue, ThreadState* thread_state
     {
         // Add path and timestamp of every direct input file.
         HashAddPath(&sighash, input.m_Filename);
-        ComputeFileSignature(
+        ComputeFileSignatureSha1(
             &sighash,
             stat_cache,
             digest_cache,
             input.m_Filename,
-            input.m_FilenameHash,
-            config.m_ShaDigestExtensions,
-            config.m_ShaDigestExtensionCount,
-            force_use_timestamp);
+            input.m_FilenameHash);
 
         if (scanner)
         {
@@ -379,15 +335,12 @@ static bool CalculateInputSignature(BuildQueue* queue, ThreadState* thread_state
         // This will walk all the implicit dependencies in hash order.
         HashSetWalk(&node->m_ImplicitInputs, [&](uint32_t, uint32_t hash, const char *filename) {
             HashAddPath(&sighash, filename);
-            ComputeFileSignature(
+            ComputeFileSignatureSha1(
                 &sighash,
                 stat_cache,
                 digest_cache,
                 filename,
-                hash,
-                config.m_ShaDigestExtensions,
-                config.m_ShaDigestExtensionCount,
-                force_use_timestamp);
+                hash);
         });
     }
 
@@ -500,7 +453,7 @@ bool CheckInputSignatureToSeeNodeNeedsExecuting(BuildQueue *queue, ThreadState *
                     JsonWriteKeyName(&msg, "changes");
                     JsonWriteStartArray(&msg);
 
-                    ReportInputSignatureChanges(&msg, queue->m_Config.m_Dag, node, dagnode, prev_builtnode, stat_cache, digest_cache, queue->m_Config.m_ScanCache, config.m_ShaDigestExtensions, config.m_ShaDigestExtensionCount, thread_state);
+                    ReportInputSignatureChanges(&msg, queue->m_Config.m_Dag, node, dagnode, prev_builtnode, stat_cache, digest_cache, queue->m_Config.m_ScanCache, thread_state);
 
                     JsonWriteEndArray(&msg);
                     JsonWriteEndObject(&msg);

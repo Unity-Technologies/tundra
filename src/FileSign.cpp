@@ -46,20 +46,10 @@ HashDigest ComputeFileSignatureSha1(StatCache* stat_cache, DigestCache* digest_c
     return result;
 }
 
-static void ComputeFileSignatureSha1(HashState *state, StatCache *stat_cache, DigestCache *digest_cache, const char *filename, uint32_t fn_hash)
+void ComputeFileSignatureSha1(HashState *state, StatCache *stat_cache, DigestCache *digest_cache, const char *filename, uint32_t fn_hash)
 {
     HashDigest digest = ComputeFileSignatureSha1(stat_cache, digest_cache, filename, fn_hash);
     HashUpdate(state, &digest, sizeof(digest));
-}
-
-static bool ComputeFileSignatureTimestamp(HashState *out, StatCache *stat_cache, const char *filename, uint32_t hash)
-{
-    FileInfo info = StatCacheStat(stat_cache, filename, hash);
-    if (info.Exists())
-        HashAddInteger(out, info.m_Timestamp);
-    else
-        HashAddInteger(out, ~0ull);
-    return false;
 }
 
 bool ShouldUseSHA1SignatureFor(const char *filename, const uint32_t sha_extension_hashes[], int sha_extension_hash_count)
@@ -76,22 +66,6 @@ bool ShouldUseSHA1SignatureFor(const char *filename, const uint32_t sha_extensio
     }
 
     return false;
-}
-
-void ComputeFileSignature(
-    HashState *out,
-    StatCache *stat_cache,
-    DigestCache *digest_cache,
-    const char *filename,
-    uint32_t fn_hash,
-    const uint32_t sha_extension_hashes[],
-    int sha_extension_hash_count,
-    bool force_use_timestamp)
-{
-    if (!force_use_timestamp && ShouldUseSHA1SignatureFor(filename, sha_extension_hashes, sha_extension_hash_count))
-        ComputeFileSignatureSha1(out, stat_cache, digest_cache, filename, fn_hash);
-    else
-        ComputeFileSignatureTimestamp(out, stat_cache, filename, fn_hash);
 }
 
 HashDigest CalculateGlobSignatureFor(const char *path, const char *filter, bool recurse, MemAllocHeap *heap, MemAllocLinear *scratch)
