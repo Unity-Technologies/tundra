@@ -313,8 +313,6 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count, char* 
     queue_config.m_ScanCache = &self->m_ScanCache;
     queue_config.m_StatCache = &self->m_StatCache;
     queue_config.m_DigestCache = &self->m_DigestCache;
-    queue_config.m_ShaDigestExtensionCount = dag->m_ShaExtensionHashes.GetCount();
-    queue_config.m_ShaDigestExtensions = dag->m_ShaExtensionHashes.GetArray();
     queue_config.m_SharedResources = dag->m_SharedResources.GetArray();
     queue_config.m_SharedResourcesCount = dag->m_SharedResources.GetCount();
     BufferInit(&queue_config.m_RequestedNodes);

@@ -45,8 +45,6 @@ struct BuildQueueConfig
     ScanCache *m_ScanCache;
     StatCache *m_StatCache;
     DigestCache *m_DigestCache;
-    int m_ShaDigestExtensionCount;
-    const uint32_t *m_ShaDigestExtensions;
     void *m_FileSigningLog;
     Mutex *m_FileSigningLogMutex;
     const Frozen::SharedResourceData *m_SharedResources;

@@ -113,9 +113,8 @@ struct DagNode
         kFlagAllowUnexpectedOutput = 1 << 10,
 
         kFlagAllowUnwrittenOutputFiles = 1 << 11,
-        kFlagBanContentDigestForInputs = 1 << 12,
 
-        kFlagCacheableByLeafInputs = 1 << 13
+        kFlagCacheableByLeafInputs = 1 << 12
     };
 
     union {
@@ -158,7 +157,7 @@ struct SharedResourceData
 
 struct Dag
 {
-    static const uint32_t MagicNumber = 0x24efa248 ^ kTundraHashMagic;
+    static const uint32_t MagicNumber = 0x12afc242 ^ kTundraHashMagic;
 
     uint32_t m_MagicNumber;
 
@@ -181,9 +180,6 @@ struct Dag
     FrozenArray<FrozenFileAndHash> m_DirectoriesCausingImplicitDependencies;
 
     FrozenArray<FrozenPtr<ScannerData>> m_Scanners;
-
-    // Hashes of filename extensions to use SHA-1 digest signing instead of timestamp signing.
-    FrozenArray<uint32_t> m_ShaExtensionHashes;
 
     int32_t m_DaysToKeepUnreferencedNodesAround;
     int32_t m_EmitDataForBeeWhy;
