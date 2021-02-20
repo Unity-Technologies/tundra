@@ -62,6 +62,7 @@ static const struct OptionTemplate
     {'e', "just-print-leafinput-signature", OptionType::kString, offsetof(DriverOptions, m_JustPrintLeafInputSignature), "Print to the specified file the leaf input signature ingredients of the requested node"},
     {'c', "stdin-canary", OptionType::kBool, offsetof(DriverOptions, m_StandardInputCanary), "Abort build if stdin is closed"},
     {'s', "stats", OptionType::kBool, offsetof(DriverOptions, m_DisplayStats), "Display stats"},
+    {'L', "logfile", OptionType::kString, offsetof(DriverOptions, m_StructuredLogFile), "Path for structured logfile"},
     {'p', "profile", OptionType::kString, offsetof(DriverOptions, m_ProfileOutput), "Output build profile"},
     {'C', "working-dir", OptionType::kString, offsetof(DriverOptions, m_WorkingDir), "Set working directory before building"},
     {'R', "dagfile", OptionType::kString, offsetof(DriverOptions, m_DAGFileName), "filename of where tundra should store the mmapped dag file"},

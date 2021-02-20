@@ -136,7 +136,11 @@ bool DriverInitData(Driver *self)
     // if we're only reporting something and not doing an actual build
     if (self->m_Options.m_IncludesOutput == nullptr && !self->m_Options.m_ShowHelp && !self->m_Options.m_ShowTargets)
     {
-        SetStructuredLogFileName(self->m_DagData->m_StructuredLogFileName);
+        const char* structuredLog = self->m_Options.m_StructuredLogFile;
+        if (structuredLog == nullptr)
+            structuredLog = self->m_DagData->m_StructuredLogFileName;
+
+        SetStructuredLogFileName(structuredLog);
 
         const char* stateFile = self->m_DagData->m_StateFileName.Get();
         if (GetFileInfo(stateFile).Exists() && !RenameFile(stateFile, self->m_DagData->m_StateFileNameMapped.Get()))

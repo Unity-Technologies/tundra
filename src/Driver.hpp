@@ -41,6 +41,7 @@ struct DriverOptions
     const char *m_WorkingDir;
     const char *m_DAGFileName;
     const char* m_DagFileNameJson;
+    const char* m_StructuredLogFile;
     const char *m_ProfileOutput;
     const char *m_IncludesOutput;
     const char *m_JustPrintLeafInputSignature;
