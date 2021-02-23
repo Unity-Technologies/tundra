@@ -74,6 +74,8 @@ struct ThreadState
 
 namespace BuildResult
 {
+// Note: these need to be kept in sync with the BuildResult::Names defined
+// in the source file.
 enum Enum
 {
     kOk = 0,                   // All nodes built successfully
