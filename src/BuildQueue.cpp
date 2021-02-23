@@ -20,8 +20,8 @@ const char *Names[Enum::kCount] =
     {
         "build success",
         "build interrupted",
+        "build failed due to an internal error",
         "build failed",
-        "build failed to setup error",
         "requires additional run"};
 }
 
