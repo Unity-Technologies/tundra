@@ -601,6 +601,10 @@ ExecResult ExecuteProcess(
     {
         DeleteProcThreadAttributeList(sinfo.lpAttributeList);
         HeapFree(heap, attributeListAllocation);
+
+        // Now that the process is created, make the stdout handle non-inheritable, so that it
+        // does not get inherited by any grandchild processes that the child process creates
+        SetHandleInformation(sinfo.StartupInfo.hStdOutput, HANDLE_FLAG_INHERIT, 0);
     }
 
     AssignProcessToJobObject(job_object, pinfo.hProcess);
