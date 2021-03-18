@@ -1043,7 +1043,7 @@ bool FreezeDagJson(const char* json_filename, const char* dag_fn)
     if (!json_memory)
         Croak("couldn't allocate memory for JSON buffer");
 
-    FILE *f = fopen(json_filename, "rb");
+    FILE *f = OpenFile(json_filename, "rb");
     if (!f)
     {
         Log(kError, "couldn't open %s for reading", json_filename);

@@ -333,7 +333,7 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count, char* 
     {
         MutexInit(&debug_signing_mutex);
         queue_config.m_FileSigningLogMutex = &debug_signing_mutex;
-        queue_config.m_FileSigningLog = fopen("signing-debug.txt", "w");
+        queue_config.m_FileSigningLog = OpenFile("signing-debug.txt", "w");
     }
     else
     {

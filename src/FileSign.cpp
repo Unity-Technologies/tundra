@@ -22,7 +22,7 @@ HashDigest ComputeFileSignatureSha1(StatCache* stat_cache, DigestCache* digest_c
     {
         TimingScope timing_scope(&g_Stats.m_FileDigestCount, &g_Stats.m_FileDigestTimeCycles);
 
-        FILE *f = fopen(filename, "rb");
+        FILE *f = OpenFile(filename, "rb");
         if (!f)
             return result;
 

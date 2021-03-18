@@ -1,4 +1,5 @@
 #include "Actions.hpp"
+#include "Common.hpp"
 #include <string.h>
 
 // This order should match the order of enum members in Actions.hpp
@@ -42,7 +43,7 @@ ExecResult WriteTextFile(const char* payload, const char* target_file, MemAllocH
 
     memset(&result, 0, sizeof(result));
 
-    FILE* f = fopen(target_file, "wb");
+    FILE* f = OpenFile(target_file, "wb");
     if (!f)
     {
         InitOutputBuffer(&result.m_OutputBuffer, heap);

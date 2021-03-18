@@ -39,7 +39,7 @@ uint64_t FileSystemUpdateLastSeenFileSystemTime()
     // To workaround this cache behavior we need to open and close the file for each mtime update.
 
     uint64_t valueToWrite = FileSystem::g_LastSeenFileSystemTime; // not important what we write, just that we write something.
-    FILE* lastSeenFileSystemTimeSampleFileFd = fopen(s_LastSeenFileSystemTimeSampleFile, "w");
+    FILE* lastSeenFileSystemTimeSampleFileFd = OpenFile(s_LastSeenFileSystemTimeSampleFile, "w");
     if (lastSeenFileSystemTimeSampleFileFd == nullptr)
         CroakErrno("Unable to create timestamp file '%s'", lastSeenFileSystemTimeSampleFileFd);
 

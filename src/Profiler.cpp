@@ -96,7 +96,7 @@ static void EscapeString(const char *src, char *dst, int dstSpace)
 
 void ProfilerWriteOutput()
 {
-    FILE *f = fopen(s_ProfilerState.m_FileName, "w");
+    FILE *f = OpenFile(s_ProfilerState.m_FileName, "w");
     if (!f)
     {
         Log(kWarning, "profiler: failed to write profiler output file into '%s'", s_ProfilerState.m_FileName);

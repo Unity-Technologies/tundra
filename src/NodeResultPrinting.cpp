@@ -363,7 +363,7 @@ static void PrintNodeResult(const NodeResultPrintData *data, BuildQueue *queue)
             snprintf(titleBuffer, sizeof titleBuffer, "Contents of %s", file);
 
             char *content_buffer;
-            FILE *f = fopen(file, "rb");
+            FILE *f = OpenFile(file, "rb");
             if (!f)
             {
 

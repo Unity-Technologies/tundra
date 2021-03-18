@@ -61,6 +61,15 @@ static void NORETURN FlushAndAbort()
     abort();
 }
 
+FILE* OpenFile(const char* filename, const char* mode)
+{
+#if defined(TUNDRA_WIN32)
+    return _wfopen(ToWideString(filename).c_str(), ToWideString(mode).c_str());
+#else
+    return fopen(filename, mode);
+#endif
+}
+
 void PrintErrno()
 {
 #if TUNDRA_WIN32
@@ -262,7 +271,7 @@ void SetStructuredLogFileName(const char *path)
 
     if (path != nullptr)
     {
-        s_StructuredLog = fopen(path, "w");
+        s_StructuredLog = OpenFile(path, "w");
         MutexInit(&s_StructuredLogMutex);
     }
 }

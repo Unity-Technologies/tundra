@@ -157,7 +157,7 @@ bool BinaryWriterFlush(BinaryWriter *self, const char *out_fn)
 {
     BinaryWriterFinalize(self);
 
-    FILE *f = fopen(out_fn, "wb");
+    FILE *f = OpenFile(out_fn, "wb");
     if (!f)
     {
         int e = errno;

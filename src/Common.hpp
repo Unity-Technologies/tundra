@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <stdint.h>
+#include <stdio.h>
 
 // Allow the use of alloca() everywhere
 #if defined(_MSC_VER)
@@ -50,6 +51,13 @@ bool ConvertToLongPath(std::wstring* path);
 
 
 void InitCommon(void);
+
+//-----------------------------------------------------------------------------
+// File handling
+//-----------------------------------------------------------------------------
+
+// Make sure UTF-8 filenames are open and created correctly (specifically on Windows with multibyte character streams)
+FILE* OpenFile(const char* filename, const char* mode);
 
 //-----------------------------------------------------------------------------
 // Error handling

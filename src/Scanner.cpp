@@ -195,7 +195,7 @@ bool ScanImplicitDeps(StatCache *stat_cache, const ScanInput *input, ScanOutput 
             BufferClear(&found_includes);
 
             // Read file into RAM, and add a terminating newline character.
-            FILE *f = fopen(fn, "rb");
+            FILE *f = OpenFile(fn, "rb");
             if (!f)
                 continue;
 

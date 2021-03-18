@@ -340,7 +340,7 @@ static void AttemptCacheWrite(BuildQueue* queue, ThreadState* thread_state, Runt
 
     char digestString[kDigestStringSize];
     DigestToString(digestString, node->m_CurrentLeafInputSignature->digest);
-    FILE *sig = fopen(digestString, "w");
+    FILE *sig = OpenFile(digestString, "w");
     if (sig == NULL)
     {
         printf("Failed to open file for signature ingredient writing. Skipping CacheWrite.\n");

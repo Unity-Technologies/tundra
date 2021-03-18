@@ -119,7 +119,7 @@ bool ReportIncludes(Driver *self)
     JsonWriteEndObject(&msg);
 
     // Write into file.
-    FILE *f = fopen(self->m_Options.m_IncludesOutput, "w");
+    FILE *f = OpenFile(self->m_Options.m_IncludesOutput, "w");
     if (!f)
     {
         Log(kError, "Failed to create includes report file '%s'", self->m_Options.m_IncludesOutput);

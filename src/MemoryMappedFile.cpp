@@ -99,7 +99,7 @@ void MmapFileMap(MemoryMappedFile *self, const char *fn)
     const DWORD creation_disposition = OPEN_EXISTING;
     const DWORD flags = FILE_ATTRIBUTE_NORMAL;
 
-    HANDLE file = CreateFileA(fn, desired_access, share_mode, NULL, creation_disposition, flags, NULL);
+    HANDLE file = CreateFileW(ToWideString(fn).c_str(), desired_access, share_mode, NULL, creation_disposition, flags, NULL);
 
     if (INVALID_HANDLE_VALUE == file)
     {
