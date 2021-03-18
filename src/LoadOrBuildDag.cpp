@@ -113,8 +113,8 @@ bool LoadOrBuildDag(Driver *self, const char *dag_fn)
 
     if (!LoadFrozenData<Frozen::Dag>(dag_fn, &self->m_DagFile, &self->m_DagData))
     {
-        remove(dag_fn);
-        remove(dagderived_filename);
+        RemoveFileOrDir(dag_fn);
+        RemoveFileOrDir(dagderived_filename);
         return ExitRequestingFrontendRun("%s couldn't be loaded", dag_fn);
     }
 
@@ -139,8 +139,8 @@ bool LoadOrBuildDag(Driver *self, const char *dag_fn)
 
     if (!LoadFrozenData<Frozen::DagDerived>(dagderived_filename, &self->m_DagDerivedFile, &self->m_DagDerivedData))
     {
-        remove(dag_fn);
-        remove(dagderived_filename);
+        RemoveFileOrDir(dag_fn);
+        RemoveFileOrDir(dagderived_filename);
         return ExitRequestingFrontendRun("%s couldn't be loaded", dag_fn);
     }
 
@@ -170,9 +170,9 @@ bool LoadOrBuildDag(Driver *self, const char *dag_fn)
     MmapFileUnmap(&self->m_DagDerivedFile);
     self->m_DagDerivedData = nullptr;
 
-    if (remove(dag_fn))
+    if (!RemoveFileOrDir(dag_fn))
         Croak("Failed to remove out of date dag at %s", dag_fn);
-    if (remove(dagderived_filename))
+    if (!RemoveFileOrDir(dagderived_filename))
         Croak("Failed to remove out of date dagderived file at %s", dagderived_filename);
 
     ExitRequestingFrontendRun("%s no longer valid. %s", FindFileNameInside(dag_fn), out_of_date_reason);

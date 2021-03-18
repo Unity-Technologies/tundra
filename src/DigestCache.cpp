@@ -117,7 +117,7 @@ bool DigestCacheSave(DigestCache *self, MemAllocHeap *serialization_heap, const 
     }
     else
     {
-        remove(tmp_filename);
+        RemoveFileOrDir(tmp_filename);
     }
 
     BinaryWriterDestroy(&writer);

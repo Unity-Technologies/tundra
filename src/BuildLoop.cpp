@@ -353,7 +353,7 @@ static void AttemptCacheWrite(BuildQueue* queue, ThreadState* thread_state, Runt
     fclose(sig);
 
     auto writeResult = CacheClient::AttemptWrite(queue->m_Config.m_Dag, node->m_DagNode, node->m_CurrentLeafInputSignature->digest, queue->m_Config.m_StatCache, &queue->m_Lock, thread_state, digestString);
-    remove(digestString);
+    RemoveFileOrDir(digestString);
 
     uint64_t now = TimerGet();
     double duration = TimerDiffSeconds(time_exec_started, now);

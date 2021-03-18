@@ -313,7 +313,7 @@ void GetCwd(char *buffer, size_t buffer_size)
 bool SetCwd(const char *dir)
 {
 #if defined(TUNDRA_WIN32)
-    return TRUE == SetCurrentDirectoryA(dir);
+    return TRUE == SetCurrentDirectoryW(ToWideString(dir).c_str());
 #elif defined(TUNDRA_UNIX)
     return 0 == chdir(dir);
 #else
@@ -563,9 +563,9 @@ bool RemoveFileOrDir(const char *path)
     if (!info.Exists())
         return true;
     else if (info.IsDirectory())
-        return TRUE == RemoveDirectoryA(path);
+        return TRUE == RemoveDirectoryW(ToWideString(path).c_str());
     else
-        return TRUE == DeleteFileA(path);
+        return TRUE == DeleteFileW(ToWideString(path).c_str());
 #endif
 }
 
@@ -575,7 +575,7 @@ bool RenameFile(const char *oldf, const char *newf)
 #if defined(TUNDRA_UNIX)
     return 0 == rename(oldf, newf);
 #else
-    return FALSE != MoveFileExA(oldf, newf, MOVEFILE_REPLACE_EXISTING);
+    return FALSE != MoveFileExW(ToWideString(oldf).c_str(), ToWideString(newf).c_str(), MOVEFILE_REPLACE_EXISTING);
 #endif
 }
 

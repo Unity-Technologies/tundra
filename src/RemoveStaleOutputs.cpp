@@ -15,14 +15,7 @@ static bool CleanupPath(const char *path)
         return false;
     if (info.IsSymlink())
         return false;
-#if defined(TUNDRA_UNIX)
-    return 0 == remove(path);
-#else
-    else if (info.IsDirectory())
-        return TRUE == RemoveDirectoryA(path);
-    else
-        return TRUE == DeleteFileA(path);
-#endif
+    return RemoveFileOrDir(path);
 }
 
 void RemoveStaleOutputs(Driver *self)

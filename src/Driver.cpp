@@ -421,7 +421,7 @@ bool DriverSaveScanCache(Driver *self)
     }
     else
     {
-        remove(self->m_DagData->m_ScanCacheFileNameTmp);
+        RemoveFileOrDir(self->m_DagData->m_ScanCacheFileNameTmp);
     }
 
     return success;

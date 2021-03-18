@@ -215,7 +215,7 @@ void ListDirectory(
     closedir(dir);
 
 #else
-    WIN32_FIND_DATAA find_data;
+    WIN32_FIND_DATAW find_data;
     char scan_path[MAX_PATH];
 
     const size_t path_length = strlen(path);
@@ -237,7 +237,7 @@ void ListDirectory(
             break;
     }
 
-    HANDLE h = FindFirstFileA(scan_path, &find_data);
+    HANDLE h = FindFirstFileW(ToWideString(scan_path).c_str(), &find_data);
 
     if (INVALID_HANDLE_VALUE == h)
     {
@@ -247,13 +247,14 @@ void ListDirectory(
 
     do
     {
-        if (ShouldFilter(find_data.cFileName, strlen(find_data.cFileName)))
+        std::string mbcs_finddata_fileName = ToMultiByteUTF8String(find_data.cFileName);
+        if (ShouldFilter(mbcs_finddata_fileName.c_str(), strlen(mbcs_finddata_fileName.c_str())))
             continue;
-        bool matchesFilter = !filter || PathMatchSpec(find_data.cFileName, filter);
+        bool matchesFilter = !filter || PathMatchSpecW(find_data.cFileName, ToWideString(filter).c_str());
         if (!matchesFilter && !recurse)
             continue;
 
-        if (path_length + strlen(find_data.cFileName) + 2 > MAX_PATH)
+        if (path_length + strlen(mbcs_finddata_fileName.c_str()) + 2 > MAX_PATH)
         {
             Log(kWarning, "Path too long: %s/%s", path, find_data.cFileName);
             continue;
@@ -277,7 +278,7 @@ void ListDirectory(
         else
             info.m_Flags |= FileInfo::kFlagFile;
 
-        strcpy(scan_path + path_length + 1, find_data.cFileName);
+        strcpy(scan_path + path_length + 1, mbcs_finddata_fileName.c_str());
 
         if (matchesFilter)
             (*callback)(user_data, info, scan_path);
@@ -285,7 +286,7 @@ void ListDirectory(
         if (recurse && info.m_Flags & FileInfo::kFlagDirectory)
             ListDirectory(scan_path, filter, recurse, user_data, callback);
 
-    } while (FindNextFileA(h, &find_data));
+    } while (FindNextFileW(h, &find_data));
 
     if (!FindClose(h))
         CroakErrno("couldn't close FindFile handle");
@@ -295,11 +296,11 @@ void ListDirectory(
 bool DeleteDirectory(const char* path)
 {
 #if TUNDRA_WIN32
-    std::filesystem::path filesystempath(path);
-    if (!std::filesystem::is_directory(path))
+    std::filesystem::path filesystempath(ToWideString(path));
+    if (!std::filesystem::is_directory(ToWideString(path)))
         return false;
     std::error_code error;
-    int result = std::filesystem::remove_all(path, error);
+    int result = std::filesystem::remove_all(ToWideString(path), error);
     return result != -1;
 #else
 

@@ -141,7 +141,7 @@ static HANDLE GetOrCreateTempFileFor(int job_id, const char *command_that_just_f
         disp = CREATE_ALWAYS;
         flags = FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE;
 
-        result = CreateFileA(temp_dir, access, sharemode, NULL, disp, flags, NULL);
+        result = CreateFileW(ToWideString(temp_dir).c_str(), access, sharemode, NULL, disp, flags, NULL);
 
         if (INVALID_HANDLE_VALUE == result)
         {
@@ -168,7 +168,7 @@ static HANDLE GetOrCreateTempFileFor(int job_id, const char *command_that_just_f
             do
             {
                 Sleep(1000);
-                result = CreateFileA(temp_dir, access, sharemode, NULL, disp, flags, NULL);
+                result = CreateFileW(ToWideString(temp_dir).c_str(), access, sharemode, NULL, disp, flags, NULL);
             } while (result == INVALID_HANDLE_VALUE);
         }
 
@@ -417,7 +417,7 @@ static bool SetupResponseFile(const char *cmd_line, char *out_new_cmd_line, int 
             out_responsefile[response_file_max_length] = '\0';
 
             {
-                HANDLE hf = CreateFileA(out_responsefile, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+                HANDLE hf = CreateFileW(ToWideString(out_responsefile).c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
                 if (INVALID_HANDLE_VALUE == hf)
                 {
                     fprintf(stderr, "couldn't create response file %s; @err=%u", out_responsefile, (unsigned int)GetLastError());
@@ -485,7 +485,7 @@ static bool SetupResponseFile(const char *cmd_line, char *out_new_cmd_line, int 
 static void CleanupResponseFile(const char *responseFile)
 {
     if (*responseFile != 0)
-        remove(responseFile);
+        RemoveFileOrDir(responseFile);
 }
 
 static int WaitForFinish(HANDLE processHandle, int (*callback_on_slow)(void *user_data), void *callback_on_slow_userdata, int time_until_first_callback)

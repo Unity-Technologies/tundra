@@ -468,7 +468,7 @@ bool SaveAllBuiltNodes(Driver *self)
     }
     else
     {
-        remove(self->m_DagData->m_StateFileNameTmp);
+        RemoveFileOrDir(self->m_DagData->m_StateFileNameTmp);
     }
 
     HashTableDestroy(&shared_strings);
