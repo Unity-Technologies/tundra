@@ -239,7 +239,12 @@ static void ShowHelp()
     }
 }
 
+#if defined(TUNDRA_WIN32)
+// On Windows we want to parse the command line using wide characters for Unicode support
+int real_main(int argc, char* argv[])
+#else
 int main(int argc, char *argv[])
+#endif
 {
 
 
@@ -556,3 +561,25 @@ leave:
 
     return build_result;
 }
+
+#if defined(TUNDRA_WIN32)
+// On Windows we want to parse the command line using wide characters for Unicode support
+int wmain(int argc, wchar_t* argv[], wchar_t* envp[])
+{
+    char** argv_mbcs = new char* [argc];
+    for (int i = 0; i < argc; i++)
+    {
+        std::string argv_mbcs_str = ToMultiByteUTF8String(argv[i]);
+        argv_mbcs[i] = new char[strlen(argv_mbcs_str.c_str()) + 1];
+        strcpy(argv_mbcs[i], argv_mbcs_str.c_str());
+    }
+
+    int res = real_main(argc, argv_mbcs);
+
+    for (int i = 0; i < argc; i++)
+        delete[] argv_mbcs[i];
+    delete[] argv_mbcs;
+
+    return res;
+}
+#endif
