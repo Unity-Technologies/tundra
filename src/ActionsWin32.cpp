@@ -55,7 +55,9 @@ ExecResult CopyFiles(const FrozenFileAndHash* src_files, const FrozenFileAndHash
         }
 
         std::wstring src_file_wide = ToWideString(src_file);
+        ConvertToLongPath(&src_file_wide);
         std::wstring target_file_wide = ToWideString(target_file);
+        ConvertToLongPath(&target_file_wide);
 
         BOOL cancel = false;
         if (CopyFileExW(src_file_wide.c_str(), target_file_wide.c_str(), NULL, NULL, &cancel, COPY_FILE_COPY_SYMLINK) == 0)
