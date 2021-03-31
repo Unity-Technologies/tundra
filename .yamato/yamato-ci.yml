@@ -10,8 +10,9 @@ linux:
     - mono bee.exe tundra2::linux64::master
     - mono bee.exe tundra2-unittest-report::linux64::master
     - mono bee.exe artifacts/for-stevedore/tundra-linux-x64.zip
-    - curl -sSo StevedoreUpload.exe "$STEVEDORE_UPLOAD_TOOL_URL"
-    - mono StevedoreUpload.exe --append-manifest=build/linux-x86_64/manifest.stevedore --version-len=12 --repo=public --version="$GIT_REVISION" artifacts/for-stevedore/*
+    - curl -sSo StevedoreUpload "$STEVEDORE_UPLOAD_TOOL_LINUX_X64_URL"
+    - chmod +x StevedoreUpload
+    - ./StevedoreUpload --append-manifest=build/linux-x86_64/manifest.stevedore --version-len=12 --repo=public --version="$GIT_REVISION" artifacts/for-stevedore/*
   artifacts:
     artifacts:
       paths:
@@ -29,8 +30,9 @@ mac-x64:
     - mono bee.exe tundra2::macos_x64::master
     - mono bee.exe tundra2-unittest-report::macos_x64::master
     - mono bee.exe artifacts/for-stevedore/tundra-mac-x64.zip
-    - curl -sSo StevedoreUpload.exe "$STEVEDORE_UPLOAD_TOOL_URL"
-    - mono StevedoreUpload.exe --append-manifest=build/osx-x86_64/manifest.stevedore --version-len=12 --repo=public --version="$GIT_REVISION" artifacts/for-stevedore/*
+    - curl -sSo StevedoreUpload "$STEVEDORE_UPLOAD_TOOL_MAC_X64_URL"
+    - chmod +x StevedoreUpload
+    - DYLD_PRINT_LIBRARIES=true ./StevedoreUpload --append-manifest=build/osx-x86_64/manifest.stevedore --version-len=12 --repo=public --version="$GIT_REVISION" artifacts/for-stevedore/*
   artifacts:
     artifacts:
       paths:
@@ -47,8 +49,9 @@ mac-arm64:
     - git submodule update
     - mono bee.exe tundra2::macos_arm64::master
     - mono bee.exe artifacts/for-stevedore/tundra-mac-arm64.zip
-    - curl -sSo StevedoreUpload.exe "$STEVEDORE_UPLOAD_TOOL_URL"
-    - mono StevedoreUpload.exe --append-manifest=build/osx-aarch64/manifest.stevedore --version-len=12 --repo=public --version="$GIT_REVISION" artifacts/for-stevedore/*
+    - curl -sSo StevedoreUpload "$STEVEDORE_UPLOAD_TOOL_MAC_X64_URL"
+    - chmod +x StevedoreUpload
+    - ./StevedoreUpload --append-manifest=build/osx-aarch64/manifest.stevedore --version-len=12 --repo=public --version="$GIT_REVISION" artifacts/for-stevedore/*
   artifacts:
     artifacts:
       paths:
@@ -66,7 +69,7 @@ windows:
     - bee.exe tundra2::win64::master
     - bee.exe tundra2-unittest-report::win64::master
     - bee.exe artifacts/for-stevedore/tundra-win-x64.zip artifacts/for-stevedore/tundra-win-x64-debug.7z
-    - curl -sSo StevedoreUpload.exe "%STEVEDORE_UPLOAD_TOOL_URL%"
+    - curl -sSo StevedoreUpload.exe "%STEVEDORE_UPLOAD_TOOL_WINDOWS_X64_URL%"
     - StevedoreUpload.exe --append-manifest=build/windows-x86_64/manifest.stevedore --version-len=12 --repo=public --version="%GIT_REVISION%" artifacts/for-stevedore/*
   artifacts:
     artifacts:
