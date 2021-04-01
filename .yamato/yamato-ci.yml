@@ -32,7 +32,7 @@ mac-x64:
     - mono bee.exe artifacts/for-stevedore/tundra-mac-x64.zip
     - curl -sSo StevedoreUpload "$STEVEDORE_UPLOAD_TOOL_MAC_X64_URL"
     - chmod +x StevedoreUpload
-    - DYLD_PRINT_LIBRARIES=true ./StevedoreUpload --append-manifest=build/osx-x86_64/manifest.stevedore --version-len=12 --repo=public --version="$GIT_REVISION" artifacts/for-stevedore/*
+    - ./StevedoreUpload --append-manifest=build/osx-x86_64/manifest.stevedore --version-len=12 --repo=public --version="$GIT_REVISION" artifacts/for-stevedore/*
   artifacts:
     artifacts:
       paths:
