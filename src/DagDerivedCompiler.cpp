@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <algorithm>
+#include <inttypes.h>
 
 static void SortBufferOfFileAndHash(Buffer<FileAndHash>& buffer)
 {
@@ -58,6 +59,7 @@ struct CompileDagDerivedWorker
     MemAllocHeap*  heap;
     MemAllocLinear* scratch;
     int node_count;
+    int max_points;
     StatCache *stat_cache;
 
     Buffer<int32_t> *combinedDependenciesBuffers;
@@ -240,27 +242,42 @@ struct CompileDagDerivedWorker
     }
 
 
+    void PrintStats()
+    {
+        uint64_t totalFlattenedEdges = 0;
+        uint64_t toBuildEdges = 0;
+        uint64_t toUseEdges = 0;
+
+        for (int32_t i = 0; i < node_count; ++i)
+        {
+             totalFlattenedEdges += combinedDependenciesBuffers[i].GetCount();
+             toBuildEdges += dag->m_DagNodes[i].m_ToBuildDependencies.GetCount();
+             toUseEdges += dag->m_DagNodes[i].m_ToUseDependencies.GetCount();
+        }
+
+        printf("Baked DAG. NodeCount=%d, TotalFlattenedEdges=%" PRId64 " ToBuildEdges=%" PRId64 " ToUseEdges=%" PRId64 " MaxPoints=%d\n", node_count, totalFlattenedEdges, toBuildEdges, toUseEdges, this->max_points);
+    }
 
     bool WriteStreams(const char* dagderived_filename)
     {
         MemAllocLinearScope scratchScope(scratch);
 
         combinedDependenciesBuffers = HeapAllocateArrayZeroed<Buffer<int32_t>>(heap, node_count);
-        for (int32_t i = 0; i < node_count; ++i)
-        {
-            for(int dep : dag->m_DagNodes[i].m_ToBuildDependencies)
+            for (int32_t i = 0; i < node_count; ++i)
             {
-                if (BufferAppendOneIfNotPresent(&combinedDependenciesBuffers[i], heap, dep))
-                    AddToUseDependenciesOfDagNodeRecursive(dag->m_DagNodes + dep, i);
-            }
+                for(int dep : dag->m_DagNodes[i].m_ToBuildDependencies)
+                {
+                    if (BufferAppendOneIfNotPresent(&combinedDependenciesBuffers[i], heap, dep))
+                        AddToUseDependenciesOfDagNodeRecursive(dag->m_DagNodes + dep, i);
+                }
         }
 
         backlinksBuffers = HeapAllocateArrayZeroed<Buffer<int32_t>>(heap, node_count);
-        for (int32_t i = 0; i < node_count; ++i)
-        {
-            for(int dep : combinedDependenciesBuffers[i])
-                BufferAppendOneIfNotPresent(&backlinksBuffers[dep], heap, i);
-        }
+            for (int32_t i = 0; i < node_count; ++i)
+            {
+                for(int dep : combinedDependenciesBuffers[i])
+                    BufferAppendOneIfNotPresent(&backlinksBuffers[dep], heap, i);
+            }
 
         auto WriteArrayOfIndices = [=](BinarySegment* segment, Buffer<int32_t>& indices)->void{
                 BinarySegmentWriteInt32(segment, indices.m_Size);
@@ -311,42 +328,57 @@ struct CompileDagDerivedWorker
         {
             WriteArrayOfIndices(dependenciesArray_seg, combinedDependenciesBuffers[nodeIndex]);
             WriteArrayOfIndices(backlinksArray_seg, backlinksBuffers[nodeIndex]);
+        }
 
-            auto calculateCumulativePoints = [&](int nodeindex) -> uint32_t
+        {
+            TimingScope timing_scope(nullptr, &g_Stats.m_CumulativePointsTime);
+            Buffer<int32_t> all_scores;
+            BufferInitWithCapacity(&all_scores, heap, node_count);
+            for (int32_t nodeIndex = 0; nodeIndex < node_count; ++nodeIndex)
+                all_scores[nodeIndex] = -1;
+            for (int32_t nodeIndex = 0; nodeIndex < node_count; ++nodeIndex)
             {
-                std::function<void(int,Buffer<uint32_t>&)> add_backlinks_to_buffer = [&](int node_index, Buffer<uint32_t>& buffer)
+                //The algorithm we're going with here assigns a certain point score to each node, that will be used at runtime during scheduling.
+                //It's intended to (roughly) correspond to how much other work executing this node will unblock. In order to make the calculating
+                //of these scores not be too prohibitive, we are going with "amount of direct dependencies + the max of their scores".  This
+                //ensures that we will have as little as possible "long poles" in the build, and that the scheduler will work towards being able to
+                //unblock as much work as possible as soon as possible.   For instance, we want "download a c++ compiler", which 1000 object file nodes
+                //are waiting for, to be scheduled ahead of "copy readme.md", that is not depended on by anything.
+
+                std::function<int32_t(int)> calculateCumulativePoints = [&](int nodeindex) -> int32_t
                 {
-                    for(int backlink: backlinksBuffers[node_index])
-                        if (BufferAppendOneIfNotPresent(&buffer, heap, backlink))
-                            add_backlinks_to_buffer(backlink, buffer);
+                    int previouslyCalculated = all_scores[nodeindex];
+                    if (previouslyCalculated != -1)
+                        return previouslyCalculated;
+
+                    int highestCostOfAnyBacklink = 0;
+                    for (auto backlink: backlinksBuffers[nodeindex])
+                        highestCostOfAnyBacklink = std::max(highestCostOfAnyBacklink, calculateCumulativePoints(backlink));
+
+                    int points = backlinksBuffers[nodeindex].GetCount() + highestCostOfAnyBacklink;
+                    all_scores[nodeindex] = points;
+                    this->max_points = std::max(this->max_points, points);
+                    return points;
                 };
 
-                add_backlinks_to_buffer(nodeindex, all_nodes_depending_on_me);
-
-                //opportunity for later: have different nodes have different amount of points. right now we just treat
-                //each node as 1 point.
-                int points = all_nodes_depending_on_me.GetCount();
-
-                BufferClear(&all_nodes_depending_on_me);
-                return points;
-            };
-
-            {
-                TimingScope timing_scope(nullptr, &g_Stats.m_CumulativePointsTime);
-            BinarySegmentWriteUint32(pointsArray_seg, calculateCumulativePoints(nodeIndex));
+                BinarySegmentWriteUint32(pointsArray_seg, calculateCumulativePoints(nodeIndex));
             }
+            BufferDestroy(&all_scores, heap);
+        }
 
+        for (int32_t nodeIndex = 0; nodeIndex < node_count; ++nodeIndex)
+        {
             BufferClear(&indices);
             {
                 TimingScope timing_scope(nullptr, &g_Stats.m_CalculateNonGeneratedIndicesTime);
-            int count = dag->m_DagNodes[nodeIndex].m_InputFiles.GetCount();
-            for (int i=0; i!=count; i++)
-            {
-                auto& inputFile = dag->m_DagNodes[nodeIndex].m_InputFiles[i];
-                if (IsFileGenerated(&dagRuntimeData, inputFile.m_FilenameHash, inputFile.m_Filename))
-                    continue;
-                BufferAppendOne(&indices, heap, i);
-            }
+                int count = dag->m_DagNodes[nodeIndex].m_InputFiles.GetCount();
+                for (int i=0; i!=count; i++)
+                {
+                    auto& inputFile = dag->m_DagNodes[nodeIndex].m_InputFiles[i];
+                    if (IsFileGenerated(&dagRuntimeData, inputFile.m_FilenameHash, inputFile.m_Filename))
+                        continue;
+                    BufferAppendOne(&indices, heap, i);
+                }
             }
 
             WriteArrayOfIndices(nonGeneratedInputIndices_seg, indices);
@@ -386,6 +418,7 @@ static void CompileDagDerivedWorkerInit(CompileDagDerivedWorker* data, const Fro
     data->str_seg = BinaryWriterAddSegment(data->writer);
 
     data->node_count = dag->m_NodeCount;
+    data->max_points = 0;
     data->stat_cache = stat_cache;
 }
 
@@ -409,6 +442,7 @@ bool CompileDagDerived(const Frozen::Dag* dag, MemAllocHeap* heap, MemAllocLinea
     CompileDagDerivedWorker worker;
     CompileDagDerivedWorkerInit(&worker,dag,heap,scratch,stat_cache);
     bool result = worker.WriteStreams(dagderived_filename);
+    worker.PrintStats();
     CompileDagDerivedWorkerDestroy(&worker);
     return result;
 };
