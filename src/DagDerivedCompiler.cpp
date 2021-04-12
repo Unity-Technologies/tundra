@@ -255,7 +255,7 @@ struct CompileDagDerivedWorker
              toUseEdges += dag->m_DagNodes[i].m_ToUseDependencies.GetCount();
         }
 
-        printf("Baked DAG. NodeCount=%d, TotalFlattenedEdges=%" PRId64 " ToBuildEdges=%" PRId64 " ToUseEdges=%" PRId64 " MaxPoints=%d\n", node_count, totalFlattenedEdges, toBuildEdges, toUseEdges, this->max_points);
+        printf("Finished compiling graph: %d nodes, %" PRId64 " flattened edges (%" PRId64 " ToBuild, %" PRId64 " ToUse), maximum node priority %d\n", node_count, totalFlattenedEdges, toBuildEdges, toUseEdges, this->max_points);
     }
 
     bool WriteStreams(const char* dagderived_filename)
