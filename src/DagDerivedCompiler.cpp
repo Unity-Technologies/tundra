@@ -273,17 +273,17 @@ struct CompileDagDerivedWorker
         }
 
         backlinksBuffers = HeapAllocateArrayZeroed<Buffer<int32_t>>(heap, node_count);
-            for (int32_t i = 0; i < node_count; ++i)
-            {
-                for(int dep : combinedDependenciesBuffers[i])
-                    BufferAppendOneIfNotPresent(&backlinksBuffers[dep], heap, i);
-            }
+        for (int32_t i = 0; i < node_count; ++i)
+        {
+            for(int dep : combinedDependenciesBuffers[i])
+                BufferAppendOneIfNotPresent(&backlinksBuffers[dep], heap, i);
+        }
 
         auto WriteArrayOfIndices = [=](BinarySegment* segment, Buffer<int32_t>& indices)->void{
-                BinarySegmentWriteInt32(segment, indices.m_Size);
-                BinarySegmentWritePointer(segment, BinarySegmentPosition(arraydata_seg));
-                for(int32_t dep : indices)
-                    BinarySegmentWriteInt32(arraydata_seg, dep);
+            BinarySegmentWriteInt32(segment, indices.m_Size);
+            BinarySegmentWritePointer(segment, BinarySegmentPosition(arraydata_seg));
+            for(int32_t dep : indices)
+                BinarySegmentWriteInt32(arraydata_seg, dep);
         };
 
         BinarySegmentWriteUint32(main_seg, Frozen::DagDerived::MagicNumber);
