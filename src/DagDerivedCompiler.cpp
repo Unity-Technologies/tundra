@@ -15,7 +15,7 @@
 #include "CacheClient.hpp"
 #include "MakeDirectories.hpp"
 #include "StatCache.hpp"
-
+#include "Stats.hpp"
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -331,9 +331,14 @@ struct CompileDagDerivedWorker
                 return points;
             };
 
+            {
+                TimingScope timing_scope(nullptr, &g_Stats.m_CumulativePointsTime);
             BinarySegmentWriteUint32(pointsArray_seg, calculateCumulativePoints(nodeIndex));
+            }
 
             BufferClear(&indices);
+            {
+                TimingScope timing_scope(nullptr, &g_Stats.m_CalculateNonGeneratedIndicesTime);
             int count = dag->m_DagNodes[nodeIndex].m_InputFiles.GetCount();
             for (int i=0; i!=count; i++)
             {
@@ -341,6 +346,7 @@ struct CompileDagDerivedWorker
                 if (IsFileGenerated(&dagRuntimeData, inputFile.m_FilenameHash, inputFile.m_Filename))
                     continue;
                 BufferAppendOne(&indices, heap, i);
+            }
             }
 
             WriteArrayOfIndices(nonGeneratedInputIndices_seg, indices);
@@ -399,6 +405,7 @@ static void CompileDagDerivedWorkerDestroy(CompileDagDerivedWorker* data)
 
 bool CompileDagDerived(const Frozen::Dag* dag, MemAllocHeap* heap, MemAllocLinear* scratch, StatCache *stat_cache, const char* dagderived_filename)
 {
+    TimingScope timing_scope(nullptr, &g_Stats.m_CompileDagDerivedTime);
     CompileDagDerivedWorker worker;
     CompileDagDerivedWorkerInit(&worker,dag,heap,scratch,stat_cache);
     bool result = worker.WriteStreams(dagderived_filename);

@@ -520,6 +520,11 @@ leave:
         printf("  munmap() time:   %10.2f ms\n", TimerToSeconds(g_Stats.m_MunmapTimeCycles) * 1000.0);
         printf("  stat() calls:    %10u\n", g_Stats.m_StatCount);
         printf("  stat() time:     %10.2f ms\n", TimerToSeconds(g_Stats.m_StatTimeCycles) * 1000.0);
+
+        printf("compiledag:        %10.2f ms\n", TimerToSeconds(g_Stats.m_CompileDagTime) * 1000.0);
+        printf("compilederived     %10.2f ms\n", TimerToSeconds(g_Stats.m_CompileDagDerivedTime) * 1000.0);
+        printf("  cumulativepoints %10.2f ms\n", TimerToSeconds(g_Stats.m_CumulativePointsTime) * 1000.0);
+        printf("  nongenindices    %10.2f ms\n", TimerToSeconds(g_Stats.m_CalculateNonGeneratedIndicesTime) * 1000.0);
     }
 
     double total_time = TimerDiffSeconds(start_time, TimerGet());

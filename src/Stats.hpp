@@ -43,6 +43,11 @@ struct TundraStats
     uint32_t m_DigestCacheHits;
     uint32_t m_FileDigestCount;
     uint64_t m_FileDigestTimeCycles;
+
+    uint64_t m_CompileDagTime;
+    uint64_t m_CompileDagDerivedTime;
+    uint64_t m_CalculateNonGeneratedIndicesTime;
+    uint64_t m_CumulativePointsTime;
 };
 
 struct TimingScope

@@ -14,6 +14,7 @@
 #include "LeafInputSignature.hpp"
 #include "FileInfoHelper.hpp"
 #include "Actions.hpp"
+#include <Stats.hpp>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -999,6 +1000,8 @@ static bool CreateDagFromJsonData(char *json_memory, const char *dag_fn)
                 Log(kInfo, "Nothing to do");
                 exit(BuildResult::kOk);
             }
+
+            TimingScope timing_scope(nullptr, &g_Stats.m_CompileDagTime);
 
             BinaryWriter writer;
             BinaryWriterInit(&writer, &heap);
