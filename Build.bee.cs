@@ -123,6 +123,7 @@ class Build
         tundraLibraryProgram.CompilerSettingsForMsvc().Add(compiler => compiler.WithUnicode(false));
         tundraLibraryProgram.Sources.Add(SourceFolder.Files("*.c*").Where(f => !f.FileName.EndsWith("Main.cpp"))
             .ToArray());
+        tundraLibraryProgram.Defines.Add("__STDC_FORMAT_MACROS");
         tundraLibraryProgram.PublicIncludeDirectories.Add(SourceFolder);
         tundraLibraryProgram.Libraries.Add(IsWindows,
             new SystemLibrary("Rstrtmgr.lib"),
