@@ -143,6 +143,24 @@ static void DumpDag(const Frozen::Dag *data)
             printf("    %s = %s\n", env.m_Name.Get(), env.m_Value.Get());
         }
 
+        printf("  globsignature:\n");
+        for (const auto& globSig : node.m_GlobSignatures)
+        {
+            char digest_str[kDigestStringSize];
+            DigestToString(digest_str, globSig.m_Digest);
+            printf("    %s = %s\n", globSig.m_Path.Get(), digest_str);
+        }
+        printf("  statsignature:\n");
+        for (const auto& statSig : node.m_StatSignatures)
+        {
+            printf("    %s = %d\n", statSig.m_Path.Get(), statSig.m_StatResult);
+        }
+        printf("  filesignature:\n");
+        for (const auto& fileSig : node.m_FileSignatures)
+        {
+            printf("    %s = %lld\n", fileSig.m_Path.Get(),  fileSig.m_Timestamp);
+        }
+
         printf("  scannerIndex: %d\n", node.m_ScannerIndex);
         if (node.m_ScannerIndex != -1)
         {
