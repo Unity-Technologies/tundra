@@ -351,6 +351,8 @@ struct CompileDagDerivedWorker
                     if (previouslyCalculated != -1)
                         return previouslyCalculated;
 
+                    all_scores[nodeindex] = 0;
+
                     int highestCostOfAnyBacklink = 0;
                     for (auto backlink: backlinksBuffers[nodeindex])
                         highestCostOfAnyBacklink = std::max(highestCostOfAnyBacklink, calculateCumulativePoints(backlink));
