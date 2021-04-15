@@ -118,13 +118,17 @@ bool LoadOrBuildDag(Driver *self, const char *dag_fn)
         return ExitRequestingFrontendRun("%s couldn't be loaded", dag_fn);
     }
 
-    if (DetectCyclicDependencies(self->m_DagData, &self->m_Heap) && self->m_Options.m_DagFileNameJson != nullptr)
+    //only check for cycles when the dag is fresh
+    if (self->m_Options.m_DagFileNameJson != nullptr)
     {
-        MmapFileUnmap(&self->m_DagFile);
-        remove(dag_fn);
-        remove(dagderived_filename);
-        exit(BuildResult::kBuildError);
-        return 0;
+        if (DetectCyclicDependencies(self->m_DagData, &self->m_Heap))
+        {
+            MmapFileUnmap(&self->m_DagFile);
+            remove(dag_fn);
+            remove(dagderived_filename);
+            exit(BuildResult::kBuildError);
+            return 0;
+        }
     }
 
     if (!dagderived_info.Exists() || self->m_Options.m_DagFileNameJson != nullptr)

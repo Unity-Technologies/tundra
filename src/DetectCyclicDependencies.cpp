@@ -48,16 +48,15 @@ public:
 
     bool Detect()
     {
-        while(true)
+        for(int i=0; i!=m_NodeCount; i++)
         {
-            int root = FindUnvisitedNode();
-            if (root == -1)
-            {
-                return false;
-            }
-            if (DepthFirstSearch(root))
+            if (m_State[i] == VisitState::GuaranteedNoCycles)
+                continue;
+
+            if (DepthFirstSearch(i))
                 return true;
         }
+        return false;
     }
 
 private:
@@ -91,14 +90,6 @@ private:
             return true;
         m_State[node] = VisitState::GuaranteedNoCycles;
         return false;
-    }
-
-    int FindUnvisitedNode()
-    {
-        for (int i=0; i!=m_NodeCount;i++)
-            if (m_State[i] == VisitState::NotYetVisited)
-                return i;
-        return -1;
     }
 
     const char* NameFor(int node)
