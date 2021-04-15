@@ -6,5 +6,5 @@ namespace Frozen
 }
 struct MemAllocHeap;
 
-void DetectCyclicDependencies(const Frozen::Dag* dag, MemAllocHeap* heap);
-
+//returns true if a cycle was found
+bool DetectCyclicDependencies(const Frozen::Dag* dag, MemAllocHeap* heap);
