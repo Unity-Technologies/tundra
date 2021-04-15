@@ -118,7 +118,7 @@ bool LoadOrBuildDag(Driver *self, const char *dag_fn)
         return ExitRequestingFrontendRun("%s couldn't be loaded", dag_fn);
     }
 
-    if (DetectCyclicDependencies(self->m_DagData, &self->m_Heap))
+    if (DetectCyclicDependencies(self->m_DagData, &self->m_Heap) && self->m_Options.m_DagFileNameJson != nullptr)
     {
         MmapFileUnmap(&self->m_DagFile);
         remove(dag_fn);
