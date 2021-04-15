@@ -130,6 +130,7 @@ private:
             if (i != 0)
               printf(" which depends on\n");
         }
+        printf("\n\n");
         BufferDestroy(&exactPathOfCycle, m_Heap);
     }
 
