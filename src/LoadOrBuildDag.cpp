@@ -7,6 +7,7 @@
 #include "FileSign.hpp"
 #include "DagDerivedCompiler.hpp"
 #include "FileInfoHelper.hpp"
+#include "DetectCyclicDependencies.hpp"
 
 static bool ExitRequestingFrontendRun(const char *reason_fmt, ...)
 {
@@ -116,6 +117,8 @@ bool LoadOrBuildDag(Driver *self, const char *dag_fn)
         remove(dagderived_filename);
         return ExitRequestingFrontendRun("%s couldn't be loaded", dag_fn);
     }
+
+    DetectCyclicDependencies(self->m_DagData, &self->m_Heap);
 
     if (!dagderived_info.Exists() || self->m_Options.m_DagFileNameJson != nullptr)
     {
