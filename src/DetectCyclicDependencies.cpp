@@ -46,23 +46,24 @@ public:
         BufferDestroy(&m_ScheduledByWho, m_Heap);
     }
 
-    void Detect()
+    bool Detect()
     {
         while(true)
         {
             int root = FindUnvisitedNode();
             if (root == -1)
             {
-                return;
+                return false;
             }
-            DepthFirstSearch(root);
+            if (DepthFirstSearch(root))
+                return true;
         }
     }
 
 private:
-    void DepthFirstSearch(int node)
+    bool DepthFirstSearch(int node)
     {
-        auto visitDependencies = [&](const FrozenArray<int32_t>& deps)
+        auto visitDependencies = [&](const FrozenArray<int32_t>& deps) -> bool
         {
             for (auto dep: deps)
             {
@@ -73,18 +74,23 @@ private:
                 if (VisitState::BeingVisited == depState)
                 {
                     PrintCycleFor(node, dep);
-                    Croak("Cyclic dependency detected");
+                    return true;
                 }
 
                 m_ScheduledByWho[dep] = node;
-                DepthFirstSearch(dep);
+                if (DepthFirstSearch(dep))
+                    return true;
             }
+            return false;
         };
 
         m_State[node] = VisitState::BeingVisited;
-        visitDependencies(m_Dag->m_DagNodes[node].m_ToBuildDependencies);
-        visitDependencies(m_Dag->m_DagNodes[node].m_ToUseDependencies);
+        if (visitDependencies(m_Dag->m_DagNodes[node].m_ToBuildDependencies))
+            return true;
+        if (visitDependencies(m_Dag->m_DagNodes[node].m_ToUseDependencies))
+            return true;
         m_State[node] = VisitState::GuaranteedNoCycles;
+        return false;
     }
 
     int FindUnvisitedNode()
@@ -141,8 +147,9 @@ private:
     }
 };
 
-void DetectCyclicDependencies(const Frozen::Dag* dag, MemAllocHeap* heap)
+//returns true if a cycle was found
+bool DetectCyclicDependencies(const Frozen::Dag* dag, MemAllocHeap* heap)
 {
     CycleDetector implementation(dag, heap);
-    implementation.Detect();
+    return implementation.Detect();
 }
