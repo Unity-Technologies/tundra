@@ -479,6 +479,7 @@ static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, M
         auto fileSystemTimeNow = FileSystemUpdateLastSeenFileSystemTime();
         if (latestTimestampSeenForNonGeneratedInputFile == fileSystemTimeNow)
         {
+            ProfilerScope prof_scope("FileSystemWaitUntilFileModificationDateIsInThePast", thread_state->m_ProfilerThreadId, nonGeneratedInputFileWithTimestamp);
             // If the latest modification time of any non generated input file matches now, then we wait for the next file system mtime tick.
             // The reason we do this is so we can safely detect changes done by the user either during graph execution or in between
             // two tundra executions happening within the same file system mtime frame.
