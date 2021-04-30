@@ -92,7 +92,7 @@ FileInfo GetFileInfo(const char *path)
 
     result.m_Flags = flags;
     // Do not allow directories to expose real timestamps, as it's not reliable behaviour across platforms
-    result.m_Timestamp = (flags & FileInfo::kFlagDirectory) ? kDirectoryTimestamp : stbuf.st_mtime;
+    result.m_Timestamp = (flags & FileInfo::kFlagDirectory) ? kDirectoryTimestamp : stbuf.st_mtimespec.tv_sec * 1000000000 + stbuf.st_mtimespec.tv_nsec;
     result.m_Size = stbuf.st_size;
 
     return result;
