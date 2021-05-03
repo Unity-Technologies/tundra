@@ -91,8 +91,19 @@ FileInfo GetFileInfo(const char *path)
       flags |= FileInfo::kFlagReadOnly;
 
     result.m_Flags = flags;
+
     // Do not allow directories to expose real timestamps, as it's not reliable behaviour across platforms
-    result.m_Timestamp = (flags & FileInfo::kFlagDirectory) ? kDirectoryTimestamp : stbuf.st_mtime;
+    result.m_Timestamp = (flags & FileInfo::kFlagDirectory) ? kDirectoryTimestamp : 
+    // high-precision timestaps in stat struct is not standardized. Different system headers 
+    // use different conventions - or don't support it at all (windows).
+#if defined(TUNDRA_APPLE)
+        stbuf.st_mtimespec.tv_sec * 1000000000 + stbuf.st_mtimespec.tv_nsec;
+#elif defined(TUNDRA_UNIX)
+        stbuf.st_mtim.tv_sec * 1000000000 + stbuf.st_mtim.tv_nsec;
+#else
+        stbuf.st_mtime * 1000000000;
+#endif       
+
     result.m_Size = stbuf.st_size;
 
     return result;
