@@ -93,10 +93,12 @@ FileInfo GetFileInfo(const char *path)
     result.m_Flags = flags;
     // Do not allow directories to expose real timestamps, as it's not reliable behaviour across platforms
     result.m_Timestamp = (flags & FileInfo::kFlagDirectory) ? kDirectoryTimestamp : 
-#if defined(TUNDRA_APPLE)
+#if !defined(_POSIX_C_SOURCE) || defined(_DARWIN_C_SOURCE)
         stbuf.st_mtimespec.tv_sec * 1000000000 + stbuf.st_mtimespec.tv_nsec;
+#elif defined __USE_MISC || defined __USE_XOPEN2K8
+        stbuf.st_mtim.tv_sec * 1000000000 + stbuf.st_mtim.tv_nsec;
 #else
-        stbuf.st_mtime * 1000000000 + stbuf.st_mtime_nsec;
+        stbuf.st_mtime * 1000000000 + stbuf.st_mtimensec;        
 #endif       
     result.m_Size = stbuf.st_size;
 
