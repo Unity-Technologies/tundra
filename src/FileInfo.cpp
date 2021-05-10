@@ -86,25 +86,9 @@ FileInfo GetFileInfo(const char *path)
     if (!ConvertToLongPath(&widePath))
         goto Failure;
 
-    HANDLE hFile = CreateFileW(widePath.c_str(),
-                            GENERIC_READ,
-                            FILE_SHARE_READ |
-                            FILE_SHARE_WRITE | 
-                            FILE_SHARE_DELETE,
-                            NULL,
-                            OPEN_EXISTING,
-                            FILE_FLAG_BACKUP_SEMANTICS,
-                            NULL);
-
-    if (hFile == INVALID_HANDLE_VALUE)
+    WIN32_FILE_ATTRIBUTE_DATA info;
+    if (!GetFileAttributesExW(widePath.c_str(), GetFileExInfoStandard, &info))
         goto Failure;
-
-    BY_HANDLE_FILE_INFORMATION info;
-    if (!GetFileInformationByHandle(hFile, &info))
-    {
-        CloseHandle(hFile);
-        goto Failure;
-    }
 
     flags |= FileInfo::kFlagExists;
 
@@ -120,11 +104,9 @@ FileInfo GetFileInfo(const char *path)
 
     result.m_Timestamp = (flags & FileInfo::kFlagDirectory) 
         ? kDirectoryTimestamp 
-        : ((((uint64_t)info.ftLastWriteTime.dwHighDateTime) << 32) + info.ftLastWriteTime.dwLowDateTime);
+        : (((uint64_t)info.ftLastWriteTime.dwHighDateTime) << 32) + info.ftLastWriteTime.dwLowDateTime;
 
     result.m_Size = (((uint64_t)info.nFileSizeHigh) << 32) + info.nFileSizeLow;
-
-    CloseHandle(hFile);
 #endif
     result.m_Flags = flags;
 
