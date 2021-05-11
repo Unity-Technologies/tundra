@@ -10,6 +10,7 @@ struct BuildQueue;
 struct ThreadState;
 struct DriverOptions;
 struct RuntimeNode;
+struct MemAllocLinear;
 
 namespace MessageStatusLevel
 {
@@ -31,6 +32,7 @@ void PrintCacheMissIntoStructuredLog(ThreadState* thread_state, RuntimeNode* nod
 void EmitColorForLevel(MessageStatusLevel::Enum status_level);
 void EmitColorReset();
 void InitNodeResultPrinting(const DriverOptions* driverOptions);
+void LogNodeUptoDate(RuntimeNode* node, MemAllocLinear* scratch, int processed_node_count, int number_of_nodes_ever_queued);
 void PrintNodeResult(
     ExecResult *result,
     const Frozen::DagNode *node_data,

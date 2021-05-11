@@ -497,6 +497,60 @@ static char *StrDup(MemAllocHeap *allocator, const char *str)
     return StrDupN(allocator, str, strlen(str));
 }
 
+static void PrintGenericNodeInfo(JsonWriter& msg, const Frozen::DagNode *node_data, int processed_node_count, int number_of_nodes_ever_queued)
+{
+    JsonWriteKeyName(&msg, "processed_node_count");
+    JsonWriteValueInteger(&msg, processed_node_count);
+
+    JsonWriteKeyName(&msg, "number_of_nodes_ever_queued");
+    JsonWriteValueInteger(&msg, number_of_nodes_ever_queued);
+
+    JsonWriteKeyName(&msg, "annotation");
+    JsonWriteValueString(&msg, node_data->m_Annotation);
+
+    JsonWriteKeyName(&msg, "index");
+    JsonWriteValueInteger(&msg, node_data->m_OriginalIndex);
+
+    if (node_data->m_OutputFiles.GetCount() > 0)
+    {
+        JsonWriteKeyName(&msg, "outputfile");
+        JsonWriteValueString(&msg, node_data->m_OutputFiles[0].m_Filename);
+    }
+
+    if (node_data->m_OutputDirectories.GetCount() > 0)
+    {
+        JsonWriteKeyName(&msg, "outputdirectory");
+        JsonWriteValueString(&msg, node_data->m_OutputDirectories[0].m_Filename);
+    }
+}
+
+void LogNodeUptoDate(RuntimeNode* node, MemAllocLinear* scratch, int processed_node_count, int number_of_nodes_ever_queued)
+{
+    if (!IsStructuredLogActive())
+        return;
+
+    MemAllocLinearScope allocScope(scratch);
+
+    JsonWriter msg;
+    JsonWriteInit(&msg, scratch);
+    JsonWriteStartObject(&msg);
+
+    JsonWriteKeyName(&msg, "msg");
+
+    //hack, writing this out as a noderesult, so I don't have to change the beedriver
+    JsonWriteValueString(&msg, "noderesult");
+    PrintGenericNodeInfo(msg, node->m_DagNode, processed_node_count, number_of_nodes_ever_queued);
+
+    JsonWriteKeyName(&msg, "exitcode");
+    JsonWriteValueInteger(&msg, 0);
+
+    JsonWriteKeyName(&msg, "recycled_previous_result");
+    JsonWriteValueInteger(&msg, 1);
+
+    JsonWriteEndObject(&msg);
+    LogStructured(&msg);
+}
+
 void PrintNodeResult(
     ExecResult *result,
     const Frozen::DagNode *node_data,
@@ -552,17 +606,7 @@ void PrintNodeResult(
         JsonWriteKeyName(&msg, "msg");
         JsonWriteValueString(&msg, "noderesult");
 
-        JsonWriteKeyName(&msg, "processed_node_count");
-        JsonWriteValueInteger(&msg, data.processed_node_count);
-
-        JsonWriteKeyName(&msg, "number_of_nodes_ever_queued");
-        JsonWriteValueInteger(&msg, data.number_of_nodes_ever_queued);
-
-        JsonWriteKeyName(&msg, "annotation");
-        JsonWriteValueString(&msg, node_data->m_Annotation);
-
-        JsonWriteKeyName(&msg, "index");
-        JsonWriteValueInteger(&msg, node_data->m_OriginalIndex);
+        PrintGenericNodeInfo(msg, data.node_data, data.processed_node_count, data.number_of_nodes_ever_queued);
 
         JsonWriteKeyName(&msg, "exitcode");
         JsonWriteValueInteger(&msg, failed ? 1 : result->m_ReturnCode);
@@ -588,17 +632,6 @@ void PrintNodeResult(
             JsonWriteValueString(&msg, data.node_data->m_ProfilerOutput.Get());
         }
 
-        if (data.node_data->m_OutputFiles.GetCount() > 0)
-        {
-            JsonWriteKeyName(&msg, "outputfile");
-            JsonWriteValueString(&msg, data.node_data->m_OutputFiles[0].m_Filename);
-        }
-
-        if (data.node_data->m_OutputDirectories.GetCount() > 0)
-        {
-            JsonWriteKeyName(&msg, "outputdirectory");
-            JsonWriteValueString(&msg, data.node_data->m_OutputDirectories[0].m_Filename);
-        }
 
         if (failed && data.return_code == 0)
         {

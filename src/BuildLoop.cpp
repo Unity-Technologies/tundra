@@ -368,7 +368,7 @@ static void StoreTimestampsOfNonGeneratedInputFiles(Buffer<uint64_t>& timeStampS
     auto& nonGeneratedInputIndices = queue->m_Config.m_DagDerived->m_NodeNonGeneratedInputIndicies[node->m_DagNodeIndex];
     BufferClear(&timeStampStorage);
     BufferAlloc(&timeStampStorage, timestampStorageHeap, nonGeneratedInputIndices.GetCount());
-    
+
     for (int i = 0; i < nonGeneratedInputIndices.GetCount(); i++)
     {
         int inputIndex = nonGeneratedInputIndices[i];
@@ -461,6 +461,7 @@ static bool AreNodeFileAndGlobSignaturesStillValid(RuntimeNode* node, ThreadStat
 
     return VerifyNodeGlobSignatures() && VerifyNodeFileSignatures() && VerifyNodeStatSignatures();
 }
+
 
 static NodeBuildResult::Enum ExecuteNode(BuildQueue* queue, RuntimeNode* node, Mutex *queue_lock, ThreadState* thread_state, StatCache* stat_cache, const Frozen::DagDerived* dagDerived)
 {
@@ -683,8 +684,19 @@ static void ProcessNode(BuildQueue *queue, ThreadState *thread_state, RuntimeNod
         MutexUnlock(queue_lock);
         NodeBuildResult::Enum nodeBuildResult = ExecuteNode(queue, node, queue_lock, thread_state, thread_state->m_Queue->m_Config.m_StatCache, queue->m_Config.m_DagDerived);
         MutexLock(queue_lock);
+        node->m_BuildResult = nodeBuildResult;
 
-        switch (node->m_BuildResult = nodeBuildResult)
+        switch (nodeBuildResult)
+        {
+            case NodeBuildResult::kUpToDate:
+            case NodeBuildResult::kUpToDateButDependeesRequireFrontendRerun:
+                LogNodeUptoDate(node, &thread_state->m_ScratchAlloc, queue->m_FinishedNodeCount, queue->m_AmountOfNodesEverQueued);
+                break;
+            default:
+                break;
+        }
+
+        switch (nodeBuildResult)
         {
             case NodeBuildResult::kRanFailed:
                 queue->m_FinalBuildResult = BuildResult::kBuildError;

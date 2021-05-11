@@ -268,6 +268,7 @@ static void DumpState(const Frozen::AllBuiltNodes *data)
         printf("  input_signature: %s\n", digest_str);
         DigestToString(digest_str, node.m_LeafInputSignature);
         printf("  leafinputsignature: %s\n", digest_str);
+
         printf("  outputs:\n");
         for (const FrozenFileAndHash& fileAndHash : node.m_OutputFiles)
             printf("    (0x%08x) %s\n", fileAndHash.m_FilenameHash, fileAndHash.m_Filename.Get());
@@ -285,6 +286,8 @@ static void DumpState(const Frozen::AllBuiltNodes *data)
         printf("  Implicit inputs:\n");
         for (int i=0; i!=node.m_ImplicitInputFiles.GetCount(); i++)
             printf("    %lld %s\n", node.m_ImplicitInputFiles[i].m_Timestamp, node.m_ImplicitInputFiles[i].m_Filename.Get());
+
+        printf("  Action:\n    %s\n", node.m_Action.Get());
 
         printf("\n");
     }
