@@ -42,39 +42,14 @@ FileInfo GetFileInfo(const char *path)
     TimingScope timing_scope(&g_Stats.m_StatCount, &g_Stats.m_StatTimeCycles);
 
     FileInfo result;
-#if defined(TUNDRA_UNIX)
-    struct stat stbuf;
-#elif defined(TUNDRA_WIN32)
-    struct __stat64 stbuf;
-#endif
 
     uint32_t flags = 0;
 
 #if defined(TUNDRA_UNIX)
+    struct stat stbuf;
 
     if (0 != lstat(path, &stbuf))
         goto Failure;
-
-#elif defined(TUNDRA_WIN32)
-
-    DWORD attrs;
-
-    std::wstring widePath(ToWideString(path));
-    //// To work around maximum path length limitations on Windows, we have to use the wide-character version of the API, with a special prefix
-    if (!ConvertToLongPath(&widePath))
-        goto Failure;
-
-    if (0 != _wstat64(widePath.c_str(), &stbuf))
-        goto Failure;
-
-    attrs = GetFileAttributesW(widePath.c_str());
-    if (attrs == INVALID_FILE_ATTRIBUTES)
-        goto Failure;
-  
-
-    if ((attrs & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
-        flags |= FileInfo::kFlagSymlink;
-#endif
 
     flags |= FileInfo::kFlagExists;
 
@@ -90,8 +65,6 @@ FileInfo GetFileInfo(const char *path)
     if ((stbuf.st_mode & S_IWRITE) == 0)
       flags |= FileInfo::kFlagReadOnly;
 
-    result.m_Flags = flags;
-
     // Do not allow directories to expose real timestamps, as it's not reliable behaviour across platforms
     result.m_Timestamp = (flags & FileInfo::kFlagDirectory) ? kDirectoryTimestamp : 
     // high-precision timestaps in stat struct is not standardized. Different system headers 
@@ -105,6 +78,37 @@ FileInfo GetFileInfo(const char *path)
 #endif       
 
     result.m_Size = stbuf.st_size;
+
+#elif defined(TUNDRA_WIN32)
+
+    std::wstring widePath(ToWideString(path));
+    //// To work around maximum path length limitations on Windows, we have to use the wide-character version of the API, with a special prefix
+    if (!ConvertToLongPath(&widePath))
+        goto Failure;
+
+    WIN32_FILE_ATTRIBUTE_DATA info;
+    if (!GetFileAttributesExW(widePath.c_str(), GetFileExInfoStandard, &info))
+        goto Failure;
+
+    flags |= FileInfo::kFlagExists;
+
+    if ((info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+        flags |= FileInfo::kFlagSymlink;
+    else if ((info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+        flags |= FileInfo::kFlagDirectory;
+    else
+        flags |= FileInfo::kFlagFile;
+
+    if ((info.dwFileAttributes & FILE_ATTRIBUTE_READONLY) != 0)
+        flags |= FileInfo::kFlagReadOnly;
+
+    result.m_Timestamp = (flags & FileInfo::kFlagDirectory) 
+        ? kDirectoryTimestamp 
+        : (((uint64_t)info.ftLastWriteTime.dwHighDateTime) << 32) + info.ftLastWriteTime.dwLowDateTime;
+
+    result.m_Size = (((uint64_t)info.nFileSizeHigh) << 32) + info.nFileSizeLow;
+#endif
+    result.m_Flags = flags;
 
     return result;
 
