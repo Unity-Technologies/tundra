@@ -53,13 +53,6 @@ bool ConvertToLongPath(std::wstring* path);
 void InitCommon(void);
 
 //-----------------------------------------------------------------------------
-// File handling
-//-----------------------------------------------------------------------------
-
-// Make sure UTF-8 filenames are open and created correctly (specifically on Windows with multibyte character streams)
-FILE* OpenFile(const char* filename, const char* mode);
-
-//-----------------------------------------------------------------------------
 // Error handling
 //-----------------------------------------------------------------------------
 
@@ -143,7 +136,7 @@ inline uint64_t Djb2HashPath64(const char *str) { return Djb2Hash64(str); }
 #endif
 
 //-----------------------------------------------------------------------------
-// Directories
+// Filesystem
 //-----------------------------------------------------------------------------
 
 void GetCwd(char *buffer, size_t buffer_size);
@@ -154,6 +147,9 @@ bool RemoveFileOrDir(const char *path);
 
 // Like rename(), but also works when target file exists on Windows.
 bool RenameFile(const char *oldf, const char *newf);
+
+// Make sure UTF-8 filenames are open and created correctly (specifically on Windows with multibyte character streams)
+FILE* OpenFile(const char* filename, const char* mode);
 
 //-----------------------------------------------------------------------------
 // Misc

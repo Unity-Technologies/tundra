@@ -61,15 +61,6 @@ static void NORETURN FlushAndAbort()
     abort();
 }
 
-FILE* OpenFile(const char* filename, const char* mode)
-{
-#if defined(TUNDRA_WIN32)
-    return _wfopen(ToWideString(filename).c_str(), ToWideString(mode).c_str());
-#else
-    return fopen(filename, mode);
-#endif
-}
-
 void PrintErrno()
 {
 #if TUNDRA_WIN32
@@ -579,4 +570,15 @@ bool RenameFile(const char *oldf, const char *newf)
 #endif
 }
 
+FILE* OpenFile(const char* filename, const char* mode)
+{
+#if defined(TUNDRA_WIN32)
+    FILE* file;
+    if (_wfopen_s(&file, ToWideString(filename).c_str(), ToWideString(mode).c_str()) != 0)
+        CroakErrno("Unable to open file \"%s\"", filename);
+    return file;
+#else
+    return fopen(filename, mode);
+#endif
+}
 
