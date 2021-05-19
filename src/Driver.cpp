@@ -375,6 +375,26 @@ BuildResult::Enum DriverBuild(Driver *self, int* out_finished_node_count, char* 
     }
 
     *out_finished_node_count = build_queue.m_FinishedNodeCount;
+
+
+    if (IsStructuredLogActive())
+    {
+
+        MemAllocLinear scratch;
+        LinearAllocInit(&scratch, build_queue.m_Config.m_Heap, MB(1), "normalexit");
+
+        JsonWriter msg;
+        JsonWriteInit(&msg, &scratch);
+        JsonWriteStartObject(&msg);
+
+        JsonWriteKeyName(&msg, "msg");
+        JsonWriteValueString(&msg, "normalexit");
+
+        JsonWriteEndObject(&msg);
+        LogStructured(&msg);
+        LinearAllocDestroy(&scratch);
+    }
+
 leave:
     // Shut down build queue
     BuildQueueDestroy(&build_queue);

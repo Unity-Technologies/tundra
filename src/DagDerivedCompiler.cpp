@@ -358,6 +358,10 @@ struct CompileDagDerivedWorker
                         highestCostOfAnyBacklink = std::max(highestCostOfAnyBacklink, calculateCumulativePoints(backlink));
 
                     int points = backlinksBuffers[nodeindex].GetCount() + highestCostOfAnyBacklink;
+
+                    const char* action = dag->m_DagNodes[nodeIndex].m_Action.Get();
+                    if (action == nullptr || *action == 0)
+                        points = 999999;
                     all_scores[nodeindex] = points;
                     this->max_points = std::max(this->max_points, points);
                     return points;
