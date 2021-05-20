@@ -125,7 +125,7 @@ void BinaryWriterDestroy(BinaryWriter *self)
     self->m_Heap = nullptr;
 }
 
-static bool BinaryWriterFinalize(BinaryWriter *w)
+static void BinaryWriterFinalize(BinaryWriter *w)
 {
     const size_t seg_count = w->m_Segments.m_Size;
     BinarySegment **segs = w->m_Segments.m_Storage;
@@ -149,14 +149,11 @@ static bool BinaryWriterFinalize(BinaryWriter *w)
     {
         BinarySegmentFixupPointers(segs[i], segs);
     }
-
-    return true;
 }
 
 bool BinaryWriterFlush(BinaryWriter *self, const char *out_fn)
 {
-    if (!BinaryWriterFinalize(self))
-        return false;
+    BinaryWriterFinalize(self);
 
     FILE *f = fopen(out_fn, "wb");
     if (!f)
