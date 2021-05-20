@@ -1,4 +1,5 @@
 #include "AllBuiltNodes.hpp"
+#include "Common.hpp"
 #include "StatCache.hpp"
 #include "Driver.hpp"
 #include "BinaryWriter.hpp"
@@ -430,12 +431,19 @@ bool SaveAllBuiltNodes(Driver *self)
     MmapFileUnmap(&self->m_StateFile);
     self->m_AllBuiltNodes = nullptr;
 
+    // BinaryWriterFlush logs its own errors, don't bother doing to here.
     bool success = BinaryWriterFlush(&writer, self->m_DagData->m_StateFileNameTmp);
 
     if (success)
     {
         // Commit atomically with a file rename.
         success = RenameFile(self->m_DagData->m_StateFileNameTmp, self->m_DagData->m_StateFileName);
+        if (!success)
+        {
+            Log(kError, "Failed to rename \"%s\" to \"%s\"",
+                self->m_DagData->m_StateFileNameTmp.Get(),
+                self->m_DagData->m_StateFileName.Get());
+        }
     }
     else
     {
