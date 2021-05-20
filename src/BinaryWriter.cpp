@@ -1,6 +1,8 @@
 #include "BinaryWriter.hpp"
+#include "Common.hpp"
 #include "Hash.hpp"
 #include <cstdio>
+#include <errno.h>
 
 
 
@@ -157,7 +159,11 @@ bool BinaryWriterFlush(BinaryWriter *self, const char *out_fn)
 
     FILE *f = fopen(out_fn, "wb");
     if (!f)
+    {
+        int e = errno;
+        Log(kWarning, "Failed to open \"%s\": %s", out_fn, strerror(e));
         return false;
+    }
 
     bool success = true;
 
@@ -168,6 +174,11 @@ bool BinaryWriterFlush(BinaryWriter *self, const char *out_fn)
     for (size_t i = 0; success && i < seg_count; ++i)
     {
         success = BinarySegmentWrite(segs[i], f);
+        if (!success)
+        {
+            Log(kWarning, "BinarySegmentWrite failed when writing \"%s\"", out_fn);
+            break;
+        }
     }
 
     fclose(f);
