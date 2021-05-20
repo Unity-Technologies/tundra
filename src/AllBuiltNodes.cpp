@@ -8,6 +8,7 @@
 #include "DagGenerator.hpp"
 #include "RuntimeNode.hpp"
 #include "LeafInputSignature.hpp"
+#include "MakeDirectories.hpp"
 #include "Driver.hpp"
 #include "SortedArrayUtil.hpp"
 
@@ -431,8 +432,28 @@ bool SaveAllBuiltNodes(Driver *self)
     MmapFileUnmap(&self->m_StateFile);
     self->m_AllBuiltNodes = nullptr;
 
-    // BinaryWriterFlush logs its own errors, don't bother doing to here.
-    bool success = BinaryWriterFlush(&writer, self->m_DagData->m_StateFileNameTmp);
+    bool success = true;
+
+    // Ensure that the target directories exist.
+    PathBuffer path;
+    PathInit(&path, self->m_DagData->m_StateFileName.Get());
+    if (!MakeDirectoriesForFile(&self->m_StatCache, path))
+    {
+        Log(kError, "Failed to create directories for \"%s\"", path);
+        success = false;
+    }
+    PathInit(&path, self->m_DagData->m_StateFileNameTmp.Get());
+    if (!MakeDirectoriesForFile(&self->m_StatCache, path))
+    {
+        Log(kError, "Failed to create directories for \"%s\"", path);
+        success = false;
+    }
+
+    if (!BinaryWriterFlush(&writer, self->m_DagData->m_StateFileNameTmp))
+    {
+        // BinaryWriterFlush logs its own errors, don't bother doing so here.
+        success = false;
+    }
 
     if (success)
     {

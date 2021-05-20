@@ -18,6 +18,7 @@
 #include "HashTable.hpp"
 #include "Hash.hpp"
 #include "Profiler.hpp"
+#include "MakeDirectories.hpp"
 #include "NodeResultPrinting.hpp"
 #include "FileSign.hpp"
 #include "PathUtil.hpp"
@@ -400,6 +401,14 @@ bool DriverSaveScanCache(Driver *self)
     // Unmap the file so we can overwrite it (on Windows.)
     MmapFileDestroy(&self->m_ScanFile);
 
+    // Ensure that the target directory exists.
+    PathBuffer path;
+    PathInit(&path, self->m_DagData->m_ScanCacheFileName.Get());
+    if (!MakeDirectoriesForFile(&self->m_StatCache, path))
+    {
+        Log(kWarning, "Failed to create directories for \"%s\"", self->m_DagData->m_ScanCacheFileName.Get());
+    }
+
     if (success)
     {
         success = RenameFile(self->m_DagData->m_ScanCacheFileNameTmp, self->m_DagData->m_ScanCacheFileName);
@@ -421,6 +430,19 @@ bool DriverSaveScanCache(Driver *self)
 // Save digest cache
 bool DriverSaveDigestCache(Driver *self)
 {
+    // Ensure that the directories exist.
+    PathBuffer path;
+    PathInit(&path, self->m_DagData->m_DigestCacheFileName.Get());
+    if (!MakeDirectoriesForFile(&self->m_StatCache, path))
+    {
+        Log(kWarning, "Failed to create directories for \"%s\"", self->m_DagData->m_DigestCacheFileName.Get());
+    }
+    PathInit(&path, self->m_DagData->m_DigestCacheFileNameTmp.Get());
+    if (!MakeDirectoriesForFile(&self->m_StatCache, path))
+    {
+        Log(kWarning, "Failed to create directories for \"%s\"", self->m_DagData->m_DigestCacheFileNameTmp.Get());
+    }
+
     // This will be invalidated.
     return DigestCacheSave(&self->m_DigestCache, &self->m_Heap, self->m_DagData->m_DigestCacheFileName, self->m_DagData->m_DigestCacheFileNameTmp);
 }
