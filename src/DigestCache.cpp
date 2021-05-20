@@ -110,6 +110,10 @@ bool DigestCacheSave(DigestCache *self, MemAllocHeap *serialization_heap, const 
     if (success)
     {
         success = RenameFile(tmp_filename, filename);
+        if (!success)
+        {
+            Log(kError, "Failed to rename \"%s\" to \"%s\"", tmp_filename, filename);
+        }
     }
     else
     {
