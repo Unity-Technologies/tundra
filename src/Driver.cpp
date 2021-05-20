@@ -403,6 +403,12 @@ bool DriverSaveScanCache(Driver *self)
     if (success)
     {
         success = RenameFile(self->m_DagData->m_ScanCacheFileNameTmp, self->m_DagData->m_ScanCacheFileName);
+        if (!success)
+        {
+            Log(kWarning, "Failed to rename \"%s\" to \"%s\"",
+                self->m_DagData->m_ScanCacheFileNameTmp.Get(),
+                self->m_DagData->m_ScanCacheFileName.Get());
+        }
     }
     else
     {
