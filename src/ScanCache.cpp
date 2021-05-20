@@ -377,6 +377,8 @@ static bool ScanCacheWriterFlush(ScanCacheWriter *self, const char *filename)
     BinarySegmentWritePointer(self->m_MainSeg, self->m_EntryPtr);
     BinarySegmentWritePointer(self->m_MainSeg, self->m_TimestampPtr);
     BinarySegmentWriteUint32(self->m_MainSeg, Frozen::ScanData::MagicNumber);
+
+    // BinaryWriterFlush logs its own errors, don't bother doing to here.
     return BinaryWriterFlush(&self->m_Writer, filename);
 }
 
@@ -521,6 +523,7 @@ bool ScanCacheSave(ScanCache *self, const char *fn, MemAllocHeap *heap)
 
     self->m_FrozenData = nullptr;
 
+    // ScanCacheWriterFlush calls BinaryWriterFlush which logs warnings, don't bother doing so here.
     bool result = ScanCacheWriterFlush(&writer, fn);
 
     ScanCacheWriterDestroy(&writer);
