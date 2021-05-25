@@ -81,8 +81,8 @@ enum Enum
     kOk = 0,                   // All nodes built successfully
     kInterrupted = 1,          // User interrupted the build (e.g CTRL+C)
     kCroak = 2,                // An internal really bad error happened
-    kBuildError = 3,           // We couldn't set up the build
-    kRequireFrontendRerun = 4, //Frontend needs to run again
+    kBuildError = 3,           // An action in the build graph failed
+    kRequireFrontendRerun = 4, // Frontend needs to run again
     kCount
 };
 
