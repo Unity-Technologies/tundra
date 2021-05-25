@@ -468,13 +468,22 @@ int main(int argc, char *argv[])
     build_result = DriverBuild(&driver, &finished_node_count, frontend_rerun_reason, (const char**) argv, argc);
 
     if (!SaveAllBuiltNodes(&driver))
+    {
         Log(kError, "Couldn't save AllBuiltNodes");
+        build_result = BuildResult::kCroak;
+    }
 
     if (!DriverSaveScanCache(&driver))
+    {
         Log(kWarning, "Couldn't save header scanning cache");
+        build_result = BuildResult::kCroak;
+    }
 
     if (!DriverSaveDigestCache(&driver))
+    {
         Log(kWarning, "Couldn't save SHA1 digest cache");
+        build_result = BuildResult::kCroak;
+    }
 
 leave:
 
