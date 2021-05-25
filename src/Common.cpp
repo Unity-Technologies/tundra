@@ -573,9 +573,9 @@ bool RenameFile(const char *oldf, const char *newf)
 FILE* OpenFile(const char* filename, const char* mode)
 {
 #if defined(TUNDRA_WIN32)
-    FILE* file;
+    FILE* file = nullptr;
     if (_wfopen_s(&file, ToWideString(filename).c_str(), ToWideString(mode).c_str()) != 0)
-        CroakErrno("Unable to open file \"%s\"", filename);
+        PrintErrno();
     return file;
 #else
     return fopen(filename, mode);
