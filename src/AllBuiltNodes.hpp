@@ -44,7 +44,7 @@ struct BuiltNode
 
 struct AllBuiltNodes
 {
-    static const uint32_t MagicNumber = 0x53533dc2 ^ kTundraHashMagic;
+    static const uint32_t MagicNumber = 0x53533dc3 ^ kTundraHashMagic;
 
     uint32_t m_MagicNumber;
 
