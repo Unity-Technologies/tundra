@@ -305,6 +305,7 @@ static bool WriteNodes(
         const char* type = FindStringValue(node, "ActionType");
         const char *action = FindStringValue(node, "Action");
         const char *annotation = FindStringValue(node, "Annotation");
+        const char *description = FindStringValue(node, "Description");
         const char *profilerOutput = FindStringValue(node, "ProfilerOutput");
         const JsonArrayValue *toBuildDependencies = FindArrayValue(node, "ToBuildDependencies");
         if (toBuildDependencies == nullptr)
@@ -353,6 +354,8 @@ static bool WriteNodes(
         }
 
         WriteStringPtr(node_data_seg, str_seg, annotation);
+
+        WriteStringPtr(node_data_seg, str_seg, description);
 
         WriteStringPtr(node_data_seg, str_seg, profilerOutput);
 
