@@ -123,6 +123,7 @@ struct DagNode
         FrozenString m_WriteTextPayload;
     };
     FrozenString m_Annotation;
+    FrozenString m_Description;
     FrozenString m_ProfilerOutput;
     FrozenArray<int32_t> m_ToBuildDependencies;
     FrozenArray<int32_t> m_ToUseDependencies;

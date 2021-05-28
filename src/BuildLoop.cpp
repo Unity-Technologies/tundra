@@ -89,6 +89,24 @@ static void LogRunNodeAction(MemAllocLinear* scratch, RuntimeNode* node)
     JsonWriteKeyName(&msg, "annotation");
     JsonWriteValueString(&msg, node->m_DagNode->m_Annotation);
 
+    if (node->m_DagNode->m_OutputFiles.GetCount() > 0)
+    {
+        JsonWriteKeyName(&msg, "outputfile");
+        JsonWriteValueString(&msg, node->m_DagNode->m_OutputFiles[0].m_Filename);
+    }
+
+    if (node->m_DagNode->m_OutputDirectories.GetCount() > 0)
+    {
+        JsonWriteKeyName(&msg, "outputdirectory");
+        JsonWriteValueString(&msg, node->m_DagNode->m_OutputDirectories[0].m_Filename);
+    }
+
+    if (node->m_DagNode->m_Description.Get())
+    {
+        JsonWriteKeyName(&msg, "description");
+        JsonWriteValueString(&msg, node->m_DagNode->m_Description.Get());
+    }
+
     JsonWriteKeyName(&msg, "index");
     JsonWriteValueInteger(&msg, node->m_DagNode->m_OriginalIndex);
 
